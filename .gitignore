@@ -25,15 +25,19 @@ run/
 # ---------- 3rd/ 外部工具（2026-09-28 起改为全量纳管） ----------
 # 原则变更：应用户要求，外部工具 3rd/（bin / tools / python / open-virome，
 # 共 ~2GB）整体入库，克隆即用，不再依赖打包版另取。
-# 例外两条：
+# 例外三条：
 #   ① 3rd/tools/rdp5/3seqTable —— 105MB，超 GitHub 单文件 100MB 硬限制，
 #      改经 Release 资产分发（release: external-tools）；下载后放回原路径
 #      3rd/tools/rdp5/3seqTable 即可，rdp5/README_3seqTable.txt 有说明；
-#   ② 3rd/open-virome/.git/ —— 上游仓库自带的版本控制目录，去掉后其
-#      工作区文件全量入库（git 不允许嵌套仓库按普通文件提交）。
+#   ② 3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd
+#      —— 168MB（polars 编译扩展），同 ① 走 Release 分发；
+#   ③ 3rd/open-virome/.git —— 上游克隆的版本控制目录，已就地改名
+#      .git-upstream（嵌套仓库只能提交成 gitlink 空引用）并忽略。
 # 全局规则（__pycache__/ *.py[cod] *.log 等）对 3rd/ 内同样生效：内置
 # Python 的 .pyc 不入库（首次运行自动重编），不影响可用性。
 3rd/tools/rdp5/3seqTable
+3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd
+3rd/open-virome/.git-upstream/
 3rd/open-virome/.git/
 examples/_work/
 
@@ -112,6 +116,3 @@ tests/._run_all.lock
 # *.py[cod] 会把 .pyd（Python 扩展 DLL，内置解释器运行必需）一并排除，
 # 此处反排除 3rd/ 下全部 .pyd；平台自身代码为纯 Python，不受影响。
 !3rd/**/*.pyd
-# 2026-09-28：上游克隆的 .git 已就地改名为 .git-upstream（git 不允许嵌套仓库按
-# 普通文件提交，会退化成 gitlink 空引用）。如需上游 git 操作，改名回 .git 即可。
-3rd/open-virome/.git-upstream/
