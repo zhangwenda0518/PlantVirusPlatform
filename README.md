@@ -100,10 +100,12 @@ cd VirusPlatform
 python -m pip install -r requirements.txt
 ```
 
-- 需要 **Windows 10+ 与 Python 3.12+**；外部工具已内置在 `3rd/`（不进 git，打包版自带，见下文"分发"）。
+- 需要 **Windows 10+ 与 Python 3.12+**；**外部工具已全量随仓库分发**（`3rd/`，约 2GB：单文件工具 + 工具套件 + 内置 Python 运行时，克隆即用）。
 - **SPAdes** 需单独安装（`SPAdes-Windows-4.3.0-dev-Setup.exe`，`spades.bat` 加入 PATH）。
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
-- 数据库（约 3.4GB）与外部工具（约 0.9GB）不进 git：源码运行请从数据库包/打包机拷贝，或用 `dev_tools/package.py` 自建（见下文）。
+- 仅两个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
+  `3rd/tools/rdp5/3seqTable`（105MB）与 `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`（168MB）。
+- 数据库（约 3.4GB）仍不进 git：源码运行请从数据库包/打包机拷贝，或用 `dev_tools/package.py` 自建（见下文）。
 
 ### 2. 启动（两种模式）
 
@@ -165,7 +167,9 @@ VirusPlatform/
 ├─ docs/                     开发文档与模块功能清单
 ├─ wiki/                     本仓库 Wiki 的源 Markdown（与线上 Wiki 同步）
 ├─ examples/                 内置示例数据（✨示例按钮共用，~8MB）
-├─ 3rd/                      外部依赖（bin/ tools/，不进 git，打包版自带）
+├─ 3rd/                      外部依赖（bin/ tools/ python/ open-virome/，全量入库；
+│                            仅 3seqTable 与 _polars_runtime.pyd 两个 >100MB 文件
+│                            经 Release 分发）
 ├─ databases/                病毒分类/参考/注释/建树库（~3.4GB，不进 git）
 ├─ host-db/                  宿主基因组与宿主分类库（按物种一库）
 ├─ platform.json             工具路径/语言/默认参数配置

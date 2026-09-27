@@ -24,7 +24,7 @@ cd VirusPlatform
 python -m pip install -r requirements.txt
 ```
 
-**外部工具**已内置在平台目录 `3rd/`（bin/ 与 tools/，kunpeng、seqkit、crabz、Blast、mafft、FastTree、iQtree、trimAl、Gblocks、diamond、mmseqs、fastp、salmon、aria2c、sracha 等），不进 git——源码运行需从打包版拷贝，或自行放置后用 `platform.json` 的 `tools` 段指定路径。
+**外部工具**已内置在平台目录 `3rd/`（bin/ 与 tools/，kunpeng、seqkit、crabz、Blast、mafft、FastTree、iQtree、trimAl、Gblocks、diamond、mmseqs、fastp、salmon、aria2c、sracha 等），**2026-09-28 起全量随 git 仓库分发，克隆即用**；仅两个超 100MB 的文件走 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools)，下载后放回对应路径即可（`3rd/tools/rdp5/3seqTable`、`3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`，各目录内有同名 README 说明）。也可自行放置后用 `platform.json` 的 `tools` 段指定路径。
 
 **需要单独安装的两项**：
 

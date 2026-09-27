@@ -44,7 +44,8 @@ VirusPlatform/
 ├─ docs/                     开发文档（DEVELOPMENT_NOTES.md 踩坑记录、模块功能清单）
 ├─ wiki/                     本 Wiki 源 Markdown
 ├─ examples/                 内置示例数据（✨示例按钮共用；results/ 固化示例运行结果）
-├─ 3rd/                      外部依赖（不进 git）
+├─ 3rd/                      外部依赖（2026-09-28 起全量入库：bin/ tools/ python/ open-virome/；
+│                            仅 3seqTable 与 _polars_runtime.pyd 两个 >100MB 文件经 Release 分发）
 │  ├─ bin/                   单文件工具（kunpeng / seqkit / crabz / clustalw2 / muscle / aria2c / sracha）
 │  ├─ tools/                 工具套件（Blast / mafft / FastTree / iQtree / trimAl / Gblocks /
 │  │                         diamond / mmseqs / fastp / SPAdes 探测 / salmon2 / raxml-ng /
