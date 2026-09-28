@@ -117,3 +117,6 @@ tests/._run_all.lock
 # *.py[cod] 会把 .pyd（Python 扩展 DLL，内置解释器运行必需）一并排除，
 # 此处反排除 3rd/ 下全部 .pyd；平台自身代码为纯 Python，不受影响。
 !3rd/**/*.pyd
+
+# RDP5.93 备用安装（2026-09-28 实测其 RDP5CL 5.84 有产出缺陷，不采用；目录仅留档）
+3rd/tools/rdp5.93/

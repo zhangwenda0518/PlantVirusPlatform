@@ -153,6 +153,8 @@ Also, `3rd/python/` (the 868MB bundled interpreter) is optional — a system Pyt
 winget install MSYS2.MSYS2 Rustlang.Rustup GoLang.Go Kit.CMake
 :: inside the MSYS2/UCRT64 shell:
 pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
+:: on networks where proxy.golang.org is unreachable:
+set GOPROXY=https://goproxy.cn,direct
 ```
 
 ### Tiered build guide
@@ -160,7 +162,7 @@ pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
 | Tier | Tools (put built binaries in) | Language | Notes |
 |---|---|---|---|
 | ① minutes | kunpeng / crabz / sracha → `3rd/bin/` | Rust | `cargo build --release` |
-| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2@latest` |
+| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2/seqkit@latest` (main package lives in the module's `seqkit/` subfolder) |
 | ① | FastTree / trimAl / minimap2 / minibwa | C | straight `gcc`/`make`; the minibwa Windows port lives in `docs/minibwa-build/` (mmap-stub patch + parity report) |
 | ② ready-made MSYS2 packages | mafft / samtools / bcftools | C | one `pacman -S` each |
 | ② CMake | diamond / iQ-TREE / RAxML-NG / lsd2 / SPAdes | C++ | CMake + VS Build Tools; for SPAdes the official installer is easier |
@@ -168,6 +170,22 @@ pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
 | ④ binary-only | RDP5 (VB6, no public source) / table2asn / Gblocks / strawberry-perl / dsrnamax / pandepth / snpgenie / viral_consensus | — | no upstream sources (or platform-internal); rely on the prebuilt `3rd/` copies |
 | side | SnpEff | Java | source is public, jar can be self-built; the slim JRE in `3rd/tools/jre-snpeff/` only serves runtime |
 | side | open-virome frontend | Node | source ships in-repo: `npm ci && npm run build` (rename `.git-upstream/` back to `.git` for upstream git work) |
+
+### ✅ Build test log (2026-09-28, on this machine: Win11 · MinGW gcc 16.2 / cargo 1.98 / go 1.27 / cmake 4.4)
+
+| Tool | Result | Notes |
+|---|---|---|
+| crabz | ✅ v0.10.1 | straight from crates.io, ~2 min |
+| sracha | ✅ v0.7.0 | `rnabioco/sracha-rs`, ~3 min |
+| seqkit | ✅ v2.14.0 | `go install .../v2/seqkit@latest`; use goproxy.cn where proxy.golang.org is unreachable |
+| FastTree | ✅ v2.2.0 | author mirror `morgannprice/fasttree`, single-file gcc build |
+| trimAl | ✅ | `inab/trimal`, `make -C source` |
+| minimap2 | ✅ v2.31 | `lh3/minimap2`, `make` |
+| minibwa | ✅ 0.7-r424-dirty | apply `docs/minibwa-build/windows-mmap-stub.patch` then **`make mimalloc=0`** (the vendored mimalloc is trimmed and has no Windows backend; disabling falls back to kalloc); index+map smoke test passed |
+| kunpeng | ⚠️ blocked | crates.io only has 0.6.9–0.7.5; the bundled v0.7.12 carries **locally modified sources** — rebuilding requires that modified source tree, the vanilla crate is no substitute |
+| RAxML-NG | ❌ MinGW route blocked | cleared 4 hurdles (coraxlib's `__declspec(dllexport)` on `__thread`, `M_PI`, `asprintf`, size_t width) then hit `sysutil.cpp`'s POSIX header `sys/resource.h` — a real port, not a patch. **The realistic tier-② route = official MSVC releases/installers** (SPAdes installer, RAxML-NG official release), exactly as the table advises |
+| MSYS2 pacman route | ❌ not verified | the silent installer popped a GUI here and never finished; documented route kept |
+| RDP5.93 (tier ④ install test) | ❌ not adopted | its RDP5CL is actually **5.84**: -f/-ofp honored, all nine methods run, exit 0 — but **zero output files written**; bundled **5.69** stays. Both 3seqTable copies are byte-identical (110,174,436 B). Install kept at `3rd/tools/rdp5.93/` (gitignored) |
 
 - **Paths**: drop binaries into the matching `3rd/` location and they are auto-detected; anywhere else, register them in the `tools` section of `platform.json` (takes effect immediately).
 - **Verify**: `python main.py tools` (detection status) → `python main.py selfcheck` (full check-up). A missing tool only affects its own step — optional steps (fastp / fq2fa / gbdraw) gray out and get skipped automatically; required steps clearly name what's missing.

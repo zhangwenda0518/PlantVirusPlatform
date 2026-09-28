@@ -152,6 +152,8 @@ python main.py report --sample NX-5                        :: 重新生成报告
 winget install MSYS2.MSYS2 Rustlang.Rustup GoLang.Go Kit.CMake
 :: MSYS2/UCRT64 shell 内：
 pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
+:: 国内网络建议补一条（proxy.golang.org 不可达时）：
+set GOPROXY=https://goproxy.cn,direct
 ```
 
 ### 分层构建指南
@@ -159,7 +161,7 @@ pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
 | 层 | 工具（构建后放至） | 语言 | 构建要点 |
 |---|---|---|---|
 | ① 十分钟级 | kunpeng / crabz / sracha → `3rd/bin/` | Rust | `cargo build --release` |
-| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2@latest` |
+| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2/seqkit@latest`（主包在模块的 `seqkit/` 子目录） |
 | ① | FastTree / trimAl / minimap2 / minibwa | C | gcc/make 直编；minibwa 的 Windows 移植材料在 `docs/minibwa-build/`（mmap stub 补丁 + 对齐报告） |
 | ② MSYS2 现成包 | mafft / samtools / bcftools | C | `pacman -S` 即装 |
 | ② CMake 级 | diamond / iQ-TREE / RAxML-NG / lsd2 / SPAdes | C++ | CMake + VS Build Tools；SPAdes 更推荐官方安装器 |
@@ -167,6 +169,22 @@ pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
 | ④ 仅二进制 | RDP5（VB6，无公开源码）/ table2asn / Gblocks / strawberry-perl / dsrnamax / pandepth / snpgenie / viral_consensus | — | 官方不发源码或平台内部工具，以 `3rd/` 预编译为准 |
 | 附 | SnpEff | Java | 源码公开可自建 jar；`3rd/tools/jre-snpeff/` 精简 JRE 仅服务运行 |
 | 附 | open-virome 前端 | Node | 源码随仓库：`npm ci && npm run build`（`.git-upstream/` 改名回 `.git` 可做上游操作） |
+
+### ✅ 实测记录（2026-09-28，本机 Win11 · MinGW gcc 16.2 / cargo 1.98 / go 1.27 / cmake 4.4）
+
+| 工具 | 结果 | 要点 |
+|---|---|---|
+| crabz | ✅ v0.10.1 | crates.io 直装，约 2 分钟 |
+| sracha | ✅ v0.7.0 | `rnabioco/sracha-rs`，约 3 分钟 |
+| seqkit | ✅ v2.14.0 | `go install .../v2/seqkit@latest`；proxy.golang.org 不可达时用 goproxy.cn |
+| FastTree | ✅ v2.2.0 | 作者镜像 `morgannprice/fasttree`，单文件 gcc 直编 |
+| trimAl | ✅ | `inab/trimal`，`make -C source` |
+| minimap2 | ✅ v2.31 | `lh3/minimap2`，`make` |
+| minibwa | ✅ 0.7-r424-dirty | 应用 `docs/minibwa-build/windows-mmap-stub.patch` 后 **`make mimalloc=0`**（内嵌 mimalloc 是裁剪版、无 Windows 后端，禁用即回退 kalloc）；index+map 冒烟通过 |
+| kunpeng | ⚠️ 阻塞 | crates.io 只有 0.6.9–0.7.5；内置 v0.7.12 含**自改源码**——重编译必须用改动后的 kunpeng 源码树，原版不能替代 |
+| RAxML-NG | ❌ MinGW 路线阻断 | 连闯 4 关（coraxlib 的 `__declspec(dllexport)`×`__thread`、`M_PI`、`asprintf`、size_t 宽度）后卡在 `sysutil.cpp` 的 POSIX 头 `sys/resource.h`——需真移植而非补丁。**② 层现实路线 = 官方 MSVC 发行版/安装器**（SPAdes 安装器、RAxML-NG 官方 release），与表中建议一致 |
+| MSYS2 pacman 路线 | ❌ 未验证 | 静默安装器在本机弹 GUI 未完成；文档路线保留 |
+| RDP5.93（④层实装测试） | ❌ 不采用 | 安装包的 RDP5CL 实为 **5.84**：-f/-ofp 被识别、九方法跑完 exit=0，但**不产出任何结果文件**；内置 **5.69** 维持。两版 3seqTable 字节一致（110,174,436 B）。安装留档 `3rd/tools/rdp5.93/`（已 gitignore） |
 
 - **产物路径**：放进对应 `3rd/` 路径即被自动探测；放别处则在 `platform.json` 的 `tools` 段登记（保存即生效）。
 - **校验**：`python main.py tools`（探测状态）→ `python main.py selfcheck`（全量体检）。缺哪个工具只影响对应步骤——可选步骤（fastp / fq2fa / gbdraw）自动灰显跳过，必需步骤会明确报缺哪件。
