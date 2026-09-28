@@ -1,5 +1,7 @@
 <div align="center">
 
+[English](README_EN.md) · [简体中文](README.md)
+
 # 🌿 VirusPlatform — 植物病毒分析平台
 
 **基于 [kunpeng](https://github.com/afshinokh/kunpeng)（超低内存宏基因组分类器）的 Windows 本地植物病毒诊断与深度分析平台**
