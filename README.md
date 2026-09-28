@@ -107,7 +107,6 @@ python -m pip install -r requirements.txt
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
 - 仅两个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
   `3rd/tools/rdp5/3seqTable`（105MB）与 `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`（168MB）。
-- 不想背 2GB 预编译包？可走下文 **从源码构建外部工具（可选）**，只编译你用到的链路。
 - 数据库（约 3.4GB）仍不进 git：源码运行请从数据库包/打包机拷贝，或用 `dev_tools/package.py` 自建（见下文）。
 
 ### 2. 启动（两种模式）
@@ -140,7 +139,10 @@ python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample NX-5
 python main.py report --sample NX-5                        :: 重新生成报告
 ```
 
-## 🔧 从源码构建外部工具（可选）
+## 🧰 附录：外部工具源码构建实测（非发布路线）
+
+> **发布路线以 `3rd/` 预编译为准**（随仓库全量分发，克隆即用；2026-09-28 定案）。
+> 本节仅保留源码构建的实测结论，供自编译 / 二进制审计 / 丢失二进制自救时参考，**不作为推荐安装方式**。
 
 **先回答常见疑问：源码编译不会更省运行内存。** 运行内存由算法与数据规模决定（kunpeng 的 hash 容量、SPAdes 的组装图、DIAMOND 的搜索索引），与二进制从哪来无关——同一份源码，本地编译与官方发行的二进制运行时内存行为一致。
 源码构建真正换来的是**仓库克隆体积**（2GB 预编译 → 几十 MB 源码）与**按需子集**（只编译用到的链路）；代价是编译过程本身更耗资源：C++ 大项目（SPAdes/BLAST）链接阶段峰值内存可达数 GB，中间产物另占 5-10GB 磁盘。

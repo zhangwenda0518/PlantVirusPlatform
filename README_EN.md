@@ -107,7 +107,6 @@ python -m pip install -r requirements.txt
 - gbdraw is the preferred genome-plot engine: `pip install git+https://github.com/satoshikawato/gbdraw.git` (falls back automatically to the pure-Python dna_features_viewer).
 - Only two files exceed GitHub's 100MB per-file hard limit and are served from the [Release (external-tools)](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) instead — download and put them back in place:
   `3rd/tools/rdp5/3seqTable` (105MB) and `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd` (168MB).
-- Don't want the ~2GB of prebuilt tools? Build only the subset you need — see **Building the External Tools from Source (Optional)** below.
 - Databases (~3.4GB) are not in git: copy them from a database package / a packaging machine, or build with `dev_tools/package.py` (see [Packaging](#-packaging--distribution-software--examples--databases-in-three-separate-folders)).
 
 ### 2. Launch (two modes)
@@ -141,7 +140,10 @@ python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample NX-5
 python main.py report --sample NX-5                        :: regenerate the report
 ```
 
-## 🔧 Building the External Tools from Source (Optional)
+## 🧰 Appendix: Source-Build Test Log (not the release route)
+
+> **The release route is the prebuilt `3rd/` tree** (shipped fully in-repo, clone-and-go; decided 2026-09-28).
+> This section only preserves the source-build findings for self-compilation / binary auditing / disaster-recovery scenarios — **it is not the recommended install method**.
 
 **First, the common question: compiling from source does NOT reduce runtime memory.** Runtime RAM is determined by algorithms and data scale (kunpeng's hash capacity, SPAdes' assembly graph, DIAMOND's search index), not by where the binary came from — a locally built binary behaves identically to the official release of the same source.
 What source builds actually buy you is **clone size** (2GB of prebuilt binaries → tens of MB of sources) and a **need-based subset** (build only the chain you use). The price is paid at build time: linking big C++ projects (SPAdes/BLAST) can peak at several GB of RAM, with another 5–10GB of disk for intermediate artifacts.
