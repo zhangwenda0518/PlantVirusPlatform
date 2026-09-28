@@ -107,7 +107,8 @@ python -m pip install -r requirements.txt
 - gbdraw is the preferred genome-plot engine: `pip install git+https://github.com/satoshikawato/gbdraw.git` (falls back automatically to the pure-Python dna_features_viewer).
 - Only two files exceed GitHub's 100MB per-file hard limit and are served from the [Release (external-tools)](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) instead — download and put them back in place:
   `3rd/tools/rdp5/3seqTable` (105MB) and `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd` (168MB).
-- Databases (~3.4GB) are not in git: copy them from a database package / a packaging machine, or build with `dev_tools/package.py` (see [Packaging](#-packaging-distribution-software--examples--databases-in-three-separate-folders)).
+- Don't want the ~2GB of prebuilt tools? Build only the subset you need — see **Building the External Tools from Source (Optional)** below.
+- Databases (~3.4GB) are not in git: copy them from a database package / a packaging machine, or build with `dev_tools/package.py` (see [Packaging](#-packaging--distribution-software--examples--databases-in-three-separate-folders)).
 
 ### 2. Launch (two modes)
 
@@ -139,6 +140,37 @@ python main.py build-host-db --genome host-db\genome.fa --taxid 4081
 python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample NX-5
 python main.py report --sample NX-5                        :: regenerate the report
 ```
+
+## 🔧 Building the External Tools from Source (Optional)
+
+**First, the common question: compiling from source does NOT reduce runtime memory.** Runtime RAM is determined by algorithms and data scale (kunpeng's hash capacity, SPAdes' assembly graph, DIAMOND's search index), not by where the binary came from — a locally built binary behaves identically to the official release of the same source.
+What source builds actually buy you is **clone size** (2GB of prebuilt binaries → tens of MB of sources) and a **need-based subset** (build only the chain you use). The price is paid at build time: linking big C++ projects (SPAdes/BLAST) can peak at several GB of RAM, with another 5–10GB of disk for intermediate artifacts.
+Also, `3rd/python/` (the 868MB bundled interpreter) is optional — a system Python 3.12 plus `python -m pip install -r requirements.txt` works just as well (the bundled interpreter only serves the packaged exe).
+
+### Toolchain setup
+
+```bat
+winget install MSYS2.MSYS2 Rustlang.Rustup GoLang.Go Kit.CMake
+:: inside the MSYS2/UCRT64 shell:
+pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
+```
+
+### Tiered build guide
+
+| Tier | Tools (put built binaries in) | Language | Notes |
+|---|---|---|---|
+| ① minutes | kunpeng / crabz / sracha → `3rd/bin/` | Rust | `cargo build --release` |
+| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2@latest` |
+| ① | FastTree / trimAl / minimap2 / minibwa | C | straight `gcc`/`make`; the minibwa Windows port lives in `docs/minibwa-build/` (mmap-stub patch + parity report) |
+| ② ready-made MSYS2 packages | mafft / samtools / bcftools | C | one `pacman -S` each |
+| ② CMake | diamond / iQ-TREE / RAxML-NG / lsd2 / SPAdes | C++ | CMake + VS Build Tools; for SPAdes the official installer is easier |
+| ③ not recommended locally | Blast+ / salmon / mmseqs | C++ | extremely heavy toolchains or degraded Windows support (salmon pushes WSL/Docker; mmseqs native build is experimental) — use the prebuilt `3rd/tools/` copies |
+| ④ binary-only | RDP5 (VB6, no public source) / table2asn / Gblocks / strawberry-perl / dsrnamax / pandepth / snpgenie / viral_consensus | — | no upstream sources (or platform-internal); rely on the prebuilt `3rd/` copies |
+| side | SnpEff | Java | source is public, jar can be self-built; the slim JRE in `3rd/tools/jre-snpeff/` only serves runtime |
+| side | open-virome frontend | Node | source ships in-repo: `npm ci && npm run build` (rename `.git-upstream/` back to `.git` for upstream git work) |
+
+- **Paths**: drop binaries into the matching `3rd/` location and they are auto-detected; anywhere else, register them in the `tools` section of `platform.json` (takes effect immediately).
+- **Verify**: `python main.py tools` (detection status) → `python main.py selfcheck` (full check-up). A missing tool only affects its own step — optional steps (fastp / fq2fa / gbdraw) gray out and get skipped automatically; required steps clearly name what's missing.
 
 ## 🖥️ UI Tour
 

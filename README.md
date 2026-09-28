@@ -107,6 +107,7 @@ python -m pip install -r requirements.txt
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
 - 仅两个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
   `3rd/tools/rdp5/3seqTable`（105MB）与 `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`（168MB）。
+- 不想背 2GB 预编译包？可走下文 **从源码构建外部工具（可选）**，只编译你用到的链路。
 - 数据库（约 3.4GB）仍不进 git：源码运行请从数据库包/打包机拷贝，或用 `dev_tools/package.py` 自建（见下文）。
 
 ### 2. 启动（两种模式）
@@ -138,6 +139,37 @@ python main.py build-host-db --genome host-db\genome.fa --taxid 4081
 python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample NX-5
 python main.py report --sample NX-5                        :: 重新生成报告
 ```
+
+## 🔧 从源码构建外部工具（可选）
+
+**先回答常见疑问：源码编译不会更省运行内存。** 运行内存由算法与数据规模决定（kunpeng 的 hash 容量、SPAdes 的组装图、DIAMOND 的搜索索引），与二进制从哪来无关——同一份源码，本地编译与官方发行的二进制运行时内存行为一致。
+源码构建真正换来的是**仓库克隆体积**（2GB 预编译 → 几十 MB 源码）与**按需子集**（只编译用到的链路）；代价是编译过程本身更耗资源：C++ 大项目（SPAdes/BLAST）链接阶段峰值内存可达数 GB，中间产物另占 5-10GB 磁盘。
+另：`3rd/python/`（868MB 内置解释器）也可省去——系统 Python 3.12 + `python -m pip install -r requirements.txt` 即可替代（内置解释器仅为打包版准备）。
+
+### 工具链准备
+
+```bat
+winget install MSYS2.MSYS2 Rustlang.Rustup GoLang.Go Kit.CMake
+:: MSYS2/UCRT64 shell 内：
+pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
+```
+
+### 分层构建指南
+
+| 层 | 工具（构建后放至） | 语言 | 构建要点 |
+|---|---|---|---|
+| ① 十分钟级 | kunpeng / crabz / sracha → `3rd/bin/` | Rust | `cargo build --release` |
+| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2@latest` |
+| ① | FastTree / trimAl / minimap2 / minibwa | C | gcc/make 直编；minibwa 的 Windows 移植材料在 `docs/minibwa-build/`（mmap stub 补丁 + 对齐报告） |
+| ② MSYS2 现成包 | mafft / samtools / bcftools | C | `pacman -S` 即装 |
+| ② CMake 级 | diamond / iQ-TREE / RAxML-NG / lsd2 / SPAdes | C++ | CMake + VS Build Tools；SPAdes 更推荐官方安装器 |
+| ③ 不建议本地编译 | Blast+ / salmon / mmseqs | C++ | 工具链极重或 Windows 原生支持退化（salmon 主推 WSL/Docker、mmseqs 原生构建为实验性）——直接用 `3rd/tools/` 预编译 |
+| ④ 仅二进制 | RDP5（VB6，无公开源码）/ table2asn / Gblocks / strawberry-perl / dsrnamax / pandepth / snpgenie / viral_consensus | — | 官方不发源码或平台内部工具，以 `3rd/` 预编译为准 |
+| 附 | SnpEff | Java | 源码公开可自建 jar；`3rd/tools/jre-snpeff/` 精简 JRE 仅服务运行 |
+| 附 | open-virome 前端 | Node | 源码随仓库：`npm ci && npm run build`（`.git-upstream/` 改名回 `.git` 可做上游操作） |
+
+- **产物路径**：放进对应 `3rd/` 路径即被自动探测；放别处则在 `platform.json` 的 `tools` 段登记（保存即生效）。
+- **校验**：`python main.py tools`（探测状态）→ `python main.py selfcheck`（全量体检）。缺哪个工具只影响对应步骤——可选步骤（fastp / fq2fa / gbdraw）自动灰显跳过，必需步骤会明确报缺哪件。
 
 ## 🖥️ 界面导览
 
