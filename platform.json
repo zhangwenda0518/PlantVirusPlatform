@@ -34,7 +34,7 @@
     "dsRNAmax": "3rd\\tools\\dsrnamax\\dsRNAmax_det.exe"
   },
   "databases": {
-    "host": "host-db\\112863_Lycium_barbarum_host_db",
+    "host": "host-db\\4081_Solanum_lycopersicum_host_db",
     "virus": "databases\\kunpeng_db\\plant"
   },
   "defaults": {
@@ -46,7 +46,7 @@
     "assembly_mode": "rnaviral",
     "assembly_input": "virus",
     "memory": 64,
-    "min_contig_len": 500,
+    "min_contig_len": 200,
     "min_orf_aa": 100,
     "top_n_refs": 10,
     "tree_tool": "fasttree",
@@ -59,14 +59,36 @@
     "do_trim": true
   },
   "language": "zh",
+  "ai": {
+    "enabled": true,
+    "provider": "deepseek",
+    "base_url": "https://api.deepseek.com/v1",
+    "api_key": "",
+    "model": "deepseek-chat",
+    "temperature": 0.3,
+    "max_tokens": 2048,
+    "explain": true,
+    "broadcast": true,
+    "gate": false,
+    "gate_timeout_min": 15,
+    "broadcast_stages": [
+      "kvsuite",
+      "assembly",
+      "report"
+    ],
+    "gate_stages": [
+      "kvsuite",
+      "assembly"
+    ],
+    "exec_auto": false,
+    "exec_auto_tune": false
+  },
   "output_root": "",
   "input_root": "",
   "database_root": "",
   "examples_root": "",
-  "active_host_db": "",
+  "active_host_db": "4081_Solanum_lycopersicum_host_db",
   "extra_virus_libs": [],
-  "extra_kv_indexes": [
-    "databases\\virusref_db\\kv_index"
-  ],
+  "extra_kv_indexes": [],
   "extra_db_roots": []
 }

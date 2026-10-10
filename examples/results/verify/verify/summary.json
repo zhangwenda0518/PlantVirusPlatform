@@ -8,9 +8,9 @@
  "combine": "union",
  "methods": [
   "blastx",
-  "cdd"
+  "bfvd"
  ],
  "host_filter": "all",
  "n_calls": 2,
- "out_dir": "D:\\桌面\\植物病毒分析平台\\tool_runs\\verify_20260909_231620\\verify"
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\verify_20261006_162431_6f5783\\verify"
 }

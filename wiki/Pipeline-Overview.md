@@ -15,11 +15,11 @@
 | | ① 宿主去除 | kunpeng 宿主库分类 → 剔除宿主 read 对 | 需先建宿主库 |
 | 🦠 病毒鉴定 | ②b 识别与定量 | kvsuite：识别 + 二次过滤定量 + 比对深度 + 病毒 reads 提取 | — |
 | 🧬 病毒组装 | ③ 组装·分类·病毒contigs | SPAdes（rnaviral 默认/metaviral/meta/rna/isolate）+ kunpeng+BLAST 分类 | — |
-| | ③b 候选序列验证 | 宿主筛选 → 长度分流 → blastx/CDD + 类病毒 blastn | — |
+| | ③b 候选序列验证 | 宿主筛选 → 长度分流 → blastx/BFVD + 类病毒 blastn | — |
 | | ③c 共识序列与变异 | reads 回贴参考 → 逐参考位置计数 → 共识 | — |
 | 🧲 宿主预测 | ④ ICTV 宿主判定 | kunpeng 分类 → ICTV 宿主概率级联 + NCBI 元数据交叉 | — |
 | 🔬 下游分析 | ⑥ ORF 预测 | pyrodigal（meta）+ pyrodigal-rv（RNA 病毒）+ orfipy（显式指定） | — |
-| | ⑥b ORF 功能注释 | DIAMOND/MMseqs2/blastp × RefSeq 蛋白 + Pfam HMM + CDD | — |
+| | ⑥b ORF 功能注释 | DIAMOND/MMseqs2/blastp × RefSeq 蛋白 + Pfam HMM + BFVD 病毒域 | — |
 | | ⑦ 进化树与 SDT | MAFFT+trimAl + FastTree/RAxML-NG/NJ；SDT identity 矩阵 | — |
 | | ⑧ 引物设计 | primer3 保守区/全长 + 热力学评分 + 特异性检查（可选） | — |
 | | ⑨ 基因组图 | gbdraw 首选 / dna_features_viewer 回退 | 两引擎全缺才灰显 |

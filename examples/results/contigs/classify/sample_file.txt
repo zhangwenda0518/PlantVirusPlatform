@@ -1,1 +1,1 @@
-1	D:\桌面\植物病毒分析平台\tool_runs\contigs_20260909_231853\contigs.filtered.fasta
+1	D:\桌面\植物病毒分析平台\run\tool_runs\contigs_20261006_162354_9b6c4e\contigs.filtered.fasta

@@ -325,6 +325,22 @@ class TaskLogger:
                 self._fh.close()
                 self._fh = None
 
+    # 上下文管理器 + 析构兜底（2026-10-04 审查 E5）：CLI 命令中途抛异常时
+    # 旧模式 `logger=make_logger(); …; logger.close()` 的 close 走不到，
+    # 日志尾部丢失、句柄延迟释放。close 幂等，重复调用安全。
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
 
 # ------------------------------------------------------------------
 # crabz 加速的 gzip 流（可选；未装 crabz 时回退 Python gzip）
@@ -483,6 +499,52 @@ def dir_size(path):
     return total
 
 
+def db_trace(paths, version_files=(), n_max=40):
+    """数据库可追溯信息（写进 db_info.json / 阶段 summary.json 用）。
+
+    paths: 库文件或库目录序列——目录取第一层文件（n_max 上限，防 mmseqs
+           分片类大目录把 summary 撑爆）；不存在的项静默跳过。
+    version_files: 版本锚点文件（如 bfvd.version），读首行内容。
+    返回 (db_files, db_versions)：
+      db_files    {文件名: [size_bytes, mtime 'YYYY-MM-DD HH:MM:SS']}
+      db_versions {文件名: 首行内容}
+    """
+    import time as _time
+    files = {}
+    for p in paths:
+        cands = []
+        if os.path.isfile(str(p)):
+            cands = [str(p)]
+        elif os.path.isdir(str(p)):
+            try:
+                cands = [os.path.join(str(p), n)
+                         for n in sorted(os.listdir(str(p)))[:n_max]]
+            except OSError:
+                continue
+        for fp in cands:
+            if not os.path.isfile(fp):
+                continue
+            try:
+                st = os.stat(fp)
+            except OSError:
+                continue
+            files[os.path.basename(fp)] = [
+                st.st_size,
+                _time.strftime('%Y-%m-%d %H:%M:%S',
+                               _time.localtime(st.st_mtime))]
+    versions = {}
+    for p in version_files:
+        if not os.path.isfile(str(p)):
+            continue
+        try:
+            with safe_open(str(p)) as f:
+                versions[os.path.basename(str(p))] = \
+                    (f.readline() or '').strip()
+        except (OSError, ValueError):
+            pass
+    return files, versions
+
+
 def est_decompressed(paths):
     """估算一组（可能 .gz）输入解压后的总字节数。
     FASTQ 压缩比经验值 ~5.5:1，FASTA ~4:1（无质量行），普通文件 1:1。"""
@@ -593,6 +655,39 @@ def task_check_cancel():
         raise RuntimeError('任务已停止（用户取消）')
 
 
+def task_cancel_event():
+    """返回当前线程（任务）绑定的取消事件（未绑定 → None）。
+
+    _TASK_STATE 是 threading.local()：**子线程读不到调用线程的事件**。
+    子线程看门狗（如 suvtk / LOGAN 子进程静默挂起时的轮询）必须先在任务
+    线程里取出该事件引用再传进线程，否则取消永远不被感知
+    （2026-10-03 修复 P3-18 踩坑）。
+    """
+    return getattr(_TASK_STATE, 'cancel', None)
+
+
+def _kill_proc_tree(proc):
+    """杀整棵进程树（Windows: taskkill /F /T；其它平台退化为 proc.kill()）。
+
+    2026-10-04 审查 E3：run_cmd 的超时/异常路径此前只 proc.kill() 直接
+    子进程——spades.bat→spades.py、kv 引擎→salmon 这类孙进程会成孤儿
+    继续吃 CPU/内存，而任务闸门名额已释放。与 web/tasks._kill_tree
+    （取消路径）统一为进程树口径。"""
+    if proc.poll() is not None:
+        return
+    try:
+        if sys.platform == 'win32':
+            subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)],
+                           capture_output=True, timeout=15)
+        else:
+            proc.kill()
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
 def _task_register(proc):
     procs = getattr(_TASK_STATE, 'procs', None)
     if procs is not None:
@@ -602,10 +697,7 @@ def _task_register(proc):
     # （任务已结束但进程仍在跑，需手工 taskkill）。注册后立即复查一次。
     ev = getattr(_TASK_STATE, 'cancel', None)
     if ev is not None and ev.is_set():
-        try:
-            proc.kill()
-        except Exception:
-            pass
+        _kill_proc_tree(proc)
 
 
 def task_register_proc(proc):
@@ -663,10 +755,7 @@ def run_cmd(cmd, logger=None, timeout=None, cwd=None, check=True,
         def _kill_watchdog():
             if not stop_mon.wait(timeout):
                 timed_out.set()
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
+                _kill_proc_tree(proc)
         _wd = threading.Thread(target=_kill_watchdog, daemon=True)
         _wd.start()
 
@@ -680,11 +769,11 @@ def run_cmd(cmd, logger=None, timeout=None, cwd=None, check=True,
                     logger.log(line, "OUT")
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        proc.kill()
+        _kill_proc_tree(proc)
         proc.wait()
         raise RuntimeError(f"命令超时被终止: {cmd[0]}")
     except KeyboardInterrupt:
-        proc.kill()
+        _kill_proc_tree(proc)
         proc.wait()
         raise
     finally:
@@ -789,6 +878,60 @@ def run_cmd_redirect(cmd, out_path, logger=None, timeout=None, cwd=None,
 
 
 # ------------------------------------------------------------------
+# 外部工具版本探测（复现依据：同一样品不同机器/不同轮的版本留痕）
+# ------------------------------------------------------------------
+_VERSION_CMD_VARIANTS = (('--version',), ('-version',))
+_TOOL_VERSION_CACHE = {}          # exe 路径 → 版本串（进程内缓存）
+
+
+def _parse_tool_version(raw):
+    """从 --version 输出里取一行有意义的版本文本；取不到返回 'unknown'。"""
+    for line in decode_output(raw or b'').splitlines():
+        s = line.strip()
+        if s:
+            return s[:200]
+    return 'unknown'
+
+
+def probe_tool_versions(tools):
+    """探测外部工具版本。tools: {tool_key: exe 路径} → {tool_key: 版本串}。
+
+    对每个工具依次试 `<exe> --version` / `<exe> -version`（10s 超时），
+    把 stdout/stderr 首行作为版本串；两条命令都失败或超时记 'unknown'。
+    进程内按 exe 路径缓存——同一次/同一天多次分析不重复 fork 子进程。
+    只读探测，绝不因某个工具异常而抛出（版本记录是附加信息，不阻断流程）。
+    """
+    out = {}
+    for key, exe in (tools or {}).items():
+        exe = str(exe or '')
+        if not exe:
+            out[key] = 'unknown'
+            continue
+        if exe in _TOOL_VERSION_CACHE:
+            out[key] = _TOOL_VERSION_CACHE[exe]
+            continue
+        ver = 'unknown'
+        for args in _VERSION_CMD_VARIANTS:
+            try:
+                r = subprocess.run(
+                    [exe] + list(args), capture_output=True, timeout=10,
+                    creationflags=(getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                                   if sys.platform == 'win32' else 0))
+                raw = (r.stdout or b'') + b'\n' + (r.stderr or b'')
+                cand = _parse_tool_version(raw)
+                if cand != 'unknown':
+                    ver = cand
+                    break
+            except Exception:
+                # 超时/权限/非可执行（如 .bat 需 cmd 外壳）→ 换下一种写法；
+                # 全失败记 unknown，调用方照常运行
+                continue
+        _TOOL_VERSION_CACHE[exe] = ver
+        out[key] = ver
+    return out
+
+
+# ------------------------------------------------------------------
 # 步骤断点标记（work_dir 均位于平台 results/ 内）
 # ------------------------------------------------------------------
 def step_done_file(work_dir, step):
@@ -798,7 +941,12 @@ def step_done_file(work_dir, step):
 
 
 def is_step_done(work_dir, step):
-    return os.path.isfile(step_done_file(work_dir, step))
+    try:
+        return os.path.isfile(step_done_file(work_dir, step))
+    except FileNotFoundError:
+        # 目录尚不存在（如全新样品首次跑到该步）= 未完成，而非异常——
+        # 调用方（如管道⑧的 conserved 守卫）据此走正常首次运行分支
+        return False
 
 
 def mark_step_done(work_dir, step):
@@ -826,7 +974,43 @@ def clear_step_done(work_dir, step=None):
 
 
 # ------------------------------------------------------------------
-# FASTA / FASTQ 流式处理
+# ------------------------------------------------------------------
+# SVG 产物合法性自检
+# ------------------------------------------------------------------
+def verify_svg(path, logger=None):
+    """SVG 产物必须是良构 XML（否则矢量交付物损坏、嵌入报告时浏览器只能
+    容错渲染残图）。2026-10-04 审查实测：examples/results/synteny/
+    compare.svg 曾有 18 处 </path 闭合缺 '>'，全部残在同一张图里。
+
+    校验失败时自动尝试幂等修复（补齐缺 '>' 的闭合标签），仍失败则告警
+    返回 False；成功/修复成功返回 True。只在产物落盘后调用。
+    """
+    import re as _re
+    import xml.etree.ElementTree as _ET
+    try:
+        _ET.parse(path)
+        return True
+    except _ET.ParseError:
+        pass
+    try:
+        with open(path, encoding='utf-8') as f:
+            svg = f.read()
+        fixed, n_fix = _re.subn(r'</([a-zA-Z][\w-]*)(?![\w>])', r'</\1>', svg)
+        _ET.fromstring(fixed)
+        with open(path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(fixed)
+        if logger:
+            logger.log(f"SVG 非良构，已自动修复 {n_fix} 处闭合标签: {path}",
+                       "WARN")
+        return True
+    except Exception as e:
+        if logger:
+            logger.log(f"SVG 非良构且无法自动修复（矢量图可能渲染残缺）: "
+                       f"{path} · {type(e).__name__}: {e}", "WARN")
+        return False
+
+
+# FASTA / FASTA 流式处理
 # ------------------------------------------------------------------
 def iter_fasta(path):
     """迭代 FASTA：yield (header_no_arrow, seq)"""

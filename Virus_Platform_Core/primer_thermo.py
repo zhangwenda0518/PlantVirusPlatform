@@ -104,16 +104,19 @@ def hairpin_analysis(fwd_seq, rev_seq):
 def end_stability_analysis(fwd_seq, rev_seq):
     """3' 端相邻稳定性（kcal/mol）。
 
-    用 calc_end_stability(seq1, seq2) 计算两条序列在 3' 端互配的 ΔG。
-    这里算的是 **引物对之间** 的 3' 端互配（Fwd vs Rev 的反向互补），
-    而非单条引物的 3' 端稳定性——后者请取 primer3 设计输出的
+    用 calc_end_stability(seq1, seq2) 计算「seq1 的 3' 端退火到 seq2」的 ΔG。
+    这里算的是 **引物对之间** 的 3' 端互配（Fwd 3' 端 vs Rev 原序列）：
+    calc_end_stability 把 seq2 按自身 5'→3' 读入，F 的 3' 端与之反平行互补
+    即真实互配。原先传 revcomp(rev) 等于把 R 摆成模板链方向，真实 3' 互配
+    被算成不结合（2026-10-03 修复 P2-10；实测 F=ACGTA / R=TACGT：
+    传 R 得 -2749 cal/mol，传 revcomp(R) 得 +1700 cal/mol）。
+    单条引物的 3' 端稳定性请取 primer3 设计输出的
     PRIMER_LEFT_i_END_STABILITY 字段（设计阶段已给出，无需重算）。
     """
     out = {'fwd_rev_end_dg': 0.0}
     if not (fwd_seq and rev_seq):
         return out
-    rc_rev = str(Seq(rev_seq).reverse_complement()) if BIO_OK else rev_seq
-    r = _safe_call('calc_end_stability', fwd_seq, rc_rev)
+    r = _safe_call('calc_end_stability', fwd_seq, rev_seq)
     if r is not None:
         out['fwd_rev_end_dg'] = round(r.dg / 1000.0, 2)
     return out
@@ -123,9 +126,20 @@ def end_stability_analysis(fwd_seq, rev_seq):
 # 3. GC / Tm 复核（Biopython Nearest-Neighbor）
 # ================================================================
 def gc_tm_check(fwd_seq, rev_seq, probe_seq=''):
-    """用 Biopython Tm_NN 独立复核 Tm，GC 用 gc_fraction 计算。"""
+    """用 Biopython Tm_NN 独立复核 Tm，GC 用 gc_fraction 计算。
+
+    口径旁注（2026-10-03 修复 P3-19，取值与字段名保持不变）：
+      * tm_note：Tm_NN 用 Biopython 默认盐条件（Na 50 mM / Mg 1.5 mM /
+        dNTP 0.6 mM / DNA 50 nM），与 primer3 内部条件不同，仅供排序与
+        交叉核对，不可与 primer3 的 Tm 混用比较。
+      * gc_note：gc_fraction 默认 ambiguous='remove'——含 N 等简并碱基的
+        引物只统计非 N 子集（分母同时剔除），序列偏短时 GC% 波动更大。
+    """
     out = {'gc_fwd': 0.0, 'gc_rev': 0.0, 'gc_probe': 0.0,
-           'tm_fwd_nn': 0.0, 'tm_rev_nn': 0.0, 'tm_probe_nn': 0.0}
+           'tm_fwd_nn': 0.0, 'tm_rev_nn': 0.0, 'tm_probe_nn': 0.0,
+           'tm_note': 'Biopython Tm_NN 默认盐条件（50 mM Na, 1.5 mM Mg, '
+                      '0.6 mM dNTP, 50 nM DNA），与 primer3 内部条件不同，仅供排序',
+           'gc_note': "gc_fraction(ambiguous='remove')：含 N 等简并碱基时只统计非 N 子集"}
     if not BIO_OK:
         return out
 

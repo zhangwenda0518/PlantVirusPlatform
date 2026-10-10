@@ -168,16 +168,25 @@ def main():
 
     # ---------- 3. 既有样品报告 ----------
     print('--- 样品报告 ---', flush=True)
-    r = c.get('/api/samples')
-    samples = [x['name'] for x in r.get_json()]
-    check(len(samples) > 0, f'样品列表 {len(samples)} 个')
-    for s in samples:
-        r = c.get(f'/report/{s}/')
-        if r.status_code == 200:
-            check(True, f'样品 {s} 报告可访问')
-            break
-    else:
-        print('  SKIP（无样品带报告）')
+    _smp = os.path.join(DIRS['results'], 'it_platform_smp')
+    os.makedirs(_smp, exist_ok=True)
+    # 与上面归档接口同一口径：不绑开发机残留数据（清理 run/ 后必然 FAIL，
+    # 2026-09-29 实测又踩中一次）。任意非下划线目录即被 /api/samples 收录，
+    # 自造最小 fixture → 断言列表如实反映 → finally 删除。
+    try:
+        r = c.get('/api/samples')
+        samples = [x['name'] for x in r.get_json()]
+        check('it_platform_smp' in samples,
+              f'样品列表如实反映（{len(samples)} 个，含自造 fixture）')
+        for s in samples:
+            r = c.get(f'/report/{s}/')
+            if r.status_code == 200:
+                check(True, f'样品 {s} 报告可访问')
+                break
+        else:
+            print('  SKIP（无样品带报告）')
+    finally:
+        shutil.rmtree(_smp, ignore_errors=True)
 
     # ---------- 3a. contigs 卡：Krona 前置 / 宿主筛选与自动预测 / ID 复制 / 跳转 ----
     hv = c.get('/tools?g=virus').get_data(as_text=True)
@@ -213,32 +222,35 @@ def main():
     ha = c.get('/tools?g=annotate').get_data(as_text=True)
     check(all(f"'{a}'" in ha for a in ('blastn', 'blastx', 'primer')),
           't-hom 卡含 BLASTN / BLASTX / Primer 分析')
-    for marker in ('Best E-value', 'Conserved Domains', 'Primer design complete',
-                   'ncbiCdd', 'ncbiNuc'):
+    for marker in ('Best E-value', 'Primer design complete', 'ncbiNuc'):
         check(marker in ha, f'metabuli 风格结果渲染含 {marker}')
+    # 2026-09-29：CDD 卡已随本地 CDD 库下线，渲染里不应再有 CDD 分支
+    check('ncbiCdd' not in ha and 'Conserved Domains' not in ha,
+          'CDD 渲染分支已移除（cdd → t-cdd 卡不存在）')
 
-    # 2026-09-18：引物设计 / dsRNA 设计由「病毒注释分析」拆到新组「检测与防治」。
+    # 2026-09-18：引物设计由「病毒注释分析」拆到新组「检测与防治」。
+    # 2026-09-29：dsRNA 设计曾整体迁出；2026-10-03 已恢复（引擎三模块 +
+    # t-dsrna 工具卡 + /api/tool/dsrna_panel）——本段断言恢复后的渲染产物。
     # 断言的是**渲染出来的界面产物**（组顶栏），不是照抄 NAV_GROUPS 自证 ——
     # 这层最容易漏改的正是 pages.py 的 _PATH_TO_GROUP（漏了则 /primer 侧栏
-    # 仍列注释组 7 项、dsRNA 入口还指向 ?g=annotate）。
+    # 仍列注释组项、入口还指向 ?g=annotate）。
     hp = c.get('/primer').get_data(as_text=True)
     _gt = hp.split('class="group-topbar"', 1)[-1].split('</nav>', 1)[0]
     check(_gt and '检测与防治' in _gt, '/primer 组顶栏 =「检测与防治」')
-    check('/tools?g=detect#t-dsrna' in _gt,
-          '/primer 组顶栏的 dsRNA 入口指向 detect 组')
     check('病毒注释分析' not in _gt, '/primer 组顶栏不再是「病毒注释分析」')
     hd = c.get('/tools?g=detect').get_data(as_text=True)
-    check('id="t-dsrna"' in hd, '检测与防治组概览渲染出 dsRNA 卡')
+    check('id="t-dsrna"' in hd, 'dsRNA 卡已恢复（detect 组渲染 t-dsrna）')
+    check('/api/tool/dsrna_panel' in hd, 'dsRNA 面板接口已随模块恢复接线')
     from Virus_Platform_Core.web.pages import NAV_GROUPS as _NG
     _g = {g['id']: g for g in _NG}
     _d_ids = {it.get('id') or it.get('href') for it in _g['detect']['items']}
     _a_ids = {it.get('id') or it.get('href') for it in _g['annotate']['items']}
-    # 2026-09-18：另一会话把「miRNA 设计」(t-mirna) 也放进了本组 →
-    # 期望集合跟着现实走（不是本会话加的东西，但断言得对得上，否则整份文件在这就崩）
-    check(_d_ids == {'/primer', 't-dsrna', 't-mirna'},
-          f'检测与防治组 = 引物设计 + dsRNA 设计 + miRNA 设计（实际 {sorted(_d_ids)}）')
-    check(not ({'/primer', 't-dsrna'} & _a_ids),
-          '注释组不再含引物设计 / dsRNA 设计')
+    # 2026-10-06：detect 组新增 t-crispr（CRISPR/Cas12a 检测试剂设计卡），
+    # 断言清单随 NAV_GROUPS 更新（旧清单缺 t-crispr 导致批量回归误报）
+    check(_d_ids == {'/primer', 't-crispr', 't-dsrna', 't-mirna'},
+          f'检测与防治组 = 引物设计 + CRISPR + dsRNA + miRNA（实际 {sorted(_d_ids)}）')
+    check(not ({'/primer'} & _a_ids),
+          '注释组不再含引物设计')
 
     # ---------- 3b. 模块历史运行组件（折叠/衔接/删除） ----------
     import os as _os
@@ -389,15 +401,16 @@ def main():
     _r = c.get('/api/examples/orf/03_assembly/summary.json')
     check(_r.status_code == 200, '示例结果单文件可取')
 
-    # 在线工具（CDD / BLASTN·BLASTX）与 LOGAN 的示例也要有输入与产物
+    # 在线工具（BLASTN·BLASTX）与 LOGAN 的示例也要有输入与产物
+    # （CDD 卡已于 2026-09-29 下线，示例映射同步移除）
     check(_os.path.isfile(_os.path.join(EX, 'example_contig_1.fasta')),
-          '单 contig 示例文件存在（CDD/BLAST 粘贴用）')
-    check("cddSeqText: 'CONTIGS_TEXT'" in _exjs and
-          "homSeqText: 'CONTIGS_TEXT'" in _exjs,
-          't-cdd / t-hom 示例填入序列正文（textarea）')
-    check("'t-cdd': 'cdd'" in _exjs and "'t-hom': 'hom'" in _exjs and
+          '单 contig 示例文件存在（BLAST 粘贴用）')
+    check("homSeqText: 'CONTIGS_TEXT'" in _exjs and
+          "cddSeqText" not in _exjs,
+          't-hom 示例填入序列正文（textarea），t-cdd 映射已移除')
+    check("'t-hom': 'hom'" in _exjs and
           "'/logan': 'logan'" in _exjs,
-          'RESULT_MAP 覆盖 cdd / hom / logan')
+          'RESULT_MAP 覆盖 hom / logan')
     _r = c.get('/api/examples/logan')
     _lgan = (_r.get_json() or {}).get('files', []) if _r.status_code == 200 else []
     check(any(f['path'].endswith('.html') and f['kind'] == 'html'
@@ -417,15 +430,17 @@ def main():
     # synteny 模块已随 2026-09 重构移除，示例结果同步下线
     check(len(_man) >= 25, f'示例结果覆盖 ≥25 个模块（实际 {len(_man)}）')
 
-    # ---------- 3f. 本地比对引擎（离线：blastn / DIAMOND / mmseqs2） ----------
+    # ---------- 3f. 本地比对引擎（离线：blastn / DIAMOND / BFVD） ----------
     from Virus_Platform_Core.local_search import engine_status as _eng_status
     _st = _eng_status()
     check(bool(_st.get('ok')), '本地 blastn 就绪（病毒参考核酸库 + BLAST+）')
     check(bool(_st.get('ok_blastx')), '本地 DIAMOND blastx 就绪（viral_prot.dmnd）')
-    check(bool(_st.get('ok_cdd')), '本地 CDD 就绪（mmseqs2 + cdd_db）')
-    check('cdd_engine' in hv and 'hom_engine' in hv and
-          'value="local" selected' in hv,
-          '前端可切换本地 / 在线引擎（cdd_engine / hom_engine）')
+    check(bool(_st.get('ok_bfvd')), 'BFVD 病毒域库就绪（misc_db/suvtk/bfvd + mmseqs2）')
+    check('hom_engine' in hv and 'value="local" selected' in hv,
+          '前端可切换本地 / 在线引擎（hom_engine）')
+    check('oa_lib_bfvd' in c.get('/annotation').get_data(as_text=True)
+          and 'vf_methods' in hv and 'vc_methods' in hv,
+          '前端含 BFVD 注释层勾选框与验证方法下拉（blastx/BFVD 双路）')
     _seq1 = ''.join(
         ln.strip() for ln in open(_os.path.join(EX, 'example_contig_1.fasta'),
                                   encoding='utf-8')
@@ -437,17 +452,12 @@ def main():
     check(_r.status_code == 200 and _bl.get('engine') == 'local' and
           len(_bl.get('hits') or []) > 0,
           f"本地 blastn 结果可经 API 读取（{len(_bl.get('hits') or [])} 条命中）")
-    for _mod, _fn, _key in (('cdd', 'example_contig_1_cdd_local.json', 'coord'),
-                            ('hom', 'example_contig_1_blastx_local.json', None)):
-        _p = _os.path.join(EX, 'results', _mod, _fn)
-        check(_os.path.isfile(_p), f'本地示例产物存在: {_mod}/{_fn}')
-        _d = json.load(open(_p, encoding='utf-8'))
-        check(_d.get('engine') == 'local' and len(_d.get('hits') or []) > 0,
-              f"{_mod}/{_fn}: engine=local 且有命中"
-              f"（{len(_d.get('hits') or [])} 条）")
-        if _key:
-            check(_d.get(_key) == 'nt' and _d.get('query_len'),
-                  '本地 CDD 用核酸坐标（coord=nt + query_len）')
+    _p = _os.path.join(EX, 'results', 'hom', 'example_contig_1_blastx_local.json')
+    check(_os.path.isfile(_p), f'本地示例产物存在: hom/example_contig_1_blastx_local.json')
+    _d = json.load(open(_p, encoding='utf-8'))
+    check(_d.get('engine') == 'local' and len(_d.get('hits') or []) > 0,
+          f"hom/example_contig_1_blastx_local.json: engine=local 且有命中"
+          f"（{len(_d.get('hits') or [])} 条）")
 
     # ---------- 4. 静态资源 ----------
     r = c.get('/static/app.js')

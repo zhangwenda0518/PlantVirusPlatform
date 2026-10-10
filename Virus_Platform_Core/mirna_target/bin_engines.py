@@ -13,7 +13,6 @@
 import os
 import re
 import subprocess
-import tempfile
 import time
 
 from ..config import PLATFORM_ROOT
@@ -29,6 +28,62 @@ RNAHYBRID_EXE = os.path.join(TOOL_ROOT, 'rnahybrid', 'RNAhybrid.exe')
 PITA_ROOT = os.path.join(TOOL_ROOT, 'pita')
 PITA_PERL = os.path.join(PITA_ROOT, 'perl', 'bin', 'perl.exe')
 PITA_SCRIPT = os.path.join(PITA_ROOT, 'pita_prediction.pl')
+
+
+def _to_dna(seq):
+    """U→T 归一（含小写 u→t，保留原大小写），供 miRanda / RNAhybrid 写盘用。
+
+    PITA 侧口径相反（要求 RNA 字母表，T→U）；两侧对称归一，
+    避免 U 输入被 DNA 引擎当非法字符（2026-10-03 修复 P2-12）。
+    """
+    return seq.replace('-', '').replace('U', 'T').replace('u', 't')
+
+
+def _ascii_space_free(path) -> bool:
+    """路径是否 ASCII 且不含空格。
+
+    PITA 的 busybox sh/cat 用空白分词：含空格路径实测必挂
+    （cat: '.../Temp/vp pita space test/...' → 断在空格处）。
+    """
+    s = str(path)
+    return ' ' not in s and s.isascii()
+
+
+def _temp_free_base() -> str:
+    """%TEMP% 下的 ASCII 无空格目录基（不合格时退到系统盘根 vp_tmp）。"""
+    import tempfile
+    cands = [tempfile.gettempdir(),
+             os.path.join(os.environ.get('SystemDrive', 'C:') + os.sep, 'vp_tmp')]
+    for c in cands:
+        if _ascii_space_free(c):
+            os.makedirs(c, exist_ok=True)
+            return c
+    return tempfile.gettempdir()
+
+
+def _pita_root():
+    """PITA 工具根：含空格时把最小文件集复制到 %TEMP% ASCII 无空格目录。
+
+    复制一次后按路径哈希缓存复用（整目录 ~103MB，只在路径含空格时发生）。
+    """
+    if _ascii_space_free(PITA_ROOT):
+        return PITA_ROOT
+    import hashlib
+    import shutil
+    tag = hashlib.md5(PITA_ROOT.encode('utf-8', 'replace')).hexdigest()[:8]
+    dst = os.path.join(_temp_free_base(), f'vp_pita_root_{tag}')
+    if not os.path.isfile(os.path.join(dst, 'pita_prediction.pl')):
+        os.makedirs(dst, exist_ok=True)
+        for name in ('perl', 'bin', 'lib'):
+            src = os.path.join(PITA_ROOT, name)
+            if os.path.isdir(src):
+                shutil.copytree(src, os.path.join(dst, name),
+                                dirs_exist_ok=True)
+        for name in os.listdir(PITA_ROOT):
+            src = os.path.join(PITA_ROOT, name)
+            if os.path.isfile(src):
+                shutil.copy2(src, os.path.join(dst, name))
+    return dst
 
 
 def binaries_available():
@@ -59,14 +114,16 @@ def run_miranda_batch(mirnas, viruses, workdir,
     返回 dict: {hits: [ {mirna, target, score, energy, q_start, q_end,
                          t_start, t_end, aln_len, identity, similarity,
                          query_aln, ref_aln, mid} ], skipped_reason?}
+
+    输入序列写盘前统一 U→T（miranda 是 DNA 字母表工具，PITA 侧反向 T→U）。
     """
     if not os.path.isfile(MIRANDA_EXE):
         return None
     os.makedirs(workdir, exist_ok=True)
     q_fa = os.path.join(workdir, 'miranda_q.fa')
     t_fa = os.path.join(workdir, 'miranda_t.fa')
-    _write_fasta(q_fa, [(n, s.replace('-', '')) for n, s in mirnas])
-    _write_fasta(t_fa, [(n, s.replace('-', '')) for n, s in viruses])
+    _write_fasta(q_fa, [(n, _to_dna(s)) for n, s in mirnas])
+    _write_fasta(t_fa, [(n, _to_dna(s)) for n, s in viruses])
     out = os.path.join(workdir, 'miranda.out')
     # miRanda v3.3a 的选项必须放在两个 FASTA 之后（file1 file2 [options]）
     r = _run([MIRANDA_EXE, q_fa, t_fa,
@@ -86,18 +143,24 @@ def run_miranda_batch(mirnas, viruses, workdir,
             try:
                 body = ln_s.split('\t', 1)[1]
                 score = float(body.split('Score:')[1].split()[0])
-                q_nums = _ints_after(body.split('R:')[0])
+                # Q 区间：先按 'Q:' 定位再取数（2026-10-03 修复 P2-9）——
+                # 旧实现 split('R:') 前缀里含 Score 数字，q1/q2 取到 score/2。
+                q_nums = _ints_after(body.split('Q:')[1].split('R:')[0])
                 q1, q2 = q_nums[0], q_nums[1]
                 r_nums = _ints_after(body.split('R:')[1].split('Align')[0])
                 t1, t2 = r_nums[0], r_nums[1]
                 aln_len = int(body.split('Align Len (')[1].split(')')[0])
             except (IndexError, ValueError):
                 continue
-            q_aln = lines[i + 1].strip() if i + 1 < len(lines) else ''
-            m_aln = lines[i + 2].strip() if i + 2 < len(lines) else ''
-            t_aln = lines[i + 3].strip() if i + 3 < len(lines) else ''
+            # 命中块固定 7 行（含空行，官方 v3.3a 实测）：
+            #   i+0 Forward/Reverse，i+1 空，i+2 Query 行，i+3 杠线行，
+            #   i+4 Ref 行，i+5 空，i+6 Energy 行
+            q_aln = lines[i + 2].strip() if i + 2 < len(lines) else ''
+            m_aln = lines[i + 3].strip() if i + 3 < len(lines) else ''
+            t_aln = lines[i + 4].strip() if i + 4 < len(lines) else ''
             energy = None
-            for j in range(i + 1, min(i + 6, len(lines))):
+            # Energy 行在第 6 行：窗口放宽到 i+8（2026-10-03 修复 P2-8）
+            for j in range(i + 1, min(i + 9, len(lines))):
                 if 'Energy:' in lines[j]:
                     try:
                         energy = float(lines[j].split('Energy:')[1].split('kCal')[0])
@@ -118,14 +181,17 @@ def run_miranda_batch(mirnas, viruses, workdir,
 
 def run_rnahybrid_batch(mirnas, viruses, workdir,
                         energy_cutoff: float = -15, max_target_len: int = 60000):
-    """官方 RNAhybrid 批量扫描（人类 3'UTR p 值表，长目标上限上调）。"""
+    """官方 RNAhybrid 批量扫描（人类 3'UTR p 值表，长目标上限上调）。
+
+    输入序列写盘前统一 U→T（与 PITA 侧 T→U 对称，2026-10-03 修复 P2-12）。
+    """
     if not os.path.isfile(RNAHYBRID_EXE):
         return None
     os.makedirs(workdir, exist_ok=True)
     q_fa = os.path.join(workdir, 'rh_q.fa')
     t_fa = os.path.join(workdir, 'rh_t.fa')
-    _write_fasta(q_fa, [(n, s.replace('-', '')) for n, s in mirnas])
-    _write_fasta(t_fa, [(n, s.replace('-', '')) for n, s in viruses])
+    _write_fasta(q_fa, [(n, _to_dna(s)) for n, s in mirnas])
+    _write_fasta(t_fa, [(n, _to_dna(s)) for n, s in viruses])
     out = os.path.join(workdir, 'rnahybrid.out')
     r = _run([RNAHYBRID_EXE, '-t', t_fa, '-q', q_fa, '-s', '3utr_human',
               '-m', str(max_target_len), '-e', str(energy_cutoff)])
@@ -168,14 +234,34 @@ def run_pita_batch(mirnas, viruses, workdir,
     自动以占位值降级 —— 其源码既定行为）。
 
     注意：PITA 管线的种子匹配要求 RNA 字母表（U）—— 输入序列里的 T
-    必须转成 U，否则候选匹配数为 0。"""
+    必须转成 U，否则候选匹配数为 0。
+
+    空格路径（2026-10-03 修复 P2-11）：PITA 的 busybox sh/cat 以空白分词，
+    含空格路径实测必挂（`cat: '.../Temp/vp pita space test/...'` 断在空格）。
+    因此：① 输入 fasta 落盘目录含空格 → 迁到 %TEMP% 下 ASCII 无空格目录
+    （跑完清理）；② PITA_ROOT 本身含空格 → 最小文件集复制到临时目录跑。
+    """
     if not (os.path.isfile(PITA_PERL) and os.path.isfile(PITA_SCRIPT)):
+        return None
+    pita_root = _pita_root()
+    pita_perl = os.path.join(pita_root, 'perl', 'bin', 'perl.exe')
+    if not os.path.isfile(pita_perl):
         return None
     os.makedirs(workdir, exist_ok=True)
 
+    # 输入 fasta 目录：含空格时迁到临时 ASCII 目录（产物在 pita_root，
+    # 不落在 workdir，故此步只影响输入读盘路径）
+    fa_dir = str(workdir)
+    tmp_fa_dir = None
+    if not _ascii_space_free(fa_dir):
+        import tempfile
+        tmp_fa_dir = tempfile.mkdtemp(prefix='vp_pita_in_',
+                                      dir=_temp_free_base())
+        fa_dir = tmp_fa_dir
+
     # PITA 管线要求 RNA 字母表（U）：保留原序列的 U，仅去除缺口字符
-    q_fa = os.path.join(workdir, 'pita_q.fa')
-    t_fa = os.path.join(workdir, 'pita_t.fa')
+    q_fa = os.path.join(fa_dir, 'pita_q.fa')
+    t_fa = os.path.join(fa_dir, 'pita_t.fa')
     _write_fasta(q_fa, [(n, s.replace('-', '').replace('T', 'U'))
                         for n, s in mirnas])
     _write_fasta(t_fa, [(n, s.replace('-', '').replace('T', 'U'))
@@ -184,19 +270,24 @@ def run_pita_batch(mirnas, viruses, workdir,
     env = os.environ.copy()
     # RNAddG4/RNAduplex 在 pita 根目录：PATH 必须含 pita 根 + perl/bin + bin
     env['PATH'] = os.pathsep.join((
-        PITA_ROOT,
-        os.path.join(PITA_ROOT, 'perl', 'bin'),
-        os.path.join(PITA_ROOT, 'bin'),
+        pita_root,
+        os.path.join(pita_root, 'perl', 'bin'),
+        os.path.join(pita_root, 'bin'),
         env.get('PATH', ''),
     ))
     # PITA 的 busybox sh/cat 处理不了反斜杠路径：传正斜杠
-    r = _run([PITA_PERL, '-I', '.', '-I', 'lib', 'pita_prediction.pl',
-              '-utr', t_fa.replace(os.sep, '/'),
-              '-mir', q_fa.replace(os.sep, '/'),
-              '-prefix', prefix,
-              '-flank_up', str(flank_up), '-flank_down', str(flank_down)],
-             cwd=PITA_ROOT, timeout=1800)
-    tab = os.path.join(PITA_ROOT, f'{prefix}_pita_results.tab')
+    try:
+        r = _run([pita_perl, '-I', '.', '-I', 'lib', 'pita_prediction.pl',
+                  '-utr', t_fa.replace(os.sep, '/'),
+                  '-mir', q_fa.replace(os.sep, '/'),
+                  '-prefix', prefix,
+                  '-flank_up', str(flank_up), '-flank_down', str(flank_down)],
+                 cwd=pita_root, timeout=1800)
+    finally:
+        if tmp_fa_dir:
+            import shutil
+            shutil.rmtree(tmp_fa_dir, ignore_errors=True)
+    tab = os.path.join(pita_root, f'{prefix}_pita_results.tab')
     hits = []
     if os.path.isfile(tab):
         with open(tab, encoding='utf-8', errors='replace') as f:

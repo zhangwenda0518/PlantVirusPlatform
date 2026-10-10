@@ -319,5 +319,12 @@
    "KC559092",
    "EU332308"
   ]
+ },
+ "_notes": {
+  "用途": "D11-D18（人工混合集）真值表：每集为 1 个物种的若干 isolate 参考（accession 级）与设计 reads 数。",
+  "已知缺口_D18": "D18（Barley yellow dwarf virus）5 个 isolate 的 pct 合计 85.27%（其余约 14.7% 的 reads 未见于源组成表）——真值覆盖不完整，定量对比只对已转录部分负责，未虚构缺失值。",
+  "已知缺口_D14": "D14（Potato virus Y）5 个 isolate 的 pct 合计 105.5%（>100%，源表四舍五入/重复计数所致）——比例对比按原表转录，未做归一化。",
+  "解析注记": "D13 的 species 字符串内嵌了源 md 的说明文字（'The composition of this dataset is completely artificial...'），为解析产物，物种判定不受影响。",
+  "披露位置": "上述缺口同步披露于 docs/paper/benchmark/BENCHMARK_zh.md 数据说明节（2026-10-03）。"
  }
 }

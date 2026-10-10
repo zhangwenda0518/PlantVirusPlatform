@@ -22,6 +22,8 @@ import os
 import re
 import shutil
 import sys
+import threading
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -69,6 +71,43 @@ def _table_dir(name):
 
 def _csv_path(name):
     return os.path.join(_table_dir(name), 'unified_metadata.csv')
+
+
+# ══════════════════════════════════════════════════════════════
+# 项目级写锁 + 原子落盘
+# ══════════════════════════════════════════════════════════════
+# unified_metadata.csv 是"整表读 → 改 → 整表回写"：Flask 多线程 / 多标签页 /
+# CLI 并发时会互相覆盖（后写者用陈旧快照盖掉先写者）。这里按**项目目录**粒度
+# 加可重入锁，串行化同一项目的读改写；写盘统一 .tmp + os.replace（原子），
+# 避免读端拿到半截文件。锁字典自身的创建受全局锁保护。
+_LOCKS = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(key):
+    """按路径取专属可重入锁（目录粒度：一个项目一把锁）。"""
+    k = os.path.abspath(str(key))
+    with _LOCKS_GUARD:
+        lk = _LOCKS.get(k)
+        if lk is None:
+            lk = _LOCKS[k] = threading.RLock()
+        return lk
+
+
+def table_lock(name):
+    """提交项目级互斥（with table_lock('项目名'): ...）。"""
+    return _lock_for(_table_dir(name))
+
+
+def atomic_write_text(path, text):
+    """文本原子落盘：同目录先写 .tmp 再 os.replace。"""
+    p = check_path(path, must_exist=False, in_platform=True)
+    os.makedirs(os.path.dirname(p) or '.', exist_ok=True)
+    tmp = p + '.tmp'
+    with safe_open(tmp, 'wt') as f:
+        f.write(text)
+    os.replace(tmp, p)
+    return p
 
 
 # ══════════════════════════════════════════════════════════════
@@ -125,23 +164,24 @@ def create_table(name, df=None, sample=''):
     sample: ''(空表) / 'demo'(内置示例) / 'public'(含 SRR 公共数据样例) /
     'selfseq'(自测数据样例，占位符待填)——后两者对应原 GUI Samples 菜单。
     """
-    d = _table_dir(name)
-    os.makedirs(d, exist_ok=True)
-    csv_p = _csv_path(name)
-    if os.path.isfile(csv_p):
-        raise FileExistsError(f"提交项目已存在: {name}")
-    if sample:
-        src = os.path.join(_sample_dir(), f'sample_{sample}.csv')
-        if sample == 'demo' or not os.path.isfile(src):
-            cols = list(UNIFIED_COLUMNS.keys())
-            df = pd.DataFrame(_DEMO_ROWS if sample == 'demo' else [],
-                              columns=cols).astype(object)
-        else:
-            df = _align_columns(load_df(src))
-    elif df is None:
-        df = pd.DataFrame(columns=list(UNIFIED_COLUMNS.keys())).astype(object)
-    save_df(df, csv_p)
-    return csv_p
+    with table_lock(name):
+        d = _table_dir(name)
+        os.makedirs(d, exist_ok=True)
+        csv_p = _csv_path(name)
+        if os.path.isfile(csv_p):
+            raise FileExistsError(f"提交项目已存在: {name}")
+        if sample:
+            src = os.path.join(_sample_dir(), f'sample_{sample}.csv')
+            if sample == 'demo' or not os.path.isfile(src):
+                cols = list(UNIFIED_COLUMNS.keys())
+                df = pd.DataFrame(_DEMO_ROWS if sample == 'demo' else [],
+                                  columns=cols).astype(object)
+            else:
+                df = _align_columns(load_df(src))
+        elif df is None:
+            df = pd.DataFrame(columns=list(UNIFIED_COLUMNS.keys())).astype(object)
+        save_df(df, csv_p)
+        return csv_p
 
 
 def _sample_dir():
@@ -174,15 +214,16 @@ def copy_table(src, dst):
 
 def import_table(name, src_path):
     """从外部 CSV/TSV/Excel 导入为提交项目。"""
-    d = _table_dir(name)
-    os.makedirs(d, exist_ok=True)
-    csv_p = _csv_path(name)
-    if os.path.isfile(csv_p):
-        raise FileExistsError(f"提交项目已存在: {name}")
-    df = load_df(src_path)
-    df = _align_columns(df)
-    save_df(df, csv_p)
-    return csv_p, len(df)
+    with table_lock(name):
+        d = _table_dir(name)
+        os.makedirs(d, exist_ok=True)
+        csv_p = _csv_path(name)
+        if os.path.isfile(csv_p):
+            raise FileExistsError(f"提交项目已存在: {name}")
+        df = load_df(src_path)
+        df = _align_columns(df)
+        save_df(df, csv_p)
+        return csv_p, len(df)
 
 
 def _align_columns(df):
@@ -196,12 +237,19 @@ def _align_columns(df):
 
 
 def save_df(df, path):
-    """DataFrame → CSV（utf-8-sig，Excel 直接打开不乱码）。"""
+    """DataFrame → CSV（utf-8-sig，Excel 直接打开不乱码）。
+
+    持项目目录锁 + .tmp→os.replace 原子落盘（并发整表回写不互相覆盖，
+    读端也不会看到半截 CSV）。
+    """
     p = check_path(path, must_exist=False, in_platform=True)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    with safe_open(p, 'wt') as f:
-        f.write('\ufeff')                      # BOM（safe_open 固定 utf-8）
-        df.to_csv(f, index=False, sep=',', lineterminator='\n')
+    with _lock_for(os.path.dirname(p)):
+        tmp = p + '.tmp'
+        with safe_open(tmp, 'wt') as f:
+            f.write('\ufeff')                      # BOM（safe_open 固定 utf-8）
+            df.to_csv(f, index=False, sep=',', lineterminator='\n')
+        os.replace(tmp, p)
     return p
 
 
@@ -210,8 +258,11 @@ def export_excel(name, df=None):
     d = _table_dir(name)
     df = load_table(name) if df is None else df
     xlsx = os.path.join(d, 'unified_metadata.xlsx')
-    df.to_excel(check_path(xlsx, must_exist=False, in_platform=True),
-                index=False, engine='openpyxl')
+    p = check_path(xlsx, must_exist=False, in_platform=True)
+    with table_lock(name):
+        tmp = p + '.tmp'
+        df.to_excel(tmp, index=False, engine='openpyxl')
+        os.replace(tmp, p)
     return xlsx
 
 
@@ -227,52 +278,56 @@ def load_table(name):
 
 
 def save_table(name, rows):
-    """前端编辑结果整表回写。rows: [{col: val, ...}, ...]"""
-    df = load_table(name)
-    cols = list(df.columns)
-    out = pd.DataFrame(rows)
-    for c in cols:
-        if c not in out.columns:
-            out[c] = ''
-    out = out[cols + [c for c in out.columns if c not in cols]]
-    out = out.fillna('').astype(object)
-    save_df(out, _csv_path(name))
-    return len(out)
+    """前端编辑结果整表回写。rows: [{col: val, ...}, ...]（项目级锁内读改写）"""
+    with table_lock(name):
+        df = load_table(name)
+        cols = list(df.columns)
+        out = pd.DataFrame(rows)
+        for c in cols:
+            if c not in out.columns:
+                out[c] = ''
+        out = out[cols + [c for c in out.columns if c not in cols]]
+        out = out.fillna('').astype(object)
+        save_df(out, _csv_path(name))
+        return len(out)
 
 
 def delete_rows(name, row_indices):
-    df = load_table(name)
-    idx = sorted({int(i) for i in row_indices}, reverse=True)
-    for i in idx:
-        if 0 <= i < len(df):
-            df = df.drop(df.index[i])
-    df = df.reset_index(drop=True)
-    save_df(df, _csv_path(name))
-    return len(df)
+    with table_lock(name):
+        df = load_table(name)
+        idx = sorted({int(i) for i in row_indices}, reverse=True)
+        for i in idx:
+            if 0 <= i < len(df):
+                df = df.drop(df.index[i])
+        df = df.reset_index(drop=True)
+        save_df(df, _csv_path(name))
+        return len(df)
 
 
 def add_rows(name, n=1):
-    df = load_table(name)
-    for _ in range(max(1, int(n))):
-        df.loc[len(df)] = {c: '' for c in df.columns}
-    save_df(df, _csv_path(name))
-    return len(df)
+    with table_lock(name):
+        df = load_table(name)
+        for _ in range(max(1, int(n))):
+            df.loc[len(df)] = {c: '' for c in df.columns}
+        save_df(df, _csv_path(name))
+        return len(df)
 
 
 def batch_fill(name, column, new_value, old_value=None):
     """旧值→新值替换（old_value 给定时）或填充该列所有占位符。返回修改数。"""
-    df = load_table(name)
-    if column not in df.columns:
-        raise KeyError(f"列不存在: {column}")
-    if old_value:
-        mask = df[column].astype(str).str.strip() == str(old_value).strip()
-    else:
-        mask = df[column].apply(is_placeholder)
-    count = int(mask.sum())
-    if count:
-        df.loc[mask, column] = str(new_value)
-        save_df(df, _csv_path(name))
-    return count
+    with table_lock(name):
+        df = load_table(name)
+        if column not in df.columns:
+            raise KeyError(f"列不存在: {column}")
+        if old_value:
+            mask = df[column].astype(str).str.strip() == str(old_value).strip()
+        else:
+            mask = df[column].apply(is_placeholder)
+        count = int(mask.sum())
+        if count:
+            df.loc[mask, column] = str(new_value)
+            save_df(df, _csv_path(name))
+        return count
 
 
 def table_payload(name):
@@ -418,10 +473,9 @@ def export_biosample_tsv(name, skip_placeholders=True):
         raise ValueError('所有行都是占位符，无可导出数据')
 
     out = os.path.join(_table_dir(name), 'biosample_registration.tsv')
-    with safe_open(out, 'wt') as f:
-        f.write('\t'.join(header) + '\n')
-        for vals in rows:
-            f.write('\t'.join(vals) + '\n')
+    with table_lock(name):                     # 与表写同锁，防与导出流程并发交叉
+        atomic_write_text(out, '\t'.join(header) + '\n'
+                          + ''.join('\t'.join(vals) + '\n' for vals in rows))
     return out, len(rows), skipped
 
 
@@ -630,9 +684,8 @@ def write_file(name, fname, content):
     if fname.startswith('..') or os.path.isabs(fname):
         raise ValueError(f"非法文件名: {fname}")
     p = check_path(os.path.join(d, fname), must_exist=False, in_platform=True)
-    with safe_open(p, 'wt') as f:
-        f.write(str(content).replace('\r\n', '\n'))
-    return p
+    with table_lock(name):
+        return atomic_write_text(p, str(content).replace('\r\n', '\n'))
 
 
 def read_file_path(name, fname):
@@ -650,7 +703,8 @@ def read_file_path(name, fname):
 # 提交序列 FASTA（GenBank 提交三件套之一：sequences.fsa）
 # ══════════════════════════════════════════════════════════════
 
-# DNA 提交不接受 U（RNA 表示），连同其它非 IUPAC 字符统一替换为 N
+# NCBI 口径：GenBank 提交的是 DNA 等价形式——RNA 序列（如 RNA 病毒基因组）
+# 的 U 必须先替换为 T（不计入非法字符）；其余非 IUPAC 字符统一替换为 N
 _SEQ_CLEAN_RE = re.compile(r'[^ACGTYSWKMBDHVN-]', re.IGNORECASE)
 
 
@@ -660,9 +714,15 @@ def export_submission_fasta(name, fasta_path, min_len=200):
     NCBI GenBank 提交三件套 = 序列 FASTA + source.src + template.sbt，
     本模块此前缺序列 FASTA 这一件。要求：
       - 表内 sequence_name 与 FASTA 头第一个 token 一一对应（顺序=表顺序）
-      - 序列字符规范化为 IUPAC（其余字符替换 N）
-    返回报告 dict {path, written, missing, extra, short, duplicates, replaced}。
+      - 序列字符规范化为 IUPAC：先 U→T（RNA→DNA 等价形式），其余替换 N
+    返回报告 dict {path, written, missing, extra, short, duplicates,
+                  replaced, u_to_t}：
+      replaced = 白名单外字符 → N 的计数；u_to_t = RNA U → T 的计数（单列）。
+    替换总数（replaced + u_to_t）超过序列总长 1% 时写
+    fasta_export_report.json 旁挂报告（供 report.html 顶部告警区块展示），
+    不阻断导出。
     """
+    import json as _json
     from collections import Counter
     from ..utils import iter_fasta
 
@@ -678,13 +738,17 @@ def export_submission_fasta(name, fasta_path, min_len=200):
     want_set = set(want)
 
     fa_ids, recs = [], {}
-    replaced = 0
+    replaced = 0                               # 非 IUPAC 字符 → N 计数
+    u_to_t = 0                                 # RNA U → T 计数（单列统计）
     for h, s in iter_fasta(check_path(fasta_path, must_exist=True)):
         sid = h.split()[0]
         fa_ids.append(sid)
         if sid in want_set and sid not in recs:
-            clean = _SEQ_CLEAN_RE.sub('N', str(s).upper())
-            replaced += sum(1 for a, b in zip(str(s).upper(), clean) if a != b)
+            raw = str(s).upper()
+            rna = raw.replace('U', 'T')        # NCBI 口径：DNA 等价形式
+            u_to_t += sum(1 for a in raw if a == 'U')
+            clean = _SEQ_CLEAN_RE.sub('N', rna)
+            replaced += sum(1 for a, b in zip(rna, clean) if a != b)
             recs[sid] = clean
 
     missing = [n for n in want if n not in recs]
@@ -702,9 +766,24 @@ def export_submission_fasta(name, fasta_path, min_len=200):
             f.write(f'>{sid}\n')
             for i in range(0, len(s), 70):
                 f.write(s[i:i + 70] + '\n')
-    return {'path': out, 'written': len(recs), 'missing': missing,
-            'extra': extra, 'short': short, 'duplicates': duplicates,
-            'replaced': replaced}
+
+    total_len = sum(len(v) for v in recs.values())
+    substituted = replaced + u_to_t
+    rep = {'path': out, 'written': len(recs), 'missing': missing,
+           'extra': extra, 'short': short, 'duplicates': duplicates,
+           'replaced': replaced, 'u_to_t': u_to_t,
+           'total_len': total_len, 'substituted': substituted,
+           'warn_substitution': bool(total_len and
+                                     substituted > 0.01 * total_len)}
+    # 旁挂报告：export()/report.html 与前端均可读取（不阻断导出）
+    try:
+        with safe_open(os.path.join(_table_dir(name),
+                                    'fasta_export_report.json'), 'wt') as jf:
+            _json.dump({k: v for k, v in rep.items() if k != 'path'},
+                       jf, ensure_ascii=False, indent=1)
+    except OSError:
+        pass
+    return rep
 
 
 def fasta_id_check(name, fasta_path):
@@ -907,38 +986,39 @@ def import_from_run(name, run):
         if col not in tdf.columns:
             raise KeyError(f"{run} 的分类表缺少 {col} 列")
 
-    df = load_table(name)
-    existing = {str(v or '').strip() for v in df['sequence_name'].tolist()} \
-        if 'sequence_name' in df.columns else set()
-    cols = list(UNIFIED_COLUMNS.keys())
-    for c in cols:
-        if c not in df.columns:
-            df[c] = ''
-    added = skipped = 0
-    details = []
-    for _, r in tdf.iterrows():
-        contig = str(r.get('contig', '') or '').strip()
-        if not contig or contig in existing:
-            skipped += 1
-            continue
-        row = {c: '' for c in cols}
-        row['sequence_name'] = contig
-        row['organism'] = _infer_organism(r)
-        # 可选自动回填（如宿主列存在时）
-        for tbl_col, run_col in _RUN_FIELD_MAP.items():
-            v = str(r.get(run_col, '') or '').strip()
-            if v and not is_placeholder(v):
-                row[tbl_col] = v
-        df.loc[len(df)] = row
-        existing.add(contig)
-        added += 1
-        details.append({
-            'contig': contig,
-            'organism': row['organism'],
-            'family': str(r.get('family', '') or '').strip(),
-            'near_complete': str(r.get('near_complete', '') or '').strip(),
-        })
-    save_df(df[_align_columns(df).columns], _csv_path(name))
+    with table_lock(name):                     # 整段 load→改→写 持锁，防并发覆盖
+        df = load_table(name)
+        existing = {str(v or '').strip() for v in df['sequence_name'].tolist()} \
+            if 'sequence_name' in df.columns else set()
+        cols = list(UNIFIED_COLUMNS.keys())
+        for c in cols:
+            if c not in df.columns:
+                df[c] = ''
+        added = skipped = 0
+        details = []
+        for _, r in tdf.iterrows():
+            contig = str(r.get('contig', '') or '').strip()
+            if not contig or contig in existing:
+                skipped += 1
+                continue
+            row = {c: '' for c in cols}
+            row['sequence_name'] = contig
+            row['organism'] = _infer_organism(r)
+            # 可选自动回填（如宿主列存在时）
+            for tbl_col, run_col in _RUN_FIELD_MAP.items():
+                v = str(r.get(run_col, '') or '').strip()
+                if v and not is_placeholder(v):
+                    row[tbl_col] = v
+            df.loc[len(df)] = row
+            existing.add(contig)
+            added += 1
+            details.append({
+                'contig': contig,
+                'organism': row['organism'],
+                'family': str(r.get('family', '') or '').strip(),
+                'near_complete': str(r.get('near_complete', '') or '').strip(),
+            })
+        save_df(df[_align_columns(df).columns], _csv_path(name))
     lineage_cols = [c for c in
                     ('realm', 'kingdom', 'phylum', 'class', 'order',
                      'family', 'genus', 'species')
@@ -1014,9 +1094,9 @@ def _link_file(name, kind):
 def _write_link(name, kind, payload):
     import json
     p = _link_file(name, kind)
-    with safe_open(p, 'wt') as f:
-        json.dump(payload, f, ensure_ascii=False, indent=1)
-    return p
+    with table_lock(name):                     # 与表写共用项目锁
+        return atomic_write_text(p, json.dumps(payload, ensure_ascii=False,
+                                               indent=1))
 
 
 def _read_link(name, kind):
@@ -1163,6 +1243,41 @@ def _parse_gff3_cds(gff_path):
     return out
 
 
+# 反向互补（部分标记判定用）
+_COMP_TBL = str.maketrans('ACGTNacgtn', 'TGCANtgcan')
+
+
+def _revcomp(s):
+    return str(s).translate(_COMP_TBL)[::-1]
+
+
+def _partial_markers(seq, s, e, st):
+    """截断 ORF → feature table 的部分标记 (lt, gt)。
+
+    规则（NCBI 5 列 feature table）：feature 5' 端不完整 → 首个坐标加 '<'；
+    3' 端不完整 → 末个坐标加 '>'。这里只在"截断正好落在 contig 边界"时判为
+    部分（起点非 ATG / 终点无终止且坐标贴边），否则只是内部异常 ORF，不加标记。
+    返回 ('', '')（正常）、('<', '')、('', '>')、('<', '>')；无法判断时 (None, None)。
+    """
+    if not seq or s < 1 or e < 1 or e > len(seq) or s > e:
+        return None, None
+    cds = seq[s - 1:e]
+    if str(st) == '-':
+        cds = _revcomp(cds)
+    if len(cds) < 3:
+        return None, None
+    has_start = cds[:3] == 'ATG'
+    has_stop = cds[-3:] in ('TAA', 'TAG', 'TGA')
+    if str(st) == '-':
+        five_at_edge = e >= len(seq)      # 反向：5' 端在写下的大坐标处
+        three_at_edge = s <= 1
+    else:
+        five_at_edge = s <= 1
+        three_at_edge = e >= len(seq)
+    return ('<' if (not has_start and five_at_edge) else '',
+            '>' if (not has_stop and three_at_edge) else '')
+
+
 def generate_feature_tbl(name):
     """按已关联 orf 运行的 CDS 注释生成 GenBank 5 列 feature table。
 
@@ -1233,21 +1348,57 @@ def generate_feature_tbl(name):
     df = load_table(name)
     names = [str(v or '').strip() for v in df['sequence_name'].tolist()
              if str(v or '').strip() and not is_placeholder(str(v or ''))]
+
+    # 3b) contig 序列（判定截断 ORF 的 < / > 部分标记）；取不到则不加标记并 WARN
+    seqs, fasta_p = {}, None
+    try:
+        fasta_p = infer_source_fasta(name)
+    except (OSError, ValueError):
+        fasta_p = None
+    if fasta_p:
+        try:
+            from ..utils import iter_fasta
+            for h, s in iter_fasta(fasta_p):
+                sid = str(h).split()[0]
+                if sid not in seqs:
+                    seqs[sid] = str(s).upper()
+        except OSError:
+            seqs = {}
+
     out = os.path.join(_table_dir(name), 'featuretable.tbl')
     written_contigs, cds_total, no_product = [], 0, 0
+    partial_flags, partial_unknown, cds_unseq = [], [], []
     with safe_open(out, 'wt') as f:
         for cid in names:                     # 保持表顺序
             rows = [(s, e, st) for (q, s, e, st) in cdses if q == cid]
             if not rows:
                 continue
             written_contigs.append(cid)
+            cseq = seqs.get(cid)
             f.write(f'>Feature {cid}\n')
             for s, e, st in sorted(rows):
                 product = prod.get((cid, s)) or prod.get((cid, e)) or ''
                 if not product:
                     product = 'hypothetical protein'
                     no_product += 1
-                f.write(f'{s}\t{e}\tCDS\n')
+                # GFF 属性值不应含 tab/换行（会破坏 5 列 feature table 结构）
+                product = re.sub(r'\s+', ' ', product).strip()
+                lt, gt = _partial_markers(cseq, s, e, st)
+                if lt is None:
+                    # 无序列/坐标越界 → 无法判断是否截断：不加标记并 WARN 列出
+                    lt = gt = ''
+                    cds_unseq.append(f'{cid}:{s}-{e}({st})')
+                elif lt or gt:
+                    partial_flags.append(
+                        {'contig': cid, 'start': s, 'end': e, 'strand': st,
+                         'five_prime': bool(lt), 'three_prime': bool(gt)})
+                if str(st) == '-':
+                    # 反向 CDS：5 列 feature table 无 complement 关键字，
+                    # 按 NCBI 约定起点 > 终点即表示互补链，故大坐标写在前；
+                    # 部分标记：'<'（5' 不完整）加在写下的首个坐标，'>' 加在末个
+                    f.write(f'{lt}{e}\t{s}{gt}\tCDS\n')
+                else:
+                    f.write(f'{lt}{s}\t{e}{gt}\tCDS\n')
                 # 注意：table2asn 对带斜杠+双引号的 /product="xxx" 解析失败，
                 # 会丢 product 名并报 MissingProteinName×N Error。须用 suvtk
                 # 同款无斜杠、无引号、tab 分隔格式（product\t名字）。
@@ -1263,9 +1414,16 @@ def generate_feature_tbl(name):
             '请核对：① 导入的 contigs 运行 与 ② 关联的 orf 运行 的序列名（sequence_name）'
             '必须一致；orf 运行应是用该 contigs 的 viral_contigs.fasta 跑的。\n'
             f'表内 {len(names)} 个 sequence_name 示例: {skipped[:3]} …')
+    if cds_unseq:
+        # WARN：拿不到 contig 序列，截断 ORF 的 < / > 部分标记无法判定（不加标记）
+        logging.getLogger(__name__).warning(
+            'feature table 部分标记未判定（无序列/坐标越界，未加 < >）: %s%s',
+            ', '.join(cds_unseq[:5]), ' …' if len(cds_unseq) > 5 else '')
     return {'path': out, 'contigs': written_contigs, 'cds_total': cds_total,
             'no_product': no_product, 'skipped': skipped,
+            'partial': partial_flags, 'partial_unknown': cds_unseq,
             'sources': {'gff': gffs[0] if gffs else None,
+                        'fasta': fasta_p,
                         'annotation': ann_tsv if os.path.isfile(ann_tsv) else None}}
 
 

@@ -9,6 +9,7 @@ import json
 import os
 import re
 import time
+import uuid
 from pathlib import Path
 
 from flask import abort
@@ -81,7 +82,10 @@ def _chain_run_step(chain_dir, root, step_key, step_name, job_factory,
     """
     from types import SimpleNamespace
     ts = time.strftime('%Y%m%d_%H%M%S')
-    run_name = f'{step_key}_{ts}'
+    # 秒级时间戳会撞车：同一秒内两次链（双击/多标签页）会复用同一步
+    # 运行目录并互相覆盖产物。追加 4 位随机后缀（口径同 tools_api 的
+    # /api/tool/run 建运行名）。
+    run_name = f'{step_key}_{ts}_{uuid.uuid4().hex[:4]}'
     run_dir = check_path(os.path.join(root, run_name), must_exist=False,
                          in_platform=True)
     os.makedirs(run_dir, exist_ok=True)
@@ -160,10 +164,10 @@ def _tool_job_virchain(ctx):
     conf = float(ctx.p.get('confidence') or 0)
     host = (ctx.p.get('host') or 'all').strip() or 'all'
     combine = (ctx.p.get('combine') or 'union').strip()
-    methods = ctx.p.get('methods') or ['blastx', 'cdd']
+    methods = ctx.p.get('methods') or ['blastx', 'bfvd']
     if isinstance(methods, str):
         methods = [m.strip() for m in methods.split(',') if m.strip()]
-    methods = [m for m in methods if m in ('blastx', 'cdd')]
+    methods = [m for m in methods if m in ('blastx', 'bfvd')]
 
     def job(log, prog, cancel):
         logger = TaskLogger(callback=log)

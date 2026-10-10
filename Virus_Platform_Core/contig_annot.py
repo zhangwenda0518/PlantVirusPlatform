@@ -5,10 +5,11 @@ Contig 深度注释（参考 plant_virus_db_pipeline/9.metabuli 的结果整理�
      family→genus→species，从 nodes.dmp/names.dmp 实时走父链）；
   2) 属平均基因组长度（genus_lens）：由病毒参考库自算并缓存，
      length/genus_avg ∈ [0.8, 1.2] 判定为「近完整基因组」；
-  3) NCBI 在线接口：BLASTN/BLASTX（URL API，virus-restricted）与
-     CDD 保守域（Batch CD-Search，6-frame 最长 ORF 翻译）。
+  3) NCBI 在线接口：BLASTN/BLASTX（URL API，virus-restricted）。
 
 对外网络仅访问 NCBI 官方域名，且逐次校验解析出的 IP 非私有/保留地址。
+（曾有 CDD 保守域在线搜索（Batch CD-Search），2026-09-29 随本地 CDD
+库一并下线。）
 """
 import os
 import re
@@ -27,11 +28,8 @@ RANKS = ['realm', 'kingdom', 'phylum', 'class',
          'order', 'family', 'genus', 'species']
 
 NCBI_BLAST_URL = 'https://blast.ncbi.nlm.nih.gov/Blast.cgi'
-NCBI_CDD_URL = 'https://www.ncbi.nlm.nih.gov/Structure/bwrpsb/bwrpsb.cgi'
 NCBI_BLAST_SLEEP = 10
-NCBI_CDD_SLEEP = 10
 BLAST_TIMEOUT = 2400
-CDD_TIMEOUT = 1800
 BLAST_HITLIST = 20
 _NCBI_HOSTS = {'blast.ncbi.nlm.nih.gov', 'www.ncbi.nlm.nih.gov',
                'eutils.ncbi.nlm.nih.gov'}
@@ -263,7 +261,7 @@ def _iter_kraken(txt):
 
 
 # ------------------------------------------------------------------
-# 6-frame 翻译 + 最长 ORF（CDD 查询用）
+# 6-frame 翻译 + 最长 ORF
 # ------------------------------------------------------------------
 _CODON = {}
 
@@ -307,7 +305,7 @@ def longest_orf_protein(dna, min_aa=50):
 
 
 # ------------------------------------------------------------------
-# NCBI BLAST (URL API) / CDD (Batch CD-Search)
+# NCBI BLAST (URL API)
 # ------------------------------------------------------------------
 def submit_blast(program, database, query_fasta, entrez_query=''):
     """提交 BLAST → (rid, rtoe 秒)。program: blastn/blastx。"""
@@ -386,79 +384,4 @@ def parse_blast_json(result):
                 'evalue': best.get('evalue', ''),
                 'bit_score': best.get('bit_score', 0),
             })
-    return hits
-
-
-def submit_cdd(query_protein_fasta):
-    """提交 NCBI Batch CD-Search → cdsid。"""
-    form = {
-        'queries': query_protein_fasta, 'smode': 'auto', 'db': 'cdd',
-        'evalue': '0.01', 'maxhit': '500', 'useid1': 'true',
-        'filter': 'false', 'compbasedadj': '1', 'tdata': 'hits',
-        'dmode': 'rep', 'qdefl': 'true', 'cddefl': 'true',
-    }
-    data = urllib.parse.urlencode(form).encode('ascii')
-    with open_checked(NCBI_CDD_URL, data=data, headers={
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'VirusPlatform/1.0'}) as resp:
-        text = resp.read().decode('utf-8', errors='replace')
-    m = re.search(r'^#cdsid\s+(\S+)', text, re.MULTILINE)
-    if not m:
-        raise RuntimeError(f'CDD 未返回 Search ID: {text[:300]}')
-    return m.group(1)
-
-
-def poll_cdd(cdsid, max_wait=CDD_TIMEOUT, sleep=None, cancel=None):
-    """轮询 CDD → hits 列表。status: 0/4 完成, 1/2/5 失败, 3 运行中。"""
-    sleep = sleep or NCBI_CDD_SLEEP
-    deadline = time.time() + max_wait
-    form = urllib.parse.urlencode({
-        'cdsid': cdsid, 'tdata': 'hits', 'dmode': 'rep',
-        'qdefl': 'true', 'cddefl': 'true'}).encode('ascii')
-    while time.time() < deadline:
-        if cancel is not None and cancel.is_set():
-            raise RuntimeError('已取消')
-        with open_checked(NCBI_CDD_URL, data=form, headers={
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'VirusPlatform/1.0'}) as resp:
-            text = resp.read().decode('utf-8', errors='replace')
-        m = re.search(r'^#status\s+(\S+)', text, re.MULTILINE)
-        status = m.group(1) if m else '3'
-        if status in ('0', '4', 'success'):
-            return parse_cdd_hits(text)
-        if status in ('1', '2', '5'):
-            raise RuntimeError(f'CDD 任务失败: status={status}')
-        time.sleep(sleep)
-    raise TimeoutError(f'CDD 轮询超时（{max_wait}s）')
-
-
-def parse_cdd_hits(text):
-    """Batch CD-Search TSV → hits 列表。"""
-    hits = []
-    lines = text.splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        if line.startswith('Query\t') and 'Hit type' in line:
-            start = i
-            break
-    if start is None:
-        return hits
-    headers = [h.strip() for h in lines[start].split('\t')]
-    for line in lines[start + 1:]:
-        if not line.strip() or line.startswith('#'):
-            continue
-        parts = line.split('\t')
-        row = {h: (parts[j].strip() if j < len(parts) else '')
-               for j, h in enumerate(headers)}
-        hits.append({
-            'query': row.get('Query', ''),
-            'hit_type': row.get('Hit type', ''),
-            'accession': row.get('Accession', ''),
-            'short_name': row.get('Short name', ''),
-            'evalue': row.get('E-Value', ''),
-            'bit_score': row.get('Bit score', ''),
-            'from': row.get('From', ''),
-            'to': row.get('To', ''),
-            'superfamily': row.get('Superfamily', ''),
-        })
     return hits

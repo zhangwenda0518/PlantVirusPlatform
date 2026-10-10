@@ -6,6 +6,13 @@
 
 涉及引擎：`beast_handoff.py`、`beast_io.py`、`mjrm.py`、`mot.py`、`bsp.py`（ESS 口径复用）。
 
+> ✅ **现状（2026-10-08 接线完成，源码实读 + 端到端实测）**：本仓**已补齐作业接线**，导出与回读两条链都能跑：
+> - **导出（上半程）**：新增工具 `beastexport`（`web/tool_jobs.py::_tool_job_beastexport` → `beast_handoff.export_job`），已进 `TOOL_REGISTRY`；「系统地理」卡新增「📦 打包 BEAST 作业包」按钮。产物落 `run/tool_runs/<任务>/beastexport/`（`aln.fasta` / `metadata.csv` / `README.txt` / `job.json`）。
+> - **回读（下半程）**：`phylogeo.analyze` 的 `beast_log` / `beast_trees` 已由 `_tool_job_phylogeo` 透传（卡内两栏 + burn-in / 后验阈值 / 最多树数三个参数），`import_beast()` 真正可达；`summary.json` 的 `beast` 段也已透传 —— 前端 BEAST 面板与 AI digest 都读它。
+> - 前端新增 6 个控件（`#pg_beast_log` / `#pg_beast_trees` / `#pg_beast_burnin` / `#pg_beast_min_prob` / `#pg_beast_max_trees` / `#pg_export_tag`）与 `#pgBeast` / `#pgExport` 两个结果位；`i18n.js` 的 `tk.pdTrack` 悬空文案已改为指向真实存在的两个控件。
+>
+> 接线前这里是「有模块、无接线」（`export_job` 无调用方、参数没透传、前端无控件）；本仓实现的是与姊妹平台「植物病毒进化分析平台」同一条接缝（对照见 `docs/进化动力学实现详解与对比_20260917.md` 第二部分，其 `_tool_job_pgjob` + `dev_tools/export_beast_job.py`）。
+
 ---
 
 ## 工作面分工
@@ -54,7 +61,11 @@ MCC 注释树的节点状态/高度解析（供走廊动画、树高估计；与
 
 ## 界面与产物
 
-- 专项分析页「进化动力学」组 BEAST 相关卡片；结果面板给出 ESS 诊断、低 ESS 列告警、走廊表与动画（时间滑杆）。
+- **界面**：不在独立卡片，而在「专项分析 → 进化动力学 → 系统地理分析」卡内的一段「🅑 BEAST 产物导入」区：上半程「📦 打包 BEAST 作业包」按钮（+ 作业名），下半程两栏（`.log` / `.trees`）+ 三个导入参数。结果面板的 BEAST 段给出后验样本数 / burn-in 丢弃 / ESS 诊断 / 树模式与用树数 / 走廊数 / 分带口径。
+- **产物**：
+  - 导出：`run/tool_runs/<任务>/beastexport/{aln.fasta, metadata.csv, README.txt, job.json}`（+ 可选 `iqtree.log` / `coords.tsv`）；`README.txt` 里是粘贴即用的服务器命令。
+  - 回读：`beast_io` 的全量产物落 `run/tool_runs/<任务>/phylogeo/beast_log.json` / `beast_trees.json`；`summary.json` 的 `beast` 段是精简版（逐列诊断截断，逐树事件不进 summary）。
+- **闭环**：本卡导出 → 拷到服务器跑（README 三条命令）→ 把 `merged/{mcc.tree, merged.log, merged.trees}` 拷回 → 填进本卡两栏 → 运行本卡，BEAST 面板与弧线分带即用真后验口径。
 
 ## 相关
 

@@ -63,14 +63,14 @@
               onchange="libsUiSync()"><span data-i18n="an.libProt">层1 序列同源（RefSeq 病毒蛋白）</span></label>
             <label class="chk"><input type="checkbox" id="oa_lib_pfam" checked
               onchange="libsUiSync()"><span data-i18n="an.libPfam">层2 Pfam HMM（Pfam-A-Viruses）</span></label>
-            <label class="chk"><input type="checkbox" id="oa_lib_cdd" checked
-              onchange="libsUiSync()"><span data-i18n="an.libCdd">层2 CDD 结构域（mmseqs2）</span></label>
+            <label class="chk"><input type="checkbox" id="oa_lib_bfvd" checked
+              onchange="libsUiSync()"><span data-i18n="an.libBfvd">层2 BFVD 病毒域（mmseqs2，与 NCBI 提交同源）</span></label>
             <button class="btn small" onclick="libsSetAll(true)" data-i18n="an.libsAll">全部层</button>
             <span class="hint" id="oa_libs_warn" style="display:none"></span>
           </div>
           <p class="hint" id="oa_libs_hint" style="margin:6px 0 0" data-i18n="an.libsHint">层1 做
           DIAMOND/MMseqs2/blastp 同源搜索（首次会下载 ~107MB 参考库）；层2 Pfam HMM 与
-          CDD 结构域为本地库、无需下载。只勾层2 时可跳过层1，速度快很多，但不会有
+          BFVD 病毒域为本地库、无需下载（BFVD 与 NCBI 提交链同库，product 命名一致）。只勾层2 时可跳过层1，速度快很多，但不会有
           物种/科属与类别投票结果。</p>
         </div>
 
@@ -143,8 +143,8 @@
 
 function val(id) { return ($(id)?.value || '').trim(); }
 
-/* ---- 注释层选择（prot 层1 序列同源 / pfam 层2 HMM / cdd 层2 结构域） ---- */
-const OA_LIBS = ['prot', 'pfam', 'cdd'];
+/* ---- 注释层选择（prot 层1 序列同源 / pfam 层2 HMM / bfvd 层2 病毒域） ---- */
+const OA_LIBS = ['prot', 'pfam', 'bfvd'];
 
 function libsSel() {
   return OA_LIBS.filter(k => $(`oa_lib_${k}`)?.checked);
@@ -224,7 +224,7 @@ function runAnnotRun(btn) {
   if (p) _runOrfa(p, btn);
 }
 
-/* 直接输入序列模式（与「保守域与功能元件注释（CDD）」卡同款）：
+/* 直接输入序列模式（与「同源比对（BLASTN · BLASTX）」卡同款）：
    「📋」= 把剪贴板内容填进下方大文本框，也兼容「序列被误粘到文件路径框」的情况；
    文本框本身支持 Ctrl+V 多行粘贴，右下角可拖拽放大。 */
 async function oaSeqFromPaste() {

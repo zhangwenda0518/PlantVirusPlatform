@@ -36,7 +36,7 @@ _LETHAL_ROW_CAP = 500
 
 # 2-bit 编码表：A=0 C=1 G=2 T=3（红线 5），大小写都认，其余字节=255（坏窗口）
 _CODE = np.full(256, 255, dtype=np.uint8)
-for _b, _c in zip(b"ACGT", range(4)):
+for _b, _c in zip(b"ACGT", range(4), strict=True):
     _CODE[_b] = _c
     _CODE[_b + 32] = _c
 
@@ -220,7 +220,8 @@ def panel_files(panel_dir) -> list:
                   if p.is_file() and p.suffix.lower() in _PANEL_EXTS)
 
 
-def build_species_index(fa_path, k: int = K_DEFAULT, cache_dir=None, log=None) -> dict:
+def build_species_index(fa_path, k: int = K_DEFAULT, cache_dir=None, log=None,
+                        cancel=None) -> dict:
     """对单个物种 FASTA 建脱靶索引：双链全部 k-mer -> 排序去重 uint64 数组。
 
     双链入集是红线 3：seq 与 revcomp(seq) 都 encode 后合并去重，之后查询单链
@@ -230,6 +231,9 @@ def build_species_index(fa_path, k: int = K_DEFAULT, cache_dir=None, log=None) -
       <stem>.k{k}.npy            排序去重后的 uint64 数组
       <stem>.k{k}.json           元数据（源文件 mtime_ns / size、k、数组长度
                                  n、总 bp、记录数）——任一不匹配即重建
+
+    cancel 给定时逐记录检查（threading.Event 风格），置位抛 RuntimeError：
+    真实面板是 GB 级，重建索引可能要几分钟，必须可中断（2026-10-03）。
 
     返回 {'arr': np.ndarray, 'bp': int, 'n_records': int, 'cached': bool}。
     源文件不存在、或 FASTA 里没有任何记录时抛 PanelError。
@@ -269,6 +273,8 @@ def build_species_index(fa_path, k: int = K_DEFAULT, cache_dir=None, log=None) -
     # --- 重建：双链全部 k-mer 合并去重（红线 3） ---
     arrs, bp, n_records = [], 0, 0
     for _name, seq in _fasta_iter(fa):
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError('用户取消')
         n_records += 1
         bp += len(seq)
         for strand in (seq, revcomp(seq)):  # 红线 3：双链入集
@@ -319,7 +325,8 @@ def load_lethal_ids(lethal_dir, species_stem: str) -> set:
 _LETHAL_INDEX_CACHE: dict = {}
 
 
-def build_lethal_index(fa_path, lethal_ids, k: int = K_DEFAULT) -> np.ndarray:
+def build_lethal_index(fa_path, lethal_ids, k: int = K_DEFAULT,
+                       cancel=None) -> np.ndarray:
     """只对 lethal_ids 命中的转录本建同款排序数组（双链，红线 3）。
 
     命中判定：record 名（header 第一词）本身在 lethal_ids 中，或其去版本号
@@ -340,6 +347,8 @@ def build_lethal_index(fa_path, lethal_ids, k: int = K_DEFAULT) -> np.ndarray:
         return hit
     arrs = []
     for name, seq in _fasta_iter(fa):
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError('用户取消')
         if name in lethal_ids or _strip_version(name) in lethal_ids:
             for strand in (seq, revcomp(seq)):
                 a = encode_kmers(strand, k)

@@ -23,7 +23,6 @@
 依赖：viennarna（import RNA）、numpy；数据文件 databases/dsrna/{lookup.db,
 siRNA_parameters.txt}。
 """
-import json
 import sqlite3
 from pathlib import Path
 
@@ -178,8 +177,10 @@ class ThermoLookup:
             raise ScoringDataError(
                 f'缺少热力学查找表 {db_path}（应随发行包提供 databases/dsrna/lookup.db）')
         conn = sqlite3.connect(str(db_path))
-        self.table = dict(conn.execute('SELECT key, value FROM lookup'))
-        conn.close()
+        try:
+            self.table = dict(conn.execute('SELECT key, value FROM lookup'))
+        finally:
+            conn.close()
 
     def get(self, key):
         return self.table.get(key)
@@ -337,12 +338,23 @@ def pick_best_window(features, efficiency_priority=50, safety_priority=50,
     wsafe = _window(None, combined)
     win = wsafe                                   # 选窗以 combined 为准
     s, e = win['s'], win['e']
+    # 臂（sense）帧坐标（2026-10-03 增加）：_sorted_names 沿**反义链（guide）**
+    # 5'→3' 排列（序号 1 = guide 5' 端窗口 = 臂 3' 末端窗口），故 nt_start/
+    # nt_end 是 guide 帧坐标（dsRIP/C-host safety_scoring 同口径，逐位一致，
+    # 勿改）。窗口覆盖 guide 位置 [s, e+19]（0-based），换算到臂帧即
+    # [L-1-(e+19), L-1-s]（L = 臂长 = n + SIRNA_LEN - 1）→ 1-based 闭区间。
+    # 引物切片/覆盖度判定必须用 sense_nt_*：直接 arm_seq[nt_start-1:nt_end]
+    # 取到的是镜像区间（臂长 > 窗口+20 时两者错位，见 2026-10-03 审计）。
+    _L = len(names) + SIRNA_LEN - 1
     return {
         'mean_combined': win['mean'],
         'start_siRNA': names[s],
         'end_siRNA': names[e - 1],
         'nt_start': s + 1,
         'nt_end': (e - 1) + SIRNA_LEN,
+        'sense_nt_start': _L - ((e - 1) + SIRNA_LEN) + 1,
+        'sense_nt_end': _L - (s + 1) + 1,
+        'frame': 'nt_start/nt_end = guide(反义链) 帧；sense_nt_* = 臂(正义链) 帧',
         'window_efficiency_mean': float(total[s:e].mean()),
         'window_safety_mean': float(safety[s:e].mean()),
         'window_raw_offtarget_sum': int(sum(features[n].get('raw_off_target_count', 0)
@@ -350,6 +362,8 @@ def pick_best_window(features, efficiency_priority=50, safety_priority=50,
         'note': win['note'],
         'efficacy_best_window': {                    # 纯效价窗（参考信息）
             'nt_start': weff['s'] + 1, 'nt_end': weff['e'] - 1 + SIRNA_LEN,
+            'sense_nt_start': _L - (weff['e'] - 1 + SIRNA_LEN) + 1,
+            'sense_nt_end': _L - (weff['s'] + 1) + 1,
             'mean_score': weff['mean'],
         },
     }

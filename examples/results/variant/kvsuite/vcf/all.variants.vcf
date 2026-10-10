@@ -1,8 +1,8 @@
 ##fileformat=VCFv4.2
 ##FILTER=<ID=PASS,Description="All filters passed">
 ##bcftoolsVersion=1.24+htslib-1.24
-##bcftoolsCommand=mpileup -f D:\桌面\植物病毒分析平台\virus-db\final.cluster.ref.fasta -d 100000 -q 0 -Q 13 -B -a FORMAT/AD,FORMAT/DP,INFO/AD -Ob -o D:\桌面\植物病毒分析平台\tool_runs\kvsuite_20260909_232425\kvsuite\vcf\all.variants.pileup.bcf D:\桌面\植物病毒分析平台\tool_runs\kvsuite_20260909_232324\kvsuite\bam\EXAMPLE.sorted.bam
-##reference=file://D:\桌面\植物病毒分析平台\virus-db\final.cluster.ref.fasta
+##bcftoolsCommand=mpileup -f D:\桌面\植物病毒分析平台\databases\virusref_db\plant_ref\reference.fasta -d 100000 -q 0 -Q 13 -B -a FORMAT/AD,FORMAT/DP,INFO/AD -Ob -o D:\桌面\植物病毒分析平台\run\tool_runs\kvsuite_20261006_162539_dbf859\kvsuite\vcf\all.variants.pileup.bcf D:\桌面\植物病毒分析平台\run\tool_runs\kvsuite_20261006_162451_b2a247\kvsuite\bam\EXAMPLE.sorted.bam
+##reference=file://D:\桌面\植物病毒分析平台\databases\virusref_db\plant_ref\reference.fasta
 ##contig=<ID=NC_077216.1,length=6096>
 ##contig=<ID=NC_076132.1,length=5419>
 ##contig=<ID=NC_077008.1,length=6245>
@@ -29,7 +29,7 @@
 ##INFO=<ID=DP4,Number=4,Type=Integer,Description="Number of high-quality ref-forward , ref-reverse, alt-forward and alt-reverse bases">
 ##INFO=<ID=MQ,Number=1,Type=Integer,Description="Average mapping quality">
 ##bcftools_callVersion=1.24+htslib-1.24
-##bcftools_callCommand=call -mv -Ob -o D:\桌面\植物病毒分析平台\tool_runs\kvsuite_20260909_232425\kvsuite\vcf\all.variants.call.bcf D:\桌面\植物病毒分析平台\tool_runs\kvsuite_20260909_232425\kvsuite\vcf\all.variants.pileup.bcf; Date=Wed Sep 09 23:24:26 2026
+##bcftools_callCommand=call -mv -Ob -o D:\桌面\植物病毒分析平台\run\tool_runs\kvsuite_20261006_162539_dbf859\kvsuite\vcf\all.variants.call.bcf D:\桌面\植物病毒分析平台\run\tool_runs\kvsuite_20261006_162539_dbf859\kvsuite\vcf\all.variants.pileup.bcf; Date=Tue Oct 06 16:25:40 2026
 ##bcftools_viewVersion=1.24+htslib-1.24
-##bcftools_viewCommand=view -Ov -o D:\桌面\植物病毒分析平台\tool_runs\kvsuite_20260909_232425\kvsuite\vcf\all.variants.raw.vcf D:\桌面\植物病毒分析平台\tool_runs\kvsuite_20260909_232425\kvsuite\vcf\all.variants.call.bcf; Date=Wed Sep 09 23:24:26 2026
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	D:\桌面\植物病毒分析平台\tool_runs\kvsuite_20260909_232324\kvsuite\bam\EXAMPLE.sorted.bam
+##bcftools_viewCommand=view -Ov -o D:\桌面\植物病毒分析平台\run\tool_runs\kvsuite_20261006_162539_dbf859\kvsuite\vcf\all.variants.raw.vcf D:\桌面\植物病毒分析平台\run\tool_runs\kvsuite_20261006_162539_dbf859\kvsuite\vcf\all.variants.call.bcf; Date=Tue Oct 06 16:25:40 2026
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	D:\桌面\植物病毒分析平台\run\tool_runs\kvsuite_20261006_162451_b2a247\kvsuite\bam\EXAMPLE.sorted.bam

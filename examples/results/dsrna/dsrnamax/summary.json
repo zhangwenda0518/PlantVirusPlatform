@@ -1,0 +1,20 @@
+{
+ "tool": "dsrna",
+ "csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\dsrna_20261006_162703_fab169\\dsrnamax\\result.csv",
+ "n_targets": 3,
+ "construct_len": 300,
+ "kmer_len": 21,
+ "iterations": 100,
+ "seed": 42,
+ "off_targets": "(无)",
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\dsrna_20261006_162703_fab169\\dsrnamax",
+ "exe_version": "1.1.15",
+ "n_arms": 1,
+ "panel_species": 0,
+ "red_lines": [],
+ "n_primer_pairs": 3,
+ "report": "dsrnamax/report.json",
+ "primers_tsv": "dsrnamax/primers.tsv",
+ "arms_fa": "dsrnamax/arms.fa",
+ "elapsed_s": 1.4
+}

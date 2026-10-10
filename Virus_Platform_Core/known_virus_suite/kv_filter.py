@@ -79,7 +79,13 @@ class FilterStage:
 
         if df is None or not len(df):
             self.logger.warning("过滤段输入为空")
-            return pl.DataFrame(), pl.DataFrame()
+            # 空输入也要落盘空表（P0-1）：否则上一轮 filtered.tsv 留在盘上
+            # 被外层汇总当成本轮"通过"结果。schema 尽量沿用输入列。
+            cols = list(df.columns) if df is not None else []
+            empty = pl.DataFrame(schema={c: pl.Utf8 for c in cols})
+            empty.write_csv(out / 'filtered.tsv', separator='\t')
+            empty.write_csv(out / 'discarded.tsv', separator='\t')
+            return empty, pl.DataFrame(schema={c: pl.Utf8 for c in cols})
 
         a = self.args
         cov = _find_col(df, 'Coverage(%)', 'coverage', 'Rep_Coverage(%)')
@@ -145,12 +151,13 @@ class FilterStage:
                 if orphan_rows:
                     fail_df = pl.concat([fail_df, *[o.drop('_drop_reason') for o in orphan_rows]], how='diagonal_relaxed')
 
-        if len(pass_df):
-            pass_df = _stringify_objects(pass_df)
-            pass_df.write_csv(out / 'filtered.tsv', separator='\t')
-        if len(fail_df):
-            fail_df = _stringify_objects(fail_df)
-            fail_df.write_csv(out / 'discarded.tsv', separator='\t')
+        # 空结果也落盘（P0-1 后半）：旧实现只在非空时写 filtered/discarded，
+        # 本轮全剔除/零命中时上一轮的旧表原样留在盘上，被当成"本轮通过"。
+        # 现在无条件写——空表带 schema，下游读取得 0 行而不是旧数据。
+        pass_df = _stringify_objects(pass_df)
+        pass_df.write_csv(out / 'filtered.tsv', separator='\t')
+        fail_df = _stringify_objects(fail_df)
+        fail_df.write_csv(out / 'discarded.tsv', separator='\t')
         self.logger.info(f"过滤段完成: 保留 {len(pass_df)} 行 / 剔除 {len(fail_df)} 行 -> {out}")
         return pass_df, fail_df
 

@@ -73,8 +73,10 @@ UNIFIED_COLUMNS = OrderedDict([
     # === source.src 字段 (src-*) ===
     ("src-Isolate",            {"required": True,  "group": "src", "desc": "唯一分离株标识 (分段病毒各片段必须相同)"}),
     ("src-geo_loc_name",       {"required": True,  "group": "src", "desc": "采集地点 (格式 Country:Region, 如 China:Ningxia)"}),
-    ("src-Lat_Lon",            {"required": True,  "group": "src", "desc": "经纬度 (如 38.47 N 106.27 E)"}),
+    ("src-Lat_Lon",            {"required": True,  "group": "src", "desc": "经纬度 (如 38.47 N 106.27 E；无坐标填 not collected)"}),
+    ("src-Lat_Lon_inferred",   {"required": False, "group": "src", "desc": "按城市名推断的经纬度（仅提示，推断值勿直接提交）"}),
     ("src-Host",               {"required": False, "group": "src", "desc": "宿主物种名"}),
+    ("host_inferred",          {"required": False, "group": "src", "desc": "自动推断的宿主（仅提示；未过 NCBI Taxonomy 校验时勿直接提交）"}),
     ("src-Segment",            {"required": False, "group": "src", "desc": "分段病毒的片段编号 (非分段留空)"}),
     ("src-Isolation-source",   {"required": False, "group": "src", "desc": "分离来源描述"}),
     ("src-Note",               {"required": False, "group": "src", "desc": "额外备注"}),
@@ -200,6 +202,7 @@ def load_metadata(meta_file, log=None):
             'biosample': str(row.get('BioSample', '')) if has_biosample and pd.notna(row.get('BioSample')) else '',
             'platform': str(row.get('Platform', '')) if has_platform and pd.notna(row.get('Platform')) else '',
             'host': str(row.get('ScientificName', '')) if pd.notna(row.get('ScientificName')) else '',
+            'taxid': str(row.get('TaxID', '')) if pd.notna(row.get('TaxID')) else '',
             'tissue': str(row.get('Tissue', '')) if pd.notna(row.get('Tissue')) else '',
             'source': str(row.get('Source', '')) if pd.notna(row.get('Source')) else '',
             'center': str(row.get('CenterName', '')) if pd.notna(row.get('CenterName')) else '',
@@ -217,12 +220,24 @@ def load_metadata(meta_file, log=None):
 
 
 def extract_sra(contig):
-    m = re.match(r'([SC]RR\d+)', contig)
+    """从 contig 名提取测序存档登录号。
+
+    支持 SRA(SRR)/ENA(ERR)/DDBJ(DRR)/GSA(CRR) 四种前缀，且允许登录号出现在
+    名字中段（如 'k141_99|SRR99'）；此前只认开头的 [SC]RR，ERR/DRR 与中段
+    出现的登录号会退化为 UNKNOWN。
+    """
+    m = re.search(r'([SEDC]RR\d+)', contig)
     return m.group(1) if m else 'UNKNOWN'
 
 
 def geo_to_latlon(geo_loc):
-    """从城市/地区名推断经纬度 (约值, NCBI 接受)"""
+    """从城市/地区名推断经纬度（仅作**提示值**）。
+
+    注意：按城市名造出的经纬度是约值，写进 src-Lat_Lon 必填列会被 NCBI 当成
+    真实采集坐标。当前口径：主列 src-Lat_Lon 默认写 'not collected'（NCBI
+    允许的缺失表述），本函数的返回值只写入提示列 src-Lat_Lon_inferred，
+    并在日志中标注「推断值，勿直接提交」，由提交人核实后手工填入主列。
+    """
     if not geo_loc or geo_loc.lower() in ('country:region', 'nan', 'not_provided', ''):
         return ''
     loc_lower = geo_loc.lower()
@@ -268,23 +283,64 @@ def geo_to_latlon(geo_loc):
     return ''
 
 
+def clean_taxon_name(v):
+    """去学名俗名括号注解：'Lycium barbarum (goji)' → 'Lycium barbarum'。
+
+    NCBI 的 /host 等 source modifier 只接受学名（可保留 [NCBITaxon:xxx] 后缀，
+    该后缀是 NCBI 认可形式，故不动）；'(goji)'/'(mint)' 一类英文俗名注解会
+    直接导致提交被退。
+    """
+    s = str(v or '')
+    s = re.sub(r'\s*\([^)]*\)', ' ', s)              # 去括号注解
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+# 推断宿主名的在线校验缓存（name → (found, taxid)）
+_HOST_TAXON_CACHE = {}
+
+
+def taxon_name_online_check(name):
+    """NCBI Taxonomy 在线校验学名；返回 (found: bool, taxid: str)。
+
+    传入名可带 [NCBITaxon:xxx] 尾注（查询前剥离）。网络不可用/查询异常时返回
+    (False, '')——调用方据此把宿主留空并给提示列，绝不把未校验的名字写进 /host。
+    """
+    key = re.sub(r'\s*\[NCBITaxon:\d+\]\s*$', '', str(name or '')).strip()
+    if not key:
+        return False, ''
+    if key in _HOST_TAXON_CACHE:
+        return _HOST_TAXON_CACHE[key]
+    try:
+        from ..ncbi_download import esearch
+        res = esearch(f'{key}[SCIN]', db='taxonomy', retmax=1)
+        out = (bool(res.get('count')), (res.get('ids') or [''])[0] if res.get('ids') else '')
+    except Exception:
+        out = (False, '')
+    _HOST_TAXON_CACHE[key] = out
+    return out
+
+
 def infer_host_from_name(taxonomy):
-    """从病毒物种名推断宿主 (如 Betacytorhabdovirus lycii → Lycium)"""
-    # 常见病毒-宿主对应模式
+    """从病毒物种名推断宿主（返回**裸学名**，不含俗名注解）。
+
+    如 Betacytorhabdovirus lycii → Lycium barbarum。
+    仅作候选值：写表前须经 taxon_name_online_check 校验（见 generate_metadata_csv）。
+    """
+    # 常见病毒-宿主对应模式（值为 NCBI 收录的学名，不带 "(goji)" 类注解）
     host_patterns = [
-        (r'\blycii\b', 'Lycium barbarum (goji)'),
-        (r'\becsmenthae\b', 'Mentha (mint)'),
-        (r'\bsolani\b', 'Solanum (nightshade)'),
-        (r'\btritici\b', 'Triticum (wheat)'),
-        (r'\bhordei\b', 'Hordeum (barley)'),
-        (r'\bo\'ryzae\b', 'Oryza (rice)'),
-        (r'\bvitis\b', 'Vitis (grape)'),
+        (r'\blycii\b', 'Lycium barbarum'),
+        (r'\becsmenthae\b', 'Mentha'),
+        (r'\bsolani\b', 'Solanum'),
+        (r'\btritici\b', 'Triticum'),
+        (r'\bhordei\b', 'Hordeum'),
+        (r'\bo\'ryzae\b', 'Oryza'),
+        (r'\bvitis\b', 'Vitis'),
         (r'\bcitri\b', 'Citrus'),
-        (r'\bnicotianae\b', 'Nicotiana (tobacco)'),
-        (r'\bcapsici\b', 'Capsicum (pepper)'),
-        (r'\bcucumeris\b', 'Cucumis (cucumber)'),
-        (r'\bsojae\b', 'Glycine (soybean)'),
-        (r'\bmaydis\b', 'Zea (corn)'),
+        (r'\bnicotianae\b', 'Nicotiana'),
+        (r'\bcapsici\b', 'Capsicum'),
+        (r'\bcucumeris\b', 'Cucumis'),
+        (r'\bsojae\b', 'Glycine'),
+        (r'\bmaydis\b', 'Zea'),
     ]
     for pattern, host in host_patterns:
         if re.search(pattern, taxonomy, re.IGNORECASE):
@@ -321,6 +377,7 @@ def generate_metadata_csv(seqs, meta_lookup, species_map, args, log):
     sub_bs = args.submission_biosample_prefix or ''
 
     rows = []
+    n_latlon_inferred = 0
     for s in seqs:
         contig = s['contig']
         taxonomy = s['taxonomy']
@@ -340,9 +397,22 @@ def generate_metadata_csv(seqs, meta_lookup, species_map, args, log):
         host = ref.get('host', '')
         if not host or host.lower() in ('nan', 'not_provided', ''):
             host = args.host or ''
+        host = clean_taxon_name(host) if host else ''   # 去俗名注解/taxid 尾注
+        host_inferred = ''
         if not host and hasattr(args, 'auto_host') and args.auto_host:
             species_name = species_map.get(contig, taxonomy)
-            host = infer_host_from_name(species_name)
+            cand = clean_taxon_name(infer_host_from_name(species_name))
+            if cand:
+                # 只有通过 NCBI Taxonomy 校验的学名才写 /host；否则仅入提示列
+                found, _tid = taxon_name_online_check(cand)
+                if found:
+                    host = cand + (f" [NCBITaxon:{_tid}]" if _tid else '')
+                else:
+                    host_inferred = cand
+                    if log:
+                        log.warning("宿主推断未通过 Taxonomy 校验，已留空 /host: "
+                                    "%s（候选 %s，见 host_inferred 列）",
+                                    species_name, cand)
         tissue = ref.get('tissue', args.tissue or '')
         # Core14 额外字段 → NCBI source modifiers
         cultivar = ref.get('source', '')    # Source = "Ningqi No.1" 品种
@@ -373,6 +443,13 @@ def generate_metadata_csv(seqs, meta_lookup, species_map, args, log):
 
         isolate = f"{sanitize_filename(taxonomy)}_{sra}"
 
+        # 经纬度：主列只接受显式传入或 'not collected'（缺失表述）；
+        # 按城市名造出的约值只进提示列，避免把推断坐标当真实采集坐标提交
+        latlon_main = args.lat_lon or "not collected"
+        latlon_inferred = '' if args.lat_lon else geo_to_latlon(geo_loc)
+        if latlon_inferred:
+            n_latlon_inferred += 1
+
         rows.append({
             "organism": taxonomy,
             "sequence_name": contig,
@@ -382,8 +459,10 @@ def generate_metadata_csv(seqs, meta_lookup, species_map, args, log):
 
             "src-Isolate": isolate,
             "src-geo_loc_name": geo_loc or "Country:Region",
-            "src-Lat_Lon": args.lat_lon or geo_to_latlon(geo_loc) or "XX.XX N XXX.XX E",
+            "src-Lat_Lon": latlon_main,
+            "src-Lat_Lon_inferred": latlon_inferred,
             "src-Host": host,
+            "host_inferred": host_inferred,
             "src-Segment": "",
             "src-Isolation-source": args.isolation_source or '',
             "src-Note": note,
@@ -409,6 +488,11 @@ def generate_metadata_csv(seqs, meta_lookup, species_map, args, log):
         })
 
     df = pd.DataFrame(rows, columns=list(UNIFIED_COLUMNS.keys()))
+    if log and n_latlon_inferred:
+        # report 口径：推断值只进提示列，主列保持 'not collected'
+        log.warning("src-Lat_Lon_inferred: %d 行按城市名推断了经纬度（推断值，勿直接提交）"
+                    "——请核实实际采集坐标后填入 src-Lat_Lon，或保留 not collected",
+                    n_latlon_inferred)
     return df
 
 
@@ -595,11 +679,11 @@ def load_config(config_path):
     if config_path and os.path.exists(config_path):
         if config_path.endswith('.yaml') or config_path.endswith('.yml'):
             import yaml
-            with open(config_path) as f:
+            with open(config_path, encoding='utf-8', errors='replace') as f:
                 user_config = yaml.safe_load(f)
         elif config_path.endswith('.json'):
             import json
-            with open(config_path) as f:
+            with open(config_path, encoding='utf-8', errors='replace') as f:
                 user_config = json.load(f)
         else:
             return config
@@ -783,7 +867,8 @@ def main():
     parser.add_argument('--pipeline', default='植物病毒分析平台 ⑥b ORF 功能注释 (DIAMOND/MMseqs2 × RefSeq 病毒蛋白库)')
     parser.add_argument('--authors', help='引用作者')
     parser.add_argument('--bioproject', help='BioProject ID')
-    parser.add_argument('--lat-lon', help='经纬度')
+    parser.add_argument('--lat-lon', help="经纬度 (如 38.47 N 106.27 E)；不给则主列写 'not collected'，"
+                                          "按城市名推断的约值只进 src-Lat_Lon_inferred 提示列")
     parser.add_argument('--isolation-source', help='分离来源')
     parser.add_argument('--collected-by', help='采集人')
     parser.add_argument('--tissue', help='组织类型')
@@ -815,7 +900,8 @@ def main():
                         help='MIUVIG source_uvig: 公共数据=metatranscriptome, 自己测的富集=viral fraction metagenome (virome)')
     parser.add_argument('--host', help='所有序列的宿主 (如 Lycium barbarum [NCBITaxon:112863])')
     parser.add_argument('--auto-host', action='store_true',
-                        help='从病毒名自动推断宿主 (Betacytorhabdovirus lycii → Lycium)')
+                        help='从病毒名自动推断宿主（裸学名，经 NCBI Taxonomy 在线校验通过才写入 '
+                             '/host；未通过则留空并在 host_inferred 列给候选）')
     parser.add_argument('--coverage-file',
                         help='覆盖度文件 (如 all_viruses.best.summary.tsv, 自动取 Rep_MeanDepth)')
     args = parser.parse_args()

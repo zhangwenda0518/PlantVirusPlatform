@@ -31,6 +31,8 @@ SCORE_CUTOFF = 3.5            # tapir_fasta --score 缺省
 MFE_RATIO_CUTOFF = 0.7        # tapir_fasta --mfe_ratio 缺省
 LINKER = 'GCGGGGACGC'         # 约束折叠的环区 linkers
 LINKER_CS = '(((xxxx)))'      # linker 的结构约束
+SEED_POS_START = 2            # 种子区（miRNA 原始 5'→3' 帧）起点
+SEED_POS_END = 12             # 种子区终点（get_upper_lower 口径 2-12）
 
 
 @dataclass
@@ -77,23 +79,39 @@ def _norm_rna(ch: str) -> str:
 def score_alignment_columns(mline: str, tline: str):
     """对 miRanda 比对的两行按 tapir_fasta::score 打分。
 
-    我们的比对：miRNA 5'→3'（上）对 target 3'→5'（下）——每列即真实
-    配对；tapir 的 q = miRNA 的互补（= revcomp 链字符）。
+    **列语义（2026-10-03 修复 P1-2）**：mline/tline 必须是**比对列**
+    （miRanda 书写约定：上行 miRNA 3'→5'、下行 target 5'→3'，含缺口），
+    不能传「无缺口 miRNA vs 原始目标片段」——反平行位点按同向两条原始
+    序列逐位比对时列语义整体错位（错位后的列既不是配对也不是缺口）。
+    tapir 的 q = miRNA 在该列的互补字符，q == h 即配对。
+
+    种子区 = miRNA 原始 5' 第 2-12 位（get_upper_lower 口径）。上行是
+    3'→5' 帧，故先翻回原始 5'→3' 帧（mline[::-1]）再自左向右数非缺口
+    字符；原始帧第 k 个非缺口字符对应的列下标 i 换算回上行：L-1-i 的
+    翻转位（本函数直接记录翻转后的列下标，等价于原来自右向左数）。
+
+    两行长度不一致（target 短于 miRNA 等）时按缺口补齐到等长
+    ——原实现对短 tline 直接索引会 IndexError（2026-10-03 修复）。
 
     返回 (score, gap, seed_gap, gu, seed_gu, match, mismatch, seed_mismatch,
           seed_start_col, seed_stop_col, aln_str)。"""
-    # 种子列定位（get_upper_lower：从 alq 右端向左数 miRNA 第 2-12 个
-    # 非缺口字符；我们的上行即 miRNA 5'→3'，故自右向左数）
-    L = len(mline)
-    seed_stop_col = seed_start_col = -1
-    idx = 0
-    for i in range(L - 1, -1, -1):
-        if mline[i] != '-':
-            idx += 1
-        if idx == 2 and seed_stop_col == -1:
-            seed_stop_col = i
-        if idx == 12 and seed_start_col == -1:
-            seed_start_col = i
+    L = max(len(mline), len(tline))
+    if not L:
+        return (0.0, 0, 0, 0, 0, 0, 0, 0, -1, -1, '')
+    mline = mline.ljust(L, '-')
+    tline = tline.ljust(L, '-')
+
+    # 种子列定位：翻回 miRNA 原始 5'→3' 帧后自左向右数第 2..12 个非缺口
+    # 字符；记录其在上行中的列下标（自右向左数第 2..12 个的等价写法）。
+    seed_cols = []
+    k = 0
+    for i_fwd, ch in enumerate(mline[::-1]):
+        if ch != '-':
+            k += 1
+            if SEED_POS_START <= k <= SEED_POS_END:
+                seed_cols.append(L - 1 - i_fwd)
+    seed_start_col = min(seed_cols) if seed_cols else -1
+    seed_stop_col = max(seed_cols) if seed_cols else -1
 
     gap = seed_gap = gu = seed_gu = match = mismatch = seed_mismatch = 0
     aln_chars = []
@@ -172,24 +190,30 @@ def tapir_predict(mirna_id: str, mirna_seq: str,
                   target_id: str, target_seq: str,
                   site_start: int, site_end: int,
                   ) -> Optional[TAPIRResult]:
-    """在给定 target 区间上运行 tapir_fasta 口径（评分 + mfe ratio）。"""
+    """在给定 target 区间上运行 tapir_fasta 口径（评分 + mfe ratio）。
+
+    列语义（2026-10-03 修复）：site 是 target 5'→3' 子串，与 miRNA 反平行
+    ——site 第 i 位对应 miRNA 原始位置 L-i+1，故把 miRNA 反转后同向逐位比
+    （q = 该位 miRNA 字符的互补字符，q == h 即配对），与 score_alignment_columns
+    的列语义一致。原实现直接拿 miRNA 5'→3' 原向与 site 同向比，等于找
+    comp(miRNA) 镜像位点（与 P0-4 同类错误），已修正。
+    """
     if site_end <= site_start or site_end > len(target_seq):
         return None
     site = target_seq[site_start - 1:site_end]
     mirna = mirna_seq.upper().replace('T', 'U')
-    revmir = _revcomp_rna(mirna)
+    mir_rev = mirna[::-1]        # 反转帧：与 target 5'→3' 反平行
+    L = len(mirna)
     if not site or not mirna:
         return None
 
-    # 评分（列对：miRNA 互补字符 vs 目标字符）
+    # 评分（列对：miRNA 互补字符 vs 目标字符；列 i ↔ miRNA 原始位置 L-i+1）
     score = gap = seed_gap = gu = seed_gu = match = mismatch = seed_mismatch = 0
     aln_chars = []
-    seed_stop_col = 1 + 1        # miRNA 第 2 位
-    seed_start_col = 12          # miRNA 第 12 位
-    for i, (m, h) in enumerate(zip(mirna, site), start=1):
+    for i, (m, h) in enumerate(zip(mir_rev, site), start=1):
         q = _revcomp_char(m)
         h_rna = h.upper().replace('T', 'U')
-        in_seed = seed_start_col <= i <= seed_start_col + 11
+        in_seed = SEED_POS_START <= (L - i + 1) <= SEED_POS_END
         if q == '-' or h == '-':
             cls = 'gap'
         elif q == h_rna:
@@ -222,12 +246,12 @@ def tapir_predict(mirna_id: str, mirna_seq: str,
     score = (gap + mismatch + seed_mismatch * 2 + seed_gap * 2 +
              seed_gu + gu * 0.5)
 
-    # mfe ratio（constraint_fold）
+    # mfe ratio（constraint_fold）。ViennaRNA 不可用时 mfe1/mfe2 归零，
+    # 避免 try 外引用未绑定变量（原实现在 ImportError 时 NameError）。
+    mfe1 = mfe2 = 0.0
     try:
-        import RNA
         mfe1, _ = _constraint_fold(mirna, revcomp_of(mirna))
-        target_full = target_seq[site_start - 1:site_end]
-        mfe2, _ = _constraint_fold(mirna, target_full)
+        mfe2, _ = _constraint_fold(mirna, site)
         ratio = (mfe2 / mfe1) if mfe1 else 0.0
     except Exception:
         ratio = 0.0
@@ -256,7 +280,13 @@ def validate_with_tapir(miranda_result, mirna_id: str,
                          ) -> Optional[TAPIRResult]:
     """Validate a miRanda hit with TAPIR scoring.
 
-    对 miRanda 比对列直接套 tapir_fasta 口径（评分 + mfe ratio）。"""
+    对 miRanda 比对列直接套 tapir_fasta 口径（评分 + mfe ratio）。
+
+    2026-10-03 修复 P1-2①：传入**比对列**（miRanda 三行格式的上下两行，
+    含缺口，上行 miRNA 3'→5'、下行 target 5'→3'），而不是「无缺口 miRNA
+    vs 原始目标片段」——后者列语义整体错位（反平行位点被当同向序列比）。
+    兼容旧格式（上行 5'→3'）：此时把上行反转后再按新帧口径打分。
+    """
     mirna_seq = miranda_result.mirna_seq
     t_start = miranda_result.target_start
     t_end = miranda_result.target_end
@@ -268,8 +298,22 @@ def validate_with_tapir(miranda_result, mirna_id: str,
     if not site:
         return None
 
+    lines = (getattr(miranda_result, 'alignment_str', '') or '').split('\n')
+    if len(lines) < 3:
+        return None
+    top_label = lines[0][:12]
+    mline = (lines[0].replace("miRNA  3' ", "").replace("miRNA  5' ", "")
+             .replace(" 5'", "").replace(" 3'", "").strip())
+    tline = (lines[2].replace("target 5' ", "").replace("target 3' ", "")
+             .replace(" 5'", "").replace(" 3'", "").strip())
+    if not mline or not tline:
+        return None
+    if "5'" in top_label:                # 旧格式：上行原为 5'→3'（镜像帧）
+        mline = mline[::-1]
+    # 长度不足时 score_alignment_columns 内部按缺口补齐（不再 IndexError）
+
     score, gap, seed_gap, gu, seed_gu, match, mismatch, seed_mismatch, \
-        _s_col, _e_col, _aln = score_alignment_columns(mirna, site)
+        _s_col, _e_col, _aln = score_alignment_columns(mline, tline)
 
     # mfe ratio（constraint_fold：self 对照 vs 目标区）
     mfe1, _st1 = _constraint_fold(mirna, revmir)

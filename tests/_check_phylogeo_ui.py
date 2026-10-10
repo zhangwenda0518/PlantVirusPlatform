@@ -70,13 +70,22 @@ WANT_CTRLS = [
     ('#pg_date_trait', '日期列名'),
     ('#pg_coords', '区域坐标表'),
     ('#pg_threads', '线程数'),
+    # 轨道 B（BEAST 打包 / 产物导入，2026-10-08 接线）
+    ('#pg_beast_log', 'BEAST 后验日志'),
+    ('#pg_beast_trees', 'BEAST 树'),
+    ('#pg_beast_burnin', 'BEAST burn-in'),
+    ('#pg_beast_min_prob', 'BEAST 后验阈值'),
+    ('#pg_beast_max_trees', 'BEAST 最多树数'),
+    ('#pg_export_tag', 'BEAST 作业名'),
 ]
 WANT_BOXES = ['#toolrun-phylogeo', '#pgResult', '#pgTitle', '#pgSummary',
-              '#pgGeo', '#pgMatrix', '#pgTransClasses', '#pgBands', '#pgGif']
+              '#pgGeo', '#pgMatrix', '#pgTransClasses', '#pgBands', '#pgBeast',
+              '#pgGif', '#pgExport']
 # 必须被 i18n 覆盖的静态文案（裸键名 = 语言开关失灵）
 WANT_KEYS = ['tk.pgWarnStatic', 'tk.pgRrtLbl', 'tk.pgRsspLbl', 'tk.pgMotpLbl',
              'tk.pgDatedTreeLbl', 'tk.pgDateTraitLbl', 'tk.pgCoordsLbl',
-             'tk.pgCoordsHint']
+             'tk.pgCoordsHint', 'tk.pgBeastLbl', 'tk.pgExportLbl',
+             'tk.pgExportBtn', 'tk.pgExportHint']
 
 FAILS = []
 

@@ -2,8 +2,14 @@
 """评测驱动：逐实验拉起 run_one.py，psutil 监控进程树峰值内存，汇总 results.json。
 
 用法: python run_bench.py [runs_root]
-默认 runs_root = C:/vp_srna_test/bench
+路径参数化（2026-10-03）：
+  runs_root = argv[1] > 环境变量 VP_BENCH_RUNS > 旧默认 C:/vp_srna_test/bench
+  数据集根  VM   = 环境变量 VP_BENCH_VM   > 旧默认 E:\\谷歌下载\\测试数据验证
+  对照输入根 CTRL = 环境变量 VP_BENCH_CTRL > 旧默认 C:\\vp_srna_test
+    （对照用 in1.fastq 与 3 参考小库 idx_k31 为评测机外部产物，未随仓库归档，
+      缺失时两条例外对照实验会在 run_one 里报错；其余实验不受影响）
 """
+import glob
 import json
 import os
 import subprocess
@@ -14,9 +20,12 @@ import psutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
-VM = r'E:\谷歌下载\测试数据验证'
+VM = os.environ.get('VP_BENCH_VM') or r'E:\谷歌下载\测试数据验证'
 BARI = os.path.join(VM, 'Raw-data-Bari.Workshop')
-RUNS = sys.argv[1] if len(sys.argv) > 1 else r'C:\vp_srna_test\bench'
+RUNS = (sys.argv[1] if len(sys.argv) > 1
+        else os.environ.get('VP_BENCH_RUNS')
+        or r'C:\vp_srna_test\bench')
+CTRL = os.environ.get('VP_BENCH_CTRL') or r'C:\vp_srna_test'
 
 EXPS = []
 # —— VIROMOCK 人工数据集 D11-D18（150bp 双端纯病毒 reads，常规路线）——
@@ -35,11 +44,11 @@ for s, fq in (('S3', 'Sample_3.fastq'), ('S9', 'Sample_9.fastq')):
     EXPS.append({'type': 'asm', 'name': s,
                  'r1': os.path.join(BARI, fq), 'out': os.path.join(RUNS, f'bari_{s.lower()}_asm')})
 EXPS.append({'type': 'ctrl_salmon_k31', 'name': 'S3',
-             'r1': r'C:\vp_srna_test\in1.fastq',
-             'index': r'C:\vp_srna_test\idx_k31',
+             'r1': os.path.join(CTRL, 'in1.fastq'),
+             'index': os.path.join(CTRL, 'idx_k31'),
              'out': os.path.join(RUNS, 'ctrl_s3_k31')})
 EXPS.append({'type': 'ctrl_bwa', 'name': 'S3',
-             'r1': r'C:\vp_srna_test\in1.fastq',
+             'r1': os.path.join(CTRL, 'in1.fastq'),
              'out': os.path.join(RUNS, 'ctrl_s3_bwa')})
 
 # —— 第二轮扩充：双引擎 + 半人工集 + 深度稀释 + 全链路 ——
@@ -101,16 +110,50 @@ def monitor(proc, timeout_s=900):
     return peak, False
 
 
-def cleanup_dir(out_dir, keep=('driver_stdout.txt',)):
-    """删除实验目录里的中间产物（结果已提取进 results.json，冗余落盘
-    只占空间）：quant/align/stats/batches/identify/logs 等全部清掉。"""
+def cleanup_dir(out_dir):
+    """实验目录收尾：关键产物移存 results/artifacts/<exp>/，其余中间文件删除。
+
+    2026-10-03 修复：原策略（除 driver_stdout.txt 外全部删除）会销毁原始
+    证据——确诊表/定量表/日志随之丢失，审计无法回溯（本对照表多处以
+    results.json 为准的原因）。现改为把以下关键产物复制保留后，再清目录：
+      identify/all_viruses.best.summary.tsv（确诊表）
+      quant/<name>/quant.sf（EM 定量表）
+      stats/<name>.refstats.tsv（映射统计）
+      identify_run.log / 根目录 *.log（运行日志）
+    其余大体积中间文件（BAM/SAM/批次缓存等）仍删除。代码改好后即刻生效，
+    本轮不重跑实验（历史产物的补救见 AUDIT 对照表）。
+    """
+    import shutil
+    exp = os.path.basename(out_dir.rstrip('\\/'))
+    art = os.path.join(RUNS, 'artifacts', exp)
+    keep_patterns = [
+        os.path.join('identify', 'all_viruses.best.summary.tsv'),
+        os.path.join('quant', '*', 'quant.sf'),
+        os.path.join('stats', '*.refstats.tsv'),
+        'identify_run.log',
+        '*.log',
+    ]
+    saved = []
+    for pat in keep_patterns:
+        for src in glob.glob(os.path.join(out_dir, pat)):
+            if os.path.isfile(src):
+                rel = os.path.relpath(src, out_dir)
+                dst = os.path.join(art, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                try:
+                    shutil.copy2(src, dst)
+                    saved.append(rel)
+                except OSError:
+                    pass
+    if saved:
+        print(f'    [artifacts] {exp}: 保留 {len(saved)} 个关键产物 '
+              f'-> results/artifacts/{exp}/', flush=True)
     for entry in os.listdir(out_dir):
-        if entry in keep:
+        if entry == 'driver_stdout.txt':
             continue
         p = os.path.join(out_dir, entry)
         try:
             if os.path.isdir(p):
-                import shutil
                 shutil.rmtree(p, ignore_errors=True)
             else:
                 os.remove(p)
@@ -118,13 +161,61 @@ def cleanup_dir(out_dir, keep=('driver_stdout.txt',)):
             pass
 
 
+def dedupe_results(results):
+    """断点续跑去重：同一实验名只保留一条有效记录。
+
+    2026-10-03 修复：此前加载旧 results.json 时不去重——某实验先以 error
+    记录落盘、重跑成功后追加成功记录，两条并存（本轮归档的 chain_s3/
+    chain_s9 各残留 1 条旧 error 重复记录即此因）。规则：同一 exp 的
+    旧 error 记录被后续成功记录取代；无成功记录时保留最新一条（便于排查）。
+    """
+    out, index = [], {}
+    for r in results:
+        exp = r.get('exp')
+        if exp in index:
+            prev = out[index[exp]]
+            if prev.get('error') and not r.get('error'):
+                out[index[exp]] = r      # 成功记录取代旧 error
+            elif prev.get('error') and r.get('error'):
+                out[index[exp]] = r      # 都失败：保留最新
+            # 新记录是 error 而旧记录有效：丢弃新 error（不回退进度）
+        else:
+            index[exp] = len(out)
+            out.append(r)
+    return out
+
+
 def main():
     os.makedirs(RUNS, exist_ok=True)
     results = []
     res_path = os.path.join(RUNS, 'results.json')
     if os.path.isfile(res_path):          # 断点续跑：已完成且有效的实验跳过
-        results = json.load(open(res_path, encoding='utf-8'))
-    done = {r['exp'] for r in results if not r.get('error')}
+        results = dedupe_results(json.load(open(res_path, encoding='utf-8')))
+    # done 判定收紧（审查 P1-7）：无 error + 退出码 0 + spec 指纹与当前
+    # 实验定义一致。旧 results.json 里的条目没有 returncode/spec_sha1 →
+    # 一律重跑（宁可重跑也不用口径不明的旧数据）。
+    import hashlib as _hl
+
+    def _spec_sha1(exp):
+        # 与 run_one.py 的 res['spec_sha1'] 同算法：解析后 sort_keys 重序列
+        # 化再哈希（保证与 spec 文件写盘格式无关）
+        _sp = os.path.join(RUNS, os.path.basename(exp['out']) + '.spec.json')
+        try:
+            with open(_sp, encoding='utf-8') as f:
+                return _hl.sha1(json.dumps(json.load(f), ensure_ascii=False,
+                                           sort_keys=True)
+                                .encode('utf-8')).hexdigest()
+        except (OSError, ValueError):
+            return None
+
+    _cur_sha = {os.path.basename(e['out']): _spec_sha1(e) for e in EXPS}
+    done = set()
+    for r in results:
+        if r.get('error') or r.get('returncode') != 0:
+            continue
+        _e = r.get('exp')
+        if r.get('spec_sha1') and r.get('spec_sha1') == _cur_sha.get(_e):
+            done.add(_e)
     for name in done:                     # 已完成实验：回溯清理中间产物
         d = os.path.join(RUNS, name)
         if os.path.isdir(d):

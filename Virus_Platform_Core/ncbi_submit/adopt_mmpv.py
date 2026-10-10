@@ -534,18 +534,27 @@ def taxon_triple(tax_row):
     species = _last_segment(tax_row.get('Species') or tax_row.get('suvtk_Species'))
     genus = _last_segment(tax_row.get('Genus') or tax_row.get('suvtk_Genus'))
     family = _last_segment(tax_row.get('Family') or tax_row.get('suvtk_Family'))
-    # suvtk 的最小可定级别是 '<Taxon> sp.'，属级名混在 Species 列时下沉
-    if species.endswith(' sp.') and not genus:
-        genus, species = species[:-4], ''
-    # 分类等级本身混进 Species 的脏值（实测 suvtk 会输出 'Riboviria sp.'，那是 realm）
-    if species.endswith(' sp.') and not genus and _is_high_rank(species[:-4]):
+    # suvtk 的最小可定级别是 '<Taxon> sp.'，属级名混在 Species 列时下沉；
+    # 但分类等级本身混进 Species 的脏值（实测 suvtk 会输出 'Riboviria sp.'，那是
+    # realm）必须先判掉——原实现把"清高等级"放在下沉之后，导致该判不可达，
+    # realm 噪音最终漏进 genus。这里合并为一次判断：命中 _HIGH_RANKS 一律清空。
+    if species.endswith(' sp.'):
+        base = species[:-4].strip()
+        if _is_high_rank(base):
+            species = ''                     # 高等级噪音：整段清空（不漏到 genus）
+        elif not genus:
+            genus, species = base, ''        # 属级名下沉策略保持
+    # genus/species 列本身命中高等级名（多来源合并时也会出现）→ 一律清空该字段
+    if _is_high_rank(genus):
+        genus = ''
+    if _is_high_rank(species):
         species = ''
     return species, genus, family
 
 
 # 高于科的分类单元名（这些落到 '<X> sp.' 时是 suvtk 的噪音，实测见过 'Riboviria sp.'）
 _HIGH_RANKS = {'riboviria', 'orthornavirae', 'monjiviricetes', 'mononegavirales',
-               'viruses', 'riboviria', 'duplornaviricota', 'pisuviricota',
+               'viruses', 'duplornaviricota', 'pisuviricota',
                'negarnaviricota', 'kitrinoviricota', 'lenarviricota'}
 
 
@@ -897,10 +906,6 @@ def merge_taxonomy(info_tsv_map, ref_info_map, suvtk_map, log=print):
     # 富表没给 Species 时，用 suvtk 的科/属级补上（哪怕只到科也比空着强）
     filled = 0
     for cid, row in out.items():
-        if not (row.get('Species') or row.get('suvtk_Species')):
-            for k in ('Species', 'suvtk_Species'):
-                if row.get(k):
-                    break
         if not row.get('Species') and row.get('suvtk_Species'):
             row['Species'] = row['suvtk_Species']
             filled += 1
@@ -1085,12 +1090,20 @@ def _run(cmd, log, timeout=600):
     return r.returncode, r.stdout or '', r.stderr or ''
 
 
-def _safe_extract(tar_path, dest):
-    """解包 tar.gz，拒绝绝对路径与 .. 穿越（包来自网络，必须校验）。"""
+def _safe_extract(tar_path, dest, max_bytes=2 * 1024 ** 3, max_members=200000):
+    """解包 tar.gz，拒绝绝对路径与 .. 穿越（包来自网络，必须校验）。
+
+    同时做 tar 炸弹防护：成员数上限 max_members、解压总量上限 max_bytes
+    （默认 2GB）——超限直接拒绝，绝不 extractall 到磁盘。
+    """
     import tarfile
     dest = Path(dest).resolve()
+    total = 0
     with tarfile.open(tar_path, 'r:gz') as tf:
-        for m in tf.getmembers():
+        members = tf.getmembers()
+        if len(members) > max_members:
+            raise ValueError(f'包内成员数 {len(members)} 超上限 {max_members}，拒绝解包')
+        for m in members:
             if not (m.isfile() or m.isdir()):
                 raise ValueError(
                     f'包内含非普通文件/目录成员: {m.name}'
@@ -1098,6 +1111,12 @@ def _safe_extract(tar_path, dest):
             target = (dest / m.name).resolve()
             if target != dest and dest not in target.parents:
                 raise ValueError(f'包内路径越界: {m.name}')
+            if m.isfile():
+                total += max(0, int(m.size or 0))
+                if total > max_bytes:
+                    raise ValueError(
+                        f'包内文件解压总量超上限 {max_bytes / 1024 ** 3:.1f}GB，'
+                        f'拒绝解包（疑似 tar 炸弹或交接包过大）')
         tf.extractall(dest)
     return dest
 

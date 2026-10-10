@@ -96,7 +96,12 @@ def api_submit_upload():
     if not f or not f.filename:
         abort(400, '缺少上传文件')
     import tempfile
-    fd, tmp = tempfile.mkstemp(suffix=os.path.splitext(f.filename)[1])
+    # 后缀白名单：表格导入只认这些；其余（含超长怪名）统一落 .csv，
+    # 避免 mkstemp(suffix=...) 把任意后缀带进临时文件（2026-10-04 审查 P3）
+    _sfx = os.path.splitext(f.filename)[1].lower()
+    if _sfx not in ('.csv', '.txt', '.tsv', '.xlsx', '.xls'):
+        _sfx = '.csv'
+    fd, tmp = tempfile.mkstemp(suffix=_sfx)
     try:
         with os.fdopen(fd, 'wb') as out:
             f.save(out)
@@ -412,6 +417,10 @@ def api_submit_table_sqn(name):
                   assembler=body.get('assembler'),
                   sequencer=body.get('sequencer'),
                   use_features=use_features,
+                  # MIUVIG 项目名 / 样本 taxid：能传则传（缺省为中性占位 + WARN，
+                  # 2026-10-03 修复 P2-13：原硬编码项目名）
+                  project_name=(body.get('project_name') or '').strip() or None,
+                  samp_taxon_id=(body.get('samp_taxon_id') or '').strip() or None,
                   tbl_path=os.path.join(out_dir, 'featuretable.tbl')
                   if not use_features else None,
                   out_dir=out_dir)

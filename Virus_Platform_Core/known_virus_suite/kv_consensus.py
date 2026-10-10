@@ -353,6 +353,22 @@ def align_sample(fq, index_prefix, out_bam, threads, log_file=None,
              log_path=log_file, master_log=master_log, check=False,
              logger=logger, env=env)
 
+    return _bam_mapped_count(out_bam, samtools, env=env)
+
+
+def _bam_mapped_count(out_bam, samtools, env=None):
+    """统计 BAM 中主记录 mapped reads 数（-F 0x904 排除 secondary/supplementary）。
+
+    供调用方做 0 映射守卫：比对工具 stderr 可能自报"比对成功"而 BAM 实际
+    0 条 mapped（sRNA 21-24nt 实测复现过：日志称 250,000 条全命中、idxstats
+    为 0），此时继续跑共识会静默产出全 N 序列。"""
+    r = _run([samtools, 'view', '-c', '-F', '0x904', str(out_bam)],
+             check=False, env=env)
+    try:
+        return int((r.stdout or '0').strip() or 0)
+    except ValueError:
+        return -1
+
 
 # ══════════════════════════════════════════════════════════
 # 共识 worker（照抄 worker_consensus, line 395）
@@ -509,7 +525,7 @@ class ConsensusStage:
         """
         samples:   样本列表 [{'name':.., 'r1':.., 'r2':..}]
         passed_df: 过滤段保留的表，含 Sample / Accession（或 Virus）
-        ref_info:  可选，用于取 Recalc_MeanDepth 动态深度
+        ref_info:  可选，用于取 MeanDepth 动态深度
         """
         a = self.args
         logger = self.logger
@@ -530,7 +546,12 @@ class ConsensusStage:
         # 变成 consensus/Unannotated_<acc>/（物种名丢失）。
         tax_col = next((c for c in ('taxonomy', 'Species', 'species')
                         if c in cols), None)
-        depth_col = 'Recalc_MeanDepth' if 'Recalc_MeanDepth' in cols else None
+        # 动态深度（--vc-depth 0）读的深度列：原管线叫 Recalc_MeanDepth，
+        # 本套件识别/过滤表里实际存在的是 MeanDepth——此前只认前者的结果是
+        # 恒取默认 0 → d 恒为 max(1,min(10,0//2))=1（动态路径形同虚设）。
+        depth_col = next((c for c in ('Recalc_MeanDepth', 'MeanDepth',
+                                      'Rep_MeanDepth')
+                          if c in cols), None)
 
         # ── 1. 提取每病毒单序列参考 ──
         target_set = set()
@@ -569,17 +590,31 @@ class ConsensusStage:
                 minibwa=self._tool('minibwa', 'minibwa'))
 
         bam_map = {}
+        samtools_exe = self._tool('samtools', 'samtools')
         for s in samples:
             sname = s['name']
             out_bam = self.d_bam / f"{sname}.sorted.bam"
             if not (a.resume and out_bam.exists() and out_bam.stat().st_size > 0):
-                align_sample(
+                mapped = align_sample(
                     s, index_prefix, str(out_bam), a.threads,
                     log_file=str(self.d_logs / f"align_{sname}.log"),
                     master_log=self.master_log, logger=logger, env=self.env,
                     minibwa=self._tool('minibwa', 'minibwa'),
-                    samtools=self._tool('samtools', 'samtools'))
+                    samtools=samtools_exe)
+            else:
+                mapped = _bam_mapped_count(out_bam, samtools_exe, env=self.env)
             if out_bam.exists() and out_bam.stat().st_size > 0:
+                # 0 映射守卫：比对工具 stderr 可能自报成功而 BAM 实际 0 条
+                # mapped（sRNA 21-24nt 实测复现），继续跑会静默产出全 N 共识。
+                if mapped == 0:
+                    logger.error(
+                        f"  [{sname}] BAM 实际 0 条 mapped reads"
+                        f"（比对工具日志可能自报成功）：拒绝生成共识，"
+                        f"跳过该样品以避免全 N 序列。请检查读长与索引兼容性"
+                        f"（如 sRNA 21-24nt）或参考库是否为空。")
+                    continue
+                if mapped < 0:
+                    logger.warning(f"  [{sname}] mapped 计数失败，按原流程继续")
                 bam_map[sname] = str(out_bam)
             else:
                 logger.warning(f"  [{sname}] 比对未产出 BAM，跳过")

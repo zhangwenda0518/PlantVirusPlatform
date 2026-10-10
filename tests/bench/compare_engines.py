@@ -10,7 +10,11 @@ import os
 import sys
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-PLATFORM = r'D:\桌面\植物病毒分析平台'
+# 平台根：默认自动推导（tests/bench/ 上溯 3 层 = 平台根），
+# 可用环境变量 VP_ROOT 覆盖（换机/换目录不用改代码）。
+PLATFORM = (os.environ.get('VP_ROOT')
+            or os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__)))))
 OUT_ROOT = os.path.join(PLATFORM, '_bench_kvs2')
 LIB_INFO = os.path.join(PLATFORM, 'databases', 'virusref_db', 'viromock_kv',
                         'reference.ref_info.tsv')

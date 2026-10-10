@@ -25,6 +25,7 @@ import sys
 import csv
 import json
 import subprocess
+import threading
 import time
 import pandas as pd
 
@@ -54,6 +55,12 @@ def refresh_paths():
 
 # NCBI MIUVIG:5.0 结构化注释字段（行级 collection_date/geo_loc_name/lat_lon 由
 # taxonomy.tsv 提供，文件级参数由本表提供）。软件字段须 `软件;版本;参数` 三段格式。
+#
+# 2026-10-03（修复 P2-13）：
+#   * project_name 原为项目私有字面量 'Lycium virome project'——改为中性占位，
+#     真实值必须由调用方传入（default_miuvig 会在未覆盖时 WARN）；
+#   * 软件版本尽量从运行环境读取（pyrodigal import 版本、annot_db 的
+#     db_info.json 引擎记录），读不到才回落到这里的字面量并 WARN。
 DEFAULT_MIUVIG = {
     'source_uvig': 'metatranscriptome (not viral targeted)',
     'vir_ident_software': 'kun_peng;0.7.12;default parameters',
@@ -67,7 +74,7 @@ DEFAULT_MIUVIG = {
     'env_broad_scale': 'host-associated',
     'env_local_scale': 'leaf',
     'env_medium': 'plant tissue',
-    'project_name': 'Lycium virome project',
+    'project_name': 'plant virus metagenome project',   # 中性占位，必须人工覆盖
     'seq_meth': 'Illumina NovaSeq 6000',
     'samp_taxon_id': 'plant metagenome [NCBITaxon:1297885]',
     'feat_pred': 'pyrodigal;3.7.1;single mode',
@@ -75,6 +82,74 @@ DEFAULT_MIUVIG = {
     'sim_search_meth': 'MMseqs2;14.7e284;default parameters',
     'size_frac': '',
 }
+
+
+def default_miuvig(project_name=None, samp_taxon_id=None, log=None):
+    """MIUVIG 文件级参数默认值表（版本字段尽量从运行环境读取）。
+
+    * feat_pred：pyrodigal 的 importlib.metadata 版本（读不到 → 字面量 + WARN）；
+    * sim_search_meth：annot_db/prot/db_info.json 的 engine 记录（读不到 → WARN）；
+    * project_name / samp_taxon_id：显式参数，缺省为中性占位并 WARN
+      （提交前必须人工核对，不能把模板里的占位当真实项目名提交）。
+    """
+    log = _logger(log)
+    mv = dict(DEFAULT_MIUVIG)
+    fallback = []
+
+    try:
+        import importlib.metadata as _md
+        pv = _md.version('pyrodigal')
+        mv['feat_pred'] = f'pyrodigal;{pv};single mode'
+    except Exception:
+        fallback.append('feat_pred(pyrodigal 版本)')
+
+    # sim_search_meth：BFVD 相似性检索走 mmseqs。优先读 suvtk 库目录下
+    # db_info.json 的引擎记录；没有就读 mmseqs 二进制自身的版本输出。
+    # 注：项目内 annot_db/prot/db_info.json 是 ④b ORF 注释（diamond）的记录，
+    # 与 BFVD 检索不是同一条链，不能拿来填该字段（会写入误导性引擎名）。
+    sim_done = False
+    try:
+        cand = os.path.join(suvtk_db_dir(), 'db_info.json')
+        if os.path.isfile(cand):
+            with open(cand, encoding='utf-8') as f:
+                info = json.load(f)
+            eng = str(info.get('engine') or info.get('sim_search_engine')
+                      or '').strip()
+            ver = str((info.get('db_versions') or {}).get(eng)
+                      or info.get('version') or '').strip()
+            if eng:
+                mv['sim_search_meth'] = (f'{eng};{ver};default' if ver
+                                         else f'{eng};版本未知;default')
+                sim_done = bool(ver)
+                if not ver:
+                    fallback.append('sim_search_meth(引擎版本)')
+    except Exception:
+        pass
+    if not sim_done:
+        try:
+            exe = os.path.join(_MMSEQS_BIN,
+                               'mmseqs.exe' if os.name == 'nt' else 'mmseqs')
+            r = subprocess.run([exe, 'version'], capture_output=True,
+                               text=True, timeout=30)
+            ver = ((r.stdout or '').strip().splitlines() or [''])[0].strip()
+            if r.returncode == 0 and ver:
+                mv['sim_search_meth'] = f'MMseqs2;{ver};default parameters'
+            else:
+                fallback.append('sim_search_meth(mmseqs 版本)')
+        except Exception:
+            fallback.append('sim_search_meth(mmseqs 版本)')
+
+    if not project_name:
+        fallback.append('project_name（中性占位，提交前必须替换为真实项目名）')
+    else:
+        mv['project_name'] = str(project_name).strip()
+    if samp_taxon_id:
+        mv['samp_taxon_id'] = str(samp_taxon_id).strip()
+
+    if fallback:
+        log('  ⚠ MIUVIG 方法学字段为默认值/未读到环境版本，请人工核对: '
+            + '; '.join(fallback))
+    return mv
 
 
 def _logger(log):
@@ -158,7 +233,7 @@ def _run_suvtk(args, cwd, log=None, timeout=None):
     才一次性落盘，45 分钟里界面上一片空白）；② 子进程登记进任务，取消时
     可硬停止；③ 每个步骤边界检查取消事件。
     """
-    from .utils import task_check_cancel, task_register_proc
+    from .utils import task_check_cancel, task_register_proc, task_cancel_event
     cmd = [_suvtk_python(), '-m', 'suvtk'] + args
     log = _logger(log)
     log('  $ ' + ' '.join(cmd))
@@ -169,6 +244,30 @@ def _run_suvtk(args, cwd, log=None, timeout=None):
     task_register_proc(proc)
     lines = []
     t0 = time.time()
+    # 看门狗（2026-10-03 修复 P3-18）：原先只在「有新输出行」时检查
+    # cancel/超时——suvtk 静默挂起（等 mmseqs/网络）时取消与超时永不触发。
+    # 线程轮询 → 越限即 kill，阻塞的读循环随即拿到 EOF；原因在循环后判读。
+    # 注意：取消事件绑在线程局部（utils._TASK_STATE 是 threading.local()），
+    # 必须在本（任务）线程先取出引用，子线程才看得到。
+    _cancel_ev = task_cancel_event()
+    _stop_wd = threading.Event()
+    _wd_reason = {'why': ''}
+
+    def _watchdog():
+        while not _stop_wd.wait(1.0):
+            why = ''
+            if _cancel_ev is not None and _cancel_ev.is_set():
+                why = 'cancel'
+            if not why and timeout and time.time() - t0 > timeout:
+                why = 'timeout'
+            if why:
+                _wd_reason['why'] = why
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                return
+    threading.Thread(target=_watchdog, daemon=True).start()
     try:
         for line in proc.stdout:
             line = line.rstrip('\n')
@@ -176,14 +275,17 @@ def _run_suvtk(args, cwd, log=None, timeout=None):
                 lines.append(line)
                 log('    ' + line)
             task_check_cancel()                 # 用户取消 → 立刻停手
-            if timeout and time.time() - t0 > timeout:
-                proc.kill()
-                raise RuntimeError('suvtk 子命令超时: ' + ' '.join(args[:3]))
         rc = proc.wait()
     except BaseException:
         if proc.poll() is None:
             proc.kill()
         raise
+    finally:
+        _stop_wd.set()
+    if _wd_reason['why'] == 'timeout':
+        raise RuntimeError('suvtk 子命令超时: ' + ' '.join(args[:3]))
+    if _wd_reason['why'] == 'cancel':
+        raise RuntimeError('任务已停止（用户取消）')
     out = '\n'.join(lines)
     if rc != 0:
         tail = '\n'.join(lines[-12:])
@@ -297,7 +399,7 @@ def _platform_feat_miuvig(run_dir, out_path):
     """平台自家 orf/tbl 链的 miuvig_features 等价物（suvtk comments -f 输入）。
 
     从 orf 运行 04b 产物提取完整注释信息：
-    - feat_pred / sim_search_meth / viral_fams_pred / cdd_pred
+    - feat_pred / sim_search_meth / viral_fams_pred
     - evidence_summary / family_summary / category_summary
     - ref_db / ref_db_version
     """
@@ -313,7 +415,7 @@ def _platform_feat_miuvig(run_dir, out_path):
     categories = {}
     evidence_count = {}
     hmm_total = 0
-    cdd_total = 0
+    bfvd_total = 0
 
     if os.path.isfile(summ_p):
         try:
@@ -328,7 +430,7 @@ def _platform_feat_miuvig(run_dir, out_path):
         except (OSError, ValueError):
             pass
 
-    # 从 orf_annotation.tsv 补充 evidence / hmm / cdd 详细统计
+    # 从 orf_annotation.tsv 补充 evidence / hmm / bfvd 详细统计
     if os.path.isfile(ann_tsv):
         try:
             cdf = pd.read_csv(ann_tsv, sep='\t', dtype=str, keep_default_na=False)
@@ -340,12 +442,11 @@ def _platform_feat_miuvig(run_dir, out_path):
                             part = part.strip()
                             if part:
                                 evidence_count[part] = evidence_count.get(part, 0) + 1
-            # hmm_hits 列：每行有值即计一次（非空字符串）
+            # hmm_hits / bfvd_hits 列：每行有值即计一次（非空字符串）
             if 'hmm_hits' in cdf.columns:
                 hmm_total = int(cdf['hmm_hits'].ne('').sum())
-            # cdd_hits 列同理
-            if 'cdd_hits' in cdf.columns:
-                cdd_total = int(cdf['cdd_hits'].ne('').sum())
+            if 'bfvd_hits' in cdf.columns:
+                bfvd_total = int(cdf['bfvd_hits'].ne('').sum())
         except (OSError, ValueError):
             pass
 
@@ -363,7 +464,6 @@ def _platform_feat_miuvig(run_dir, out_path):
     feat_pred = f'{model};3.7.1;single mode'
     sim_search_meth = f'{engine};2.1.8;default'
     viral_fams_pred = 'HMMER;3.4;Pfam-A-Viruses'
-    cdd_pred = 'MMseqs2;14.7e284;CDD+Pfam'
     ref_db = 'RefSeq viral'
     ref_db_version = '2024-06'
 
@@ -372,13 +472,12 @@ def _platform_feat_miuvig(run_dir, out_path):
         f.write(f'feat_pred\t{feat_pred}\n')
         f.write(f'sim_search_meth\t{sim_search_meth}\n')
         f.write(f'viral_fams_pred\t{viral_fams_pred}\n')
-        f.write(f'cdd_pred\t{cdd_pred}\n')
         f.write(f'ref_db\t{ref_db}\n')
         f.write(f'ref_db_version\t{ref_db_version}\n')
         f.write(f'n_contigs\t{n_orfs}\n')
         f.write(f'n_annotated\t{n_annotated}\n')
         f.write(f'evidence_summary\tseq={n_evidenced}, '
-                f'hmm={hmm_total}, cdd={cdd_total}\n')
+                f'hmm={hmm_total}, bfvd={bfvd_total}\n')
         # 注: investigation_type 是 MIxS/MIGS 字段（prefix ##MIGS-Data-START##），
         # 不属于 MIUVIG:5.0-Data。suvtk 的 comments 命令把所有字段放在同一个
         # MIUVIG cmt 里，但 table2asn 校验器把 investigation_type 当作 MIxS
@@ -397,7 +496,7 @@ def _platform_feat_miuvig(run_dir, out_path):
 def build_sqn(run_dir, *, seq_fasta=None, rows=None, author=None,
               miuvig=None, assembler=None, sequencer=None,
               use_features=True, tbl_path=None, out_dir=None, threads=None,
-              log=None):
+              project_name=None, samp_taxon_id=None, log=None):
     """核心编排：给定 orf 运行（含 03_assembly / 04_orf / 04b）+ 提交表行，
     生成 .sqn/.cmt/.val。返回产物 dict。
 
@@ -406,6 +505,8 @@ def build_sqn(run_dir, *, seq_fasta=None, rows=None, author=None,
             street,email,postal}。
     use_features=True: 先跑 suvtk features（BFVD）产 tbl；False: 用平台自家 tbl
     （tbl_path 须指向 store.generate_feature_tbl 产物）。
+    project_name / samp_taxon_id: MIUVIG 文件级字段（2026-10-03 加入；
+    缺省为中性占位并在日志 WARN，提交前须由调用方传真实值覆盖）。
     """
     log = _logger(log)
     errs = _check_ready(log)
@@ -492,7 +593,9 @@ def build_sqn(run_dir, *, seq_fasta=None, rows=None, author=None,
             f.write(template)
 
     # ---- 4) MIUVIG 文件级参数 + assembly（编辑复用）----
-    mv = dict(DEFAULT_MIUVIG)
+    # 版本字段从运行环境探测；project_name 等未显式覆盖时 WARN（P2-13）
+    mv = default_miuvig(project_name=project_name,
+                        samp_taxon_id=samp_taxon_id, log=log)
     if miuvig:
         mv.update({k: _clean(v) for k, v in miuvig.items() if _clean(v)})
     mv_p = os.path.join(out_dir, 'miuvig.tsv')
@@ -605,8 +708,14 @@ if __name__ == '__main__':
     p.add_argument('--city', default='Yinchuan')
     p.add_argument('--country', default='China')
     p.add_argument('--email', default='zhangwenda@example.com')
+    p.add_argument('--project-name', default=None,
+                   help='MIUVIG project_name（缺省为中性占位并 WARN，提交前必须覆盖）')
+    p.add_argument('--samp-taxon-id', default=None,
+                   help='MIUVIG samp_taxon_id（缺省为植物宏基因组通用 taxid）')
     a = p.parse_args()
     print(build_sqn(a.run_dir,
+                    project_name=a.project_name,
+                    samp_taxon_id=a.samp_taxon_id,
                     author={k: getattr(a, k) for k in
                             ('last', 'first', 'affil', 'city', 'country',
                              'email')}))

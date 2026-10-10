@@ -5,6 +5,7 @@
   dist/VirusPlatform/            ① 程序（exe + webapp + bin/ + tools/，~1GB）
   dist/VirusPlatform-Examples/   ② 示例数据（<程序>/examples/，~1MB）
   dist/VirusPlatform-Database/   ③ 数据库（仅 --with-db 时生成）
+  dist/VirusPlatform-Source/     ④ 源码包（仅 --with-source 时生成）
 
 分发口径（2026-09-19 起）：**原始数据集与数据库区分开**——
   * 随包只发「原始数据集」（参考 FASTA + 注释表 + taxonomy dmp + 第三方
@@ -21,7 +22,7 @@
 数据库包内容（逐项见下方 `_DB_TREES`）：
   数据集：virusref_db（参考 FASTA/ref_info + 预置 v4 blastn 库）、tax_db、
           virus_ref（RefSeq/RVDB 源 FASTA，本机有就随包）
-  注释：annot_db/{prot,cdd,hmm}
+  注释：annot_db/{prot,hmm}
   建树/其他：tree_db、misc_db/{viroids,suvtk,prob}、genus_lens.tsv
 
 程序启动时按此顺序找示例目录（Virus_Platform_Core/config.py `_detect_examples_root`）：
@@ -37,6 +38,14 @@
   python dev_tools/package.py --verify             # 打包后跑产物自检
   python dev_tools/package.py --dedupe-only        # 只对已有 dist 做硬链接去重（不重打包）
   python dev_tools/package.py --no-exe             # exe 已建好，只补外部工具/示例/说明
+  python dev_tools/package.py --with-source        # 再加源码包（源码+绿色运行时，~900MB）
+  python dev_tools/package.py --source-only        # 跳过 exe/示例/数据库，只出源码包
+
+源码包（2026-09-29）：让使用者也能以**源码模式**运行分析——平台源码全树
++ 3rd/python 绿色运行时 + 启动 bat。定位是程序包的「叠加层」：把
+dist/VirusPlatform-Source 的内容并入 dist/VirusPlatform 程序目录，双击
+启动平台-网页.bat 即源码运行（工具链 3rd/bin、3rd/tools 程序包已带，
+解释器与全部依赖在 3rd/python 里，primer3 亦随包）。exe 分发口径不受影响。
 """
 import argparse
 import json
@@ -44,6 +53,7 @@ import os
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 # 参数最先解析：--help 直接退出，绝不触发后面的打包/清理动作
 _parser = argparse.ArgumentParser(description='打包发布版（默认程序/数据库/示例三分离）')
@@ -62,6 +72,11 @@ _parser.add_argument('--dedupe-only', action='store_true',
                      help='不打包，只对已有 dist/VirusPlatform 做硬链接去重')
 _parser.add_argument('--no-exe', action='store_true',
                      help='跳过 PyInstaller（exe 已构建好），只补外部工具/示例/说明')
+_parser.add_argument('--with-source', action='store_true',
+                     help='同时生成「源码包」：源码全树 + 3rd/python 绿色运行时 + '
+                          '启动 bat（并入程序包目录即可源码运行）')
+_parser.add_argument('--source-only', action='store_true',
+                     help='跳过 exe/示例/数据库，仅生成/更新源码包')
 _args, _ = _parser.parse_known_args()
 
 # 控制台编码兜底：Windows 默认代码页是 GBK，脚本里若出现 GBK 编不出的字符
@@ -81,6 +96,7 @@ os.chdir(ROOT)
 APP = os.path.join('dist', 'VirusPlatform')
 EX_DIR = os.path.join('dist', 'VirusPlatform-Examples')
 DB_DIR = os.path.join('dist', 'VirusPlatform-Database')
+SRC_DIR = os.path.join('dist', 'VirusPlatform-Source')
 SPLIT = not _args.no_split
 
 
@@ -112,6 +128,48 @@ def _dir_stat(path):
             except OSError:
                 pass
     return n, total
+
+
+def _build_info():
+    """构建清单（build_info.json 内容）：发布包可追溯所需的元信息。
+
+    动机：产物一旦离开本机（U 盘/网盘/他人电脑），"这是哪次提交、什么时候、
+    哪套工具链打的"就无从查起，自检报告也无法回溯到对应版本。把 git rev +
+    构建时间 + `main.py tools` 探测原文 + 数据库目录统计固化进产物内部，
+    无需外部记录即可追溯（2026-10-03）。
+    """
+    def _git(*a):
+        try:
+            r = subprocess.run(['git', *a], capture_output=True, text=True,
+                               encoding='utf-8', errors='replace')
+            return (r.stdout or '').strip()
+        except Exception:
+            return ''
+
+    tools_probe = ''
+    try:
+        r = subprocess.run([sys.executable, 'main.py', 'tools'],
+                           capture_output=True, text=True, encoding='utf-8',
+                           errors='replace', timeout=300)
+        tools_probe = r.stdout or ''
+        if not tools_probe.strip():
+            tools_probe = f'<tools 探测无输出, rc={r.returncode}> ' + (r.stderr or '')
+    except Exception as e:
+        tools_probe = f'<tools 探测失败: {e!r}>'
+
+    db_dirs = {}
+    for rel in ('databases', 'host-db'):
+        n, sz = _dir_stat(rel)
+        db_dirs[rel + '/'] = {'files': n, 'bytes': sz}
+
+    return {
+        'git_rev': _git('rev-parse', 'HEAD'),
+        'built_at_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'python': sys.version.split()[0],
+        'argv': sys.argv[1:],
+        'tools_probe': tools_probe,
+        'db_dirs': db_dirs,
+    }
 
 
 def _dedupe_hardlinks(root, min_size=64 * 1024):
@@ -181,7 +239,7 @@ if _args.dedupe_only:
 # ------------------------------------------------------------------
 # 1) PyInstaller
 # ------------------------------------------------------------------
-if not _args.db_only:
+if not (_args.db_only or _args.source_only):
     if _args.no_exe:
         print('== 1/5 跳过 PyInstaller（--no-exe，沿用已有 dist/VirusPlatform）==')
     else:
@@ -238,22 +296,22 @@ if not _args.db_only:
         shutil.copytree(ov_build, dst)
         print('  + 3rd/open-virome/frontend/build/')
 
-    # dsRNA 设计的小型数据文件（2026-09-19）：lookup.db 热力学查找表 /
-    # siRNA 参数 / 致死基因清单 —— 没有它们 dsRNA 卡一运行就报
-    # 「缺少热力学查找表」。合计 <100KB，随程序包开箱即用；大头的脱靶
-    # 面板 panel\（1.4G/8 物种）走数据库包（见 _DB_TREES）。
+    # dsRNA 设计的小型数据文件（2026-09-19；2026-10-03 随功能恢复重新入包）：
+    # lookup.db 热力学查找表 / siRNA 参数 / 致死基因清单 —— 没有它们 dsRNA 卡
+    # 一运行就报「缺少热力学查找表」。合计 <100KB，随程序包开箱即用；大头的
+    # 脱靶面板 panel\（物种 RefSeq RNA，GB 级）走数据库包（见 _DB_TREES）。
     for _rel in ('databases/dsrna/lookup.db',
                  'databases/dsrna/siRNA_parameters.txt',
                  'databases/dsrna/lethal_lists'):
-        if os.path.isdir(_rel):
-            dst = os.path.join(APP, *_rel.split('/'))
-            _rmtree(dst)
-            shutil.copytree(_rel, dst)
+        _src = os.path.join(ROOT, *_rel.split('/'))
+        _dst = os.path.join(APP, *_rel.split('/'))
+        if os.path.isdir(_src):
+            _rmtree(_dst)
+            shutil.copytree(_src, _dst)
             print('  +', _rel + '/')
-        elif os.path.isfile(_rel):
-            dst = os.path.join(APP, *_rel.split('/'))
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(_rel, dst)
+        elif os.path.isfile(_src):
+            os.makedirs(os.path.dirname(_dst), exist_ok=True)
+            shutil.copy2(_src, _dst)
             print('  +', _rel)
 
     # primer3-py 包副本（2026-09-20）：分发版在非 ASCII 安装路径下跑 primer3，
@@ -332,7 +390,7 @@ else:
 # ------------------------------------------------------------------
 # 3) 示例数据（独立目录）
 # ------------------------------------------------------------------
-if not _args.db_only:
+if not (_args.db_only or _args.source_only):
     print('== 3/5 示例数据 ==')
     src_ex = 'examples'
     if not os.path.isdir(src_ex):
@@ -367,9 +425,11 @@ def _skip_engine_index(dir_path, names):
     首次运行时由引擎在库目录内自建一次并全局复用（kv_stage.index_dir_for，
     平台内所有库通用）。kv_index 一家就省 ~1.66GB 分发体积；其余库目录
     （viromock_kv 等）同样适用。日志与历史备份目录一并跳过。
+
+    2026-09-29：不再要求"锚点与索引同目录"。引擎索引子目录在任何层级
+    出现都跳过——默认库更名 plant_ref 后，索引既可能在库目录内（自包含
+    布局），也可能残留在旧 kv_index/ 这类纯索引目录里，一律不入包。
     """
-    if 'reference.fasta' not in names and 'manifest.json' not in names:
-        return set()                         # 不是库目录（如 virusref_db/blast）
     import fnmatch as _fn
     skip = {'salmon_k31', 'salmon_k15', 'salmon', 'minibwa', 'logs'}
     for pat in ('salmon_index*', 'backup_*', '*.log', '*.stale'):
@@ -446,14 +506,14 @@ if _args.with_db or _args.db_only:
                              ' + 预置 v4 blastn 库 + kv_index 鉴定库（引擎索引不随包，首跑自建）'),
         ('virus_ref',        '← RefSeq/RVDB 源 FASTA（通用病毒库建库数据集；本机有就随包）'),
         ('annot_db/prot',    '← 功能注释层1：RefSeq 病毒蛋白（DIAMOND 库 + faa.gz + 元数据）'),
-        ('annot_db/cdd',     '← 功能注释层2 / CDD 卡：mmseqs2 CDD 库 + cddid 表 + 病毒白名单'),
         ('annot_db/hmm',     '← 功能注释层2：Pfam-A-Viruses（已 hmmpress）'),
         ('tree_db',          '← 建树参考 plant / ictv 两套口径'),
         ('misc_db/viroids',  '← 类病毒 blastn v4 库'),
         ('misc_db/suvtk',    '← NCBI 提交 BFVD 功能注释库'),
         ('misc_db/prob',     '← 宿主概率表'),
-        ('dsrna/panel',      '← dsRNA 脱靶面板（8 物种 RefSeq RNA，1.4G；'
-                             '小文件 lookup.db/参数/致死清单已随程序包）'),
+        # 2026-10-03 用户裁定：dsRNA 脱靶面板（~1.4GB 物种 RefSeq RNA）不再随
+        # 数据库包分发（软件体积瘦身）。功能保留：自备面板放 databases/dsrna/panel/
+        # 即自动参与脱靶扫描；小文件 lookup.db / 参数 / 致死清单仍随程序包。
     )
     if _args.with_built_virusdb:
         _DB_TREES = _DB_TREES + (
@@ -489,7 +549,7 @@ if _args.with_db or _args.db_only:
             '  · kunpeng 病毒分类库（plant/ref）不预带：到「数据库构建」页\n'
             '    「原始数据集」区一键构建（plant 由参考数据集直接构建，\n'
             '    ref 需先放入 RefSeq 源 FASTA）\n'
-            '  · NCBI Taxonomy / 注释库（CDD、Pfam、RefSeq 蛋白）/ 建树参考 /\n'
+            '  · NCBI Taxonomy / 注释库（Pfam、RefSeq 蛋白）/ 建树参考 /\n'
             '    blastn 库等为第三方直接使用库，随包即用\n'
             '  · 宿主分类库按物种而异，用「数据库构建」页自建\n'
             '\n'
@@ -510,6 +570,89 @@ if _args.with_db or _args.db_only:
 else:
     print('== 4/5 数据库：跳过（软件与数据库分离分发）==')
     print('  需要数据库包时重跑：python dev_tools/package.py --with-db')
+
+# ------------------------------------------------------------------
+# 4b) 源码包（叠加层：并入程序包目录即可源码模式运行）
+# ------------------------------------------------------------------
+if _args.source_only:
+    _args.with_source = True
+if _args.with_source:
+    print('== 4b/5 源码包 ==')
+    _rmtree(SRC_DIR)
+    os.makedirs(SRC_DIR, exist_ok=True)
+
+    _SRC_IG = shutil.ignore_patterns('__pycache__', '*.pyc',
+                                     '.pytest_cache', '.ruff_cache')
+
+    def _src_tree(rel, note):
+        src = os.path.join(ROOT, rel)
+        if not os.path.isdir(src):
+            print(f'  - 跳过（源不存在）: {rel}/')
+            return
+        dst = os.path.join(SRC_DIR, *rel.split('/'))
+        shutil.copytree(src, dst, ignore=_SRC_IG)
+        n, size = _dir_stat(dst)
+        print(f'  + {rel}/  {_fmt(size)} / {n} 文件  {note}')
+
+    def _src_file(rel, note):
+        if not os.path.isfile(os.path.join(ROOT, rel)):
+            print(f'  - 跳过（源不存在）: {rel}')
+            return
+        dst = os.path.join(SRC_DIR, rel)
+        os.makedirs(os.path.dirname(dst) or SRC_DIR, exist_ok=True)
+        shutil.copy2(os.path.join(ROOT, rel), dst)
+        print(f'  + {rel}  {_fmt(os.path.getsize(dst))}  {note}')
+
+    for _f in ('app.py', 'main.py', 'requirements.txt', 'requirements.lock'):
+        _src_file(_f, '入口 / 依赖清单')
+    for _d in ('Virus_Platform_Core', 'webapp', 'scripts', 'dev_tools'):
+        _src_tree(_d, '平台源码 / 前端 / 辅助脚本')
+    for _b in ('启动平台-网页.bat', '启动平台-桌面窗口.bat', '启动拖拽代理.bat',
+               '挂载数据目录.bat', '环境自检.bat'):
+        _src_file(_b, '源码模式启动脚本')
+
+    _rt = os.path.join('3rd', 'python')
+    if os.path.isdir(_rt):
+        _src_tree(_rt, '绿色版 Python 3.12 运行时（依赖与 primer3 已装好）')
+    else:
+        print('  ! 缺少 3rd/python：源码包将无法开箱运行（需使用者自装 Python 3.12）')
+
+    # 干净 platform.json（与程序包同口径：零硬编码路径，示例/数据库自动探测）
+    with open(os.path.join(SRC_DIR, 'platform.json'), 'w', encoding='utf-8') as f:
+        json.dump({'threads': 0, 'tools': {},
+                   'defaults': {'max_heavy_tasks': 2, 'max_light_tasks': 4},
+                   'language': 'zh', 'examples_root': ''},
+                  f, ensure_ascii=False, indent=2)
+    print('  + platform.json（干净配置）')
+
+    _readme = '''本目录是「源码包」——让使用者以源码模式运行平台（区别于 exe 双击运行）。
+
+内容：平台源码全树（Virus_Platform_Core / webapp / app.py / main.py）
++ 3rd/python 绿色版 Python 3.12（全部依赖与 primer3 已装好）
++ 源码模式启动脚本（bat）。
+
+用法（叠加到程序包，推荐）：
+  ① 先拿到程序包 dist/VirusPlatform/（exe + 3rd/bin + 3rd/tools 工具链）
+  ② 把本目录的全部内容复制进 VirusPlatform 目录内（同名目录合并）
+  ③ 双击「启动平台-网页.bat」（或桌面窗口版）→ 源码模式，改代码即时生效
+  数据库/示例仍由 VirusPlatform-Database / -Examples 两个包提供（同级自动识别）。
+
+独立放置（不并入程序包）也可以：
+  本目录自带解释器与全部依赖，「python app.py」即可启动；
+  但分析功能依赖外部工具（blastn/spades/kunpeng 等，在 3rd/tools、3rd/bin），
+  独立使用时需自行补齐，或到「设置 → 工具路径」指定。
+
+说明：
+  - 源码模式与 exe 模式共享同一套 platform.json / 数据库 / 示例配置；
+  - primer3 已随 3rd/python 携带，源码模式引物热力学开箱可用；
+  - 依赖清单见 requirements.txt / requirements.lock（重建环境用）。
+'''
+    with open(os.path.join(SRC_DIR, '源码运行说明.txt'), 'w',
+              encoding='utf-8') as f:
+        f.write(_readme)
+    print('  + 源码运行说明.txt')
+    _n, _sz = _dir_stat(SRC_DIR)
+    print(f'  —— 源码包合计 {_fmt(_sz)} / {_n} 文件')
 
 # ------------------------------------------------------------------
 # 5) 顶层说明 + 汇总
@@ -534,7 +677,7 @@ if SPLIT and os.path.isdir(APP):
             '③ VirusPlatform-Database\\   数据库包（仅 --with-db 时生成）\n'
             '   - 原始数据集：病毒参考（FASTA+注释表）、NCBI Taxonomy、\n'
             '     RefSeq/RVDB 源 FASTA（若随包）\n'
-            '   - 第三方直接使用库：注释库（RefSeq 病毒蛋白 / CDD / Pfam HMM）、\n'
+            '   - 第三方直接使用库：注释库（RefSeq 病毒蛋白 / Pfam HMM）、\n'
             '     建树参考、类病毒库、SUVTK、宿主概率表、属平均长度表、\n'
             '     预置 blastn 库\n'
             '   - 派生库不预带、首跑/一键自建：鉴定库引擎索引首次运行自动\n'
@@ -552,7 +695,7 @@ if SPLIT and os.path.isdir(APP):
             '（源码模式：python main.py selfcheck）\n')
     print('  + dist/程序与数据说明.txt')
 
-for d in (APP, EX_DIR, DB_DIR):
+for d in (APP, EX_DIR, DB_DIR, SRC_DIR):
     if os.path.isdir(d):
         total = sum(os.path.getsize(os.path.join(dp, f))
                     for dp, _s, fs in os.walk(d) for f in fs)
@@ -560,11 +703,55 @@ for d in (APP, EX_DIR, DB_DIR):
         print(f'  {d}: {total / 1e9:.3f} GB / {n} 文件')
 
 # ------------------------------------------------------------------
+# 5.5) 产物构建清单 build_info.json（可追溯：git rev / 时间 / tools 探测）
+# ------------------------------------------------------------------
+print('== 5.5/5 构建清单 ==')
+_info = _build_info()
+for _d in (APP, EX_DIR, DB_DIR, SRC_DIR):
+    if not os.path.isdir(_d):
+        continue
+    _payload = dict(_info, product=os.path.basename(_d))
+    with open(os.path.join(_d, 'build_info.json'), 'w', encoding='utf-8') as f:
+        json.dump(_payload, f, ensure_ascii=False, indent=2)
+        f.write('\n')
+    print(f'  + {_d}/build_info.json'
+          f'（git {(_info["git_rev"] or "?")[:10]}，'
+          f'{_info["built_at_utc"]}）')
+
+# ------------------------------------------------------------------
 # 可选：产物自检
 # ------------------------------------------------------------------
-if _args.verify and os.path.isfile(os.path.join(APP, 'VirusPlatform.exe')):
-    print('\n== 产物自检（exe --cli selfcheck）==')
-    r = subprocess.run([os.path.abspath(os.path.join(APP, 'VirusPlatform.exe')),
-                        '--cli', 'selfcheck'], cwd=os.path.abspath(APP))
-    print('  selfcheck 退出码:', r.returncode)
+if _args.verify:
+    print('\n== 产物自检 ==')
+    _verify_bad = []
+    for _d in (APP, EX_DIR, DB_DIR, SRC_DIR):
+        if not os.path.isdir(_d):
+            continue
+        _bi = os.path.join(_d, 'build_info.json')
+        if not os.path.isfile(_bi):
+            _verify_bad.append(f'{_d}: 缺 build_info.json（本次打包未生成？）')
+            continue
+        try:
+            with open(_bi, encoding='utf-8') as f:
+                _bi_json = json.load(f)
+        except Exception as e:
+            _verify_bad.append(f'{_d}: build_info.json 解析失败 ({e!r})')
+            continue
+        _rev = str(_bi_json.get('git_rev') or '').strip()
+        if not _rev:
+            _verify_bad.append(
+                f'{_d}: build_info.json 的 git_rev 为空'
+                '（打包时不在 git 仓库内，或 git 不可用）')
+            continue
+        print(f'  ✔ {_d}/build_info.json'
+              f'（git {_rev[:10]}，{_bi_json.get("built_at_utc", "?")}）')
+    for _b in _verify_bad:
+        print('  ✘ ' + _b)
+    if os.path.isfile(os.path.join(APP, 'VirusPlatform.exe')):
+        print('== 产物自检（exe --cli selfcheck）==')
+        r = subprocess.run([os.path.abspath(os.path.join(APP, 'VirusPlatform.exe')),
+                            '--cli', 'selfcheck'], cwd=os.path.abspath(APP))
+        print('  selfcheck 退出码:', r.returncode)
+    if _verify_bad:
+        sys.exit(1)
 print('\n完成。')

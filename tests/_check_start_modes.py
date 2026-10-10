@@ -42,6 +42,10 @@ def fake_window(url, m='gui'):
 app._open_window = fake_window
 app._open_browser = lambda url: calls.append(('browser', url))
 app._pick_port = lambda: 8799
+# 测试子进程不与真实例互斥：撞上环境里遗留的平台实例锁会让
+# main() 走 busy 退出分支，测试输出无从产生（2026-10-04 回归实测）
+app._acquire_instance_lock = lambda: ('ok', None)
+app._release_instance_lock = lambda p: None
 app._start_server = lambda port: types.SimpleNamespace(shutdown=lambda: None)
 
 class SyncThread:
@@ -51,8 +55,20 @@ class SyncThread:
         self._t(*self._a)
 
 app.threading = types.SimpleNamespace(Thread=SyncThread, get_ident=lambda: 0)
-app.time = types.SimpleNamespace(
-    sleep=lambda s: (_ for _ in ()).throw(KeyboardInterrupt()))
+
+# app.time 只把 sleep 换成"抛 KeyboardInterrupt"（跳出浏览器模式死循环），
+# 其余属性（strftime/time/monotonic…）透传真 time —— app.main() 的其它动作
+# （如单实例锁写 pid+时间戳）也要用；只塞一个 sleep 的 SimpleNamespace 会
+# 让 add 新功能时报 AttributeError（2026-10-03 实例锁 strftime 即此）。
+import time as _real_time
+
+class TimeStub:
+    def __getattr__(self, name):
+        return getattr(_real_time, name)
+    def sleep(self, s):
+        raise KeyboardInterrupt()
+
+app.time = TimeStub()
 try:
     app.main()
 except KeyboardInterrupt:

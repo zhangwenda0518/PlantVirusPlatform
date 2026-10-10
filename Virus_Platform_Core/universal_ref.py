@@ -158,7 +158,7 @@ def _fasta_accessions(source):
             f"请放入 RefSeq Viral 或 RVDB 的 FASTA 文件（.fa/.fasta，可 .gz）")
     want = set()
     opener = gzip.open if fa.endswith('.gz') else open
-    with opener(fa, 'rt', errors='replace') as f:
+    with opener(fa, 'rt', encoding='utf-8', errors='replace') as f:
         for line in f:
             if not line.startswith('>'):
                 continue
@@ -226,7 +226,7 @@ def build_universal_meta(source='refvirus', logger=None):
         if logger:
             logger.log("解析 RVDB_Taxon 表（1100 万行，首次约 1-3 分钟）...")
         want_norm = {_norm_acc(a) for a in want}
-        with gzip.open(taxon_gz, 'rt', errors='replace') as f:
+        with gzip.open(taxon_gz, 'rt', encoding='utf-8', errors='replace') as f:
             for line in f:
                 if line.startswith('#'):
                     continue
@@ -326,7 +326,7 @@ def build_universal_db(source='refvirus', db_dir=None, hash_capacity='2G',
     opener = gzip.open if src.endswith('.gz') else open
     n = skip = no_acc = 0
     skipped_samples = []
-    with opener(src, 'rt', errors='replace') as f, \
+    with opener(src, 'rt', encoding='utf-8', errors='replace') as f, \
             safe_open(tagged, 'wt') as w:
         for line in f:
             if line.startswith('>'):
@@ -369,24 +369,21 @@ def _load_ncbi_acc2tax(want, logger=None):
     """NCBI 官方 nucl_gb.accession2taxid → {accession: taxid}（仅 want 内）。
 
     本地无该文件时自动从 NCBI FTP 下载（2.7GB gz，一次性，之后复用缓存）。
+    下载走 orf_annot._download_whitelisted（https 域名白名单 + 拒绝解析到
+    私网/环回地址 + 重定向逐跳复检，2026-10-03 审计 P3 前为裸 urlopen）。
     下载失败返回空 dict（回退双源）。
     """
     if not os.path.isdir(_UNI_DIR):
         os.makedirs(_UNI_DIR, exist_ok=True)
 
     if not os.path.isfile(_NCBI_ACC2TAX):
-        if logger:
-            logger.log(f"下载 NCBI 官方映射（{_NCBI_FTP}，2.7GB，一次性）...")
-        import urllib.request
+        # 复用 ⑥b 的下载器：白名单（ftp.ncbi.nlm.nih.gov）与 IP 校验同源，
+        # 免去在本模块重复一份安全逻辑（label 仅改日志标题）
+        from .orf_annot import _download_whitelisted
         try:
-            req = urllib.request.Request(_NCBI_FTP)
-            with urllib.request.urlopen(req, timeout=60) as resp,                     open(_NCBI_ACC2TAX + '.part', 'wb') as out:
-                while True:
-                    chunk = resp.read(1 << 20)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-            os.replace(_NCBI_ACC2TAX + '.part', _NCBI_ACC2TAX)
+            _download_whitelisted(
+                _NCBI_FTP, _NCBI_ACC2TAX, logger=logger,
+                label='NCBI accession2taxid 官方映射（2.7GB，一次性）')
         except Exception as e:
             if logger:
                 logger.log(f"NCBI 映射下载失败（回退双源）: {e}", "WARN")
@@ -396,7 +393,8 @@ def _load_ncbi_acc2tax(want, logger=None):
                    "流式过滤）...")
     out = {}
     want_base = {a.split('.')[0] for a in want}
-    with gzip.open(_NCBI_ACC2TAX, 'rt', errors='replace') as f:
+    with gzip.open(_NCBI_ACC2TAX, 'rt', encoding='utf-8',
+                   errors='replace') as f:
         f.readline()                      # header: accession	accession.version	taxid	gi
         for line in f:
             parts = line.rstrip('\n').split('\t')

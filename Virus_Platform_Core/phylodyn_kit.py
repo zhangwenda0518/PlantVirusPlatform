@@ -324,12 +324,30 @@ def region_of_name(name):
 # 为什么单列一个判定：实测 explorer 新版导出的 2,967 条里 `Unknown` 占 2,529（85%）。
 # 它**不是一个区划**，只是一句"不知道"；把它当区划参与"各分区等量"会让结果
 # 塌成 47 条（等于悄悄丢掉 98% 数据）。所以降采样与统计一律先判定、再排除、并如实报告。
-_NO_REGION_TOKENS = {'', '?', 'unknown', 'n/a', 'na', '-', '--', 'none', 'null', 'nan'}
+#
+# ⚠️ 2026-10-03：词表与 `phylodyn_govern._is_unknown_level` **对齐（唯一权威）** ——
+#   治理把 `unknown_region` / `Unknown_AI` / `未` 这类带后缀写法清成空地点，判定
+#   若只认精确的 'unknown' 就会与治理口径脱节（同一条数据两种结论）。这里只额外
+#   收治理不处理的"符号型空值"（`?` / `-` / `--` / `nan` 等）。
+_NO_REGION_SYMBOLS = {'', '?', '-', '--', 'nan'}
+_NO_REGION_TOKENS = _NO_REGION_SYMBOLS | {'unknown', 'n/a', 'na', 'none', 'null'}
 
 
 def is_no_region(v):
-    """是不是"没有区划信息"（Unknown / 空 / ? / N/A）。"""
-    return (v or '').strip().lower() in _NO_REGION_TOKENS
+    """是不是"没有区划信息"（Unknown / 空 / ? / N/A / `Unknown:Unknown` …）。
+
+    判定 = 符号型空值（本模块口径）**或** `phylodyn_govern._is_unknown_level`
+    （治理口径，认 `unknown` 后缀写法）；两处共用同一套"这不是区划"的语义。
+    复合写法按 `phylodyn_govern.split_location` 拆段：**每段都是 Unknown**
+    （`Unknown:Unknown` / `unknown_region: Unknown`）才算"没有区划"；
+    `China: Unknown` 这种还有真实国家的**不**在此列（治理另有 country_only 口径管）。
+    """
+    t = (v or '').strip()
+    if t.lower() in _NO_REGION_SYMBOLS:
+        return True
+    from Virus_Platform_Core.phylodyn_govern import _is_unknown_level, split_location
+    parts = split_location(t)
+    return bool(parts) and all(_is_unknown_level(p) for p in parts)
 
 
 def attach_coords(rows, points, region_key='location'):
@@ -401,13 +419,27 @@ def dedup_rows(rows, seqs=None, *, name_key='name', date_key='date',
     返回 `(keep_rows, drop_rows, report)`；**保持原顺序**，保留**首次出现**的那条。
     · `seq_of`（名字→序列）或 `seqs`（路径）都没给时，退化成按 (date, location) 去重，
       并在 report 里写明 `by='date+location'`（**不静默**降级）。
+    · ⚠️ 2026-10-03 修：序列索引**同时**以 FASTA 完整头与首词建键 ——
+      FASTA 头常带描述（`>NC_001 黄瓜花叶病毒`），而元数据的 name 列可能写完整头、
+      也可能只写首词；原实现只按 `nm.split()[0]` 查，头带描述时**恒空串**，
+      序列分量等于失效（三元组退化成二元组还不自知）。report 的 `by` 如实标注
+      实际生效的键（一条序列都没命中 → 不冒充"按序列去重"）。
     """
     seq_map = seq_of
     if seq_map is None and seqs is not None:
         seq_map = read_fasta(seqs)
+    if seq_map is not None:
+        # 两键指向同一条序列（完整头 + 首词，先到先得）；不覆盖已有键
+        idx = {}
+        for h, sq in seq_map.items():
+            for k in (h, (h.split()[0] if h else '')):
+                if k and k not in idx:
+                    idx[k] = sq
+        seq_map = idx
     by = 'date+location+sequence' if seq_map else 'date+location'
     seen, keep, drop = {}, [], []
     n_skipped = 0
+    n_seq_hit = 0
     for r in rows:
         nm = (r.get(name_key) or '').strip()
         loc = (r.get(loc_key) or '').strip()
@@ -418,15 +450,23 @@ def dedup_rows(rows, seqs=None, *, name_key='name', date_key='date',
             n_skipped += 1
             keep.append(r)
             continue
-        key = ((r.get(date_key) or '').strip(), loc,
-               (seq_map.get(nm.split()[0], '') if seq_map else ''))
+        sq = ''
+        if seq_map is not None:
+            sq = seq_map.get(nm) or (seq_map.get(nm.split()[0]) if nm else '')
+            if sq:
+                n_seq_hit += 1
+        key = ((r.get(date_key) or '').strip(), loc, sq)
         if key in seen:
             drop.append({'name': nm, 'dup_of': seen[key], 'date': key[0],
                          'location': key[1]})
         else:
             seen[key] = nm
             keep.append(r)
+    if seq_map is not None and not n_seq_hit:
+        # 给了序列但从没命中 → 实际生效的是二元组，如实标注（别让报告骗人）
+        by = 'date+location（序列索引 0 条命中，等同 date+location）'
     rep = {'by': by, 'n_in': len(rows), 'n_kept': len(keep), 'n_dropped': len(drop),
+           'n_seq_matched': n_seq_hit,
            'dropped': drop[:200], 'n_dropped_listed': min(200, len(drop)),
            'groups': len(seen), 'n_skipped_no_loc': n_skipped}
     return keep, drop, rep
@@ -1080,7 +1120,13 @@ def import_from_files(fasta_path, meta_path, out_dir, strict=False, govern=True,
 
 
 def import_manual(fasta_text, meta_text, out_dir, strict=False, govern=True, date_mode='mid', require_location=True):
-    """来源②：手动输入。FASTA 文本 + 元数据表文本（TSV/CSV，name,date,location[,lat,lon]）。"""
+    """来源②：手动输入。FASTA 文本 + 元数据表文本（TSV/CSV，name,date,location[,lat,lon]）。
+
+    ⚠️ 2026-10-03 修：`govern` / `date_mode` / `require_location` 三个参数原来
+    在内部调用 `import_from_files` 时被**丢掉**（只传了 strict），于是卡上取消勾选
+    「入口治理」、改日期口径（mid/start）、放宽缺地点要求，对手动粘贴这条路**全都不生效**
+    —— 现在原样透传（与文件来源同口径）。
+    """
     if not fasta_text.strip():
         raise ValueError('请粘贴 FASTA 序列')
     if not meta_text.strip():
@@ -1093,7 +1139,9 @@ def import_manual(fasta_text, meta_text, out_dir, strict=False, govern=True, dat
             f.write(fasta_text if fasta_text.endswith('\n') else fasta_text + '\n')
         with open(cs_p, 'w', encoding='utf-8', newline='\n') as f:
             f.write(meta_text if meta_text.endswith('\n') else meta_text + '\n')
-        return import_from_files(fa_p, cs_p, out_dir, strict=strict)
+        return import_from_files(fa_p, cs_p, out_dir, strict=strict,
+                                 govern=govern, date_mode=date_mode,
+                                 require_location=require_location)
 
 
 _GB_DATE_RX = re.compile(r'/collection_date="([^"]+)"')

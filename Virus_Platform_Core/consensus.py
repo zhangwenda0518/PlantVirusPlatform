@@ -44,6 +44,7 @@ import os
 import re
 import json
 import gzip
+import shutil
 from collections import Counter
 
 from .config import get_config
@@ -52,9 +53,12 @@ from .utils import run_cmd
 # ---------------------------------------------------------------- 常量
 # 参数默认值对齐 ViralWasm-Consensus
 MIN_BASE_QUALITY = 20      # -q / --min_qual：最小碱基质量
-MIN_DEPTH = 1              # -d / --min_depth：最小覆盖深度（2026-09 统一为 1：
-                           # 低滴度/低频株共识完整性优先，Q20 质量过滤已在
-                           # 计数前把关；要保守阈值可按调用传 5/10）
+MIN_DEPTH = 4              # -d / --min_depth：最小覆盖深度（2026-10-03 定为 4，即"深度>3"：
+                           # 原值 1 时单条 read（例如 1x 处的测序错误/污染）
+                           # 即可定共识碱基并产出 SNV，低覆盖位点噪声全部入表；
+                           # >3 与 ViralConsensus/samtools 常规口径一致，深度≤3
+                           # 的位点共识仍给简并符、SNV 不再产出。要更宽松可显式
+                           # 传小值（参数保留可配置）
 MIN_FREQ = 0.5             # -f / --min_freq：最小等位基因频率
 AMBIG = 'N'                # -a / --ambig：简并符号
 
@@ -253,6 +257,34 @@ def build_index(ref_fa, logger=None):
     return ref_fa
 
 
+def _stage_ref_for_index(ref_fa, out_sam, logger=None):
+    """给 minibwa 索引准备独占的 ASCII 安全临时目录（把参考复制进去）。
+
+    为什么不在参考 FASTA 旁建索引（旧行为）：`.l2b/.mbw` 落在 run_dir 的
+    参考旁边、比对完 finally 删除——同一参考的并发运行会互删对方的索引
+    （A 建好、B 跑完删掉，A 的 map 中途失败）。改为每次调用复制参考到本次
+    运行独占的临时目录，建索引→比对→整目录清理，彼此不相干。
+
+    参考本身可能位于含中文的样品目录，而 minibwa 与 blast/mafft 同属对
+    非 ASCII 路径敏感的 C 工具：索引目录优先走 %TEMP% 中转
+    （assembly._ascii_work_base 的同款惯例），不可用时退回产物目录并 WARN。
+    返回 (索引目录, 目录内参考路径)；调用方负责 rmtree 整个目录。
+    """
+    import tempfile
+    try:
+        from .assembly import _ascii_work_base
+        base = _ascii_work_base('vp_mbw')
+    except Exception as e:
+        base = os.path.dirname(os.path.abspath(str(out_sam))) or '.'
+        if logger:
+            logger.log(f'ASCII 临时目录不可用（{e}），minibwa 索引目录改落 '
+                       f'{base}', 'WARN')
+    d = tempfile.mkdtemp(prefix='mbw_idx_', dir=base)
+    local_ref = os.path.join(d, 'ref.fa')
+    shutil.copyfile(ref_fa, local_ref)
+    return d, local_ref
+
+
 def run_minimap2(ref_fa, reads, out_sam, threads=None, preset='sr',
                  logger=None):
     """minibwa 回贴。reads 项为 str（单端）或 (r1, r2) 二元组（双端）。
@@ -268,6 +300,9 @@ def run_minimap2(ref_fa, reads, out_sam, threads=None, preset='sr',
 
     多个样本/多个 read 对时逐个比对到临时 SAM 再合并（保留一份 header），
     各样本 reads 汇入同一张覆盖统计——与旧版口径一致。
+
+    索引不再写在参考旁（并发互删），改落本次运行独占的临时目录（见
+    _stage_ref_for_index），函数退出前整目录清理。
 
     注意：minibwa 的 stderr 是 GBK 编码，平台 run_cmd 已用
     errors='replace' 兜底（报错文本可能含替换符，进程不受影响）。
@@ -292,8 +327,10 @@ def run_minimap2(ref_fa, reads, out_sam, threads=None, preset='sr',
     nthread = str(threads or get_config().threads or 4)
     preset_mb = map_preset(preset)
 
-    idx = build_index(ref_fa, logger=logger)
+    idx_dir, local_ref = _stage_ref_for_index(ref_fa, out_sam, logger=logger)
     try:
+        idx = build_index(local_ref, logger=logger)
+
         def _map_cmd(dst, r1, r2):
             cmd = [exe, 'map', '-x', preset_mb, '-N', '0', '-t', nthread,
                    '-o', dst, idx, r1]
@@ -335,13 +372,8 @@ def run_minimap2(ref_fa, reads, out_sam, threads=None, preset='sr',
                     pass
         return out_sam
     finally:
-        # 索引落在参考 FASTA 旁（.l2b/.mbw），比对完即清，
-        # 避免污染 run_dir 产物目录
-        for ext in ('.l2b', '.mbw'):
-            try:
-                os.remove(ref_fa + ext)
-            except OSError:
-                pass
+        # 本次运行独占的索引目录（参考副本 + .l2b/.mbw）用完即整目录清理
+        shutil.rmtree(idx_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- pileup
@@ -353,20 +385,29 @@ def pileup(sam_path, refs, min_qual=MIN_BASE_QUALITY, min_mapq=MIN_MAPQ,
     插入语义对齐 ViralConsensus：记录「该位置之前」发生的插入序列；
     只登记**非空**插入（ViralConsensus 会为每个覆盖位置写 "" 空插入，
     高深度下会让 json 膨胀，这里省略——覆盖深度看 poscounts 的 Total 即可）。
+
+    返回 dict 含 'qual_unavailable'：输入 QUAL 全为 '*'（无碱基质量）时为
+    True，表示 min_qual 过滤实际未生效（minibwa 等工具的输出即如此）。
     """
     counts = {n: [[0] * NB for _ in range(len(s))] for n, s in refs.items()}
     ins = {n: {} for n in refs}
     nreads = Counter()
+    # 是否实测到 QUAL=='*'（质量不可用）的比对记录：此时 min_qual 不过滤
+    # 任何碱基，等于"质量过滤未生效"——必须让调用方/摘要可见（见下）。
+    qual_unavailable = False
 
-    total = os.path.getsize(sam_path) or 1
+    is_gz = str(sam_path).endswith('.gz')
+    total = 0 if is_gz else (os.path.getsize(sam_path) or 1)
     done = 0
+    n_lines = 0
     last_pct = -1
-    op = gzip.open if str(sam_path).endswith('.gz') else open
+    op = gzip.open if is_gz else open
     with op(sam_path, 'rt', encoding='utf-8', errors='replace') as f:
         for line in f:
             if line[0] == '@':
                 continue
-            done += len(line)
+            done += len(line.encode('utf-8', 'replace')) if is_gz else len(line)
+            n_lines += 1
             p = line.rstrip('\n').split('\t')
             if len(p) < 11:
                 continue
@@ -395,6 +436,13 @@ def pileup(sam_path, refs, min_qual=MIN_BASE_QUALITY, min_mapq=MIN_MAPQ,
             # 所有缺质量记录误判为低质量而静默丢弃（实测 minibwa 输出即为此情形）。
             if qual == '*':
                 qual = None
+                if not qual_unavailable:
+                    qual_unavailable = True
+                    if logger:
+                        logger.log(
+                            '输入比对记录无碱基质量（QUAL 为 *，htslib 以 '
+                            '255 填充）：min_qual 质量过滤不适用，'
+                            '本结果等效于关闭质量过滤', 'WARN')
             try:
                 rp = int(p[3]) - 1
             except ValueError:
@@ -415,6 +463,11 @@ def pileup(sam_path, refs, min_qual=MIN_BASE_QUALITY, min_mapq=MIN_MAPQ,
                         ri = rp + i
                         if ri >= rlen:
                             break
+                        # SEQ 比 CIGAR 短（异常/截断 SAM）时跳过该位点计数，
+                        # 不让 IndexError 打断整阶段——此前只护了 QUAL 没护
+                        # SEQ（2026-10-04 审查 E4）
+                        if qi >= len(seq):
+                            continue
                         # 碱基质量过滤（Phred+33）；qual=None 表示 SAM 的 '*'
                         # （质量不可用），按 htslib 语义视为 255 直接通过
                         if qual is None:
@@ -449,12 +502,23 @@ def pileup(sam_path, refs, min_qual=MIN_BASE_QUALITY, min_mapq=MIN_MAPQ,
                 # H：都不前进
 
             if progress:
-                pct = min(99, int(done * 100 / total))
-                if pct != last_pct and pct % 10 == 0:
-                    last_pct = pct
-                    progress('pileup', 0.4 + 0.4 * pct / 100,
-                             '统计位置计数 %d%%' % pct)
-    return {'counts': counts, 'ins': ins, 'nreads': nreads}
+                if total:
+                    # 文本 SAM：分子分母同为字符量纲（2026-10-04 审查 P3：
+                    # 此前 gz 的分母是压缩字节，pct 恒被截断在 99%）
+                    pct = min(99, int(done * 100 / total))
+                    if pct != last_pct and pct % 10 == 0:
+                        last_pct = pct
+                        progress('pileup', 0.4 + 0.4 * pct / 100,
+                                 '统计位置计数 %d%%' % pct)
+                else:
+                    # gz：解压总量未知，按行数报进度（不给假百分比）
+                    pct = min(99, int(n_lines / 100))
+                    if pct != last_pct and pct % 10 == 0:
+                        last_pct = pct
+                        progress('pileup', 0.4 + 0.4 * pct / 100,
+                                 f'统计位置计数（已读 {n_lines:,} 行）')
+    return {'counts': counts, 'ins': ins, 'nreads': nreads,
+            'qual_unavailable': qual_unavailable}
 
 
 # ---------------------------------------------------------------- 共识
@@ -756,6 +820,10 @@ def consensus_and_variants(run_dir, ref_fasta, reads, out_subdir='consensus',
         'max_read_len_sampled': max_read_len,
         'unknown': [r['contig'] for r in cov_rows if r['present'] == 'unknown'],
         'min_cov_pct': min_cov_pct,
+        # min_qual 是否真正生效：输入无碱基质量（QUAL 全为 '*'，minibwa 输出
+        # 即如此）时为 false——下游/报告据此知道"这次没做质量过滤"，
+        # 不能把低覆盖位点当作已按 Q20 把关的结果解读。
+        'min_qual_effective': not bool(p.get('qual_unavailable')),
         'refs': cov_rows,
         'params': {'min_qual': min_qual, 'min_depth': min_depth,
                    'min_freq': min_freq, 'ambig': ambig,

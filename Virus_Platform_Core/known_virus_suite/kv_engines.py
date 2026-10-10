@@ -246,6 +246,16 @@ class SalmonEngine(VirusEngine):
             if index_ref_ok(idx_path, ref_fasta, idx_path / 'info.json',
                             logger=self.logger):
                 self.log(f"复用已有索引 -> {idx_path}")
+                # 旧索引兼容：salmon 默认折叠完全重复的参考（931 条重复被并掉，
+                # 被折叠参考永远拿不到 reads）。新索引一律 --keepDuplicates；
+                # 旧索引无法自动补救，这里只显式提示重建（不自动重建，避免
+                # 每次跑都白等一轮建索引）。
+                if self._index_collapsed_duplicates(idx_path):
+                    self.log(
+                        "旧索引折叠过完全重复参考（duplicate_clusters.tsv / "
+                        "info.json:keep_duplicates=false）：被折叠的参考将永远"
+                        "拿不到 reads，且无告警。请改名/删除该索引目录后重建"
+                        "（本次不自动重建）", level='warning')
                 return idx_path
             # 参考已变化（换库/更新参考）：旧索引定量结果是错的，必须重建。
             # 旧目录改名保留（不直接删），构建失败时还能人工回退。
@@ -261,12 +271,17 @@ class SalmonEngine(VirusEngine):
         index_dir.mkdir(parents=True, exist_ok=True)
         self.log(f"构建索引 (k={kmer}) -> {idx_path}")
         t0 = time.time()
+        # --keepDuplicates（salmon 2.7 原生支持）：保留全部完全重复参考。
+        # salmon 默认折叠完全重复序列（本平台库实测 931 条被折进 192 个
+        # 保留簇），被折叠的 accession 在 quant.sf 里恒为 0 —— 换库/物种名
+        # 不同的重复参考（如不同病毒名共用同一条序列）会被静默漏检。
         cmd = [self.exe, 'index', '-t', str(ref_fasta), '-i', str(idx_path),
-               '-k', str(kmer), '-p', str(threads)]
+               '-k', str(kmer), '-p', str(threads), '--keepDuplicates']
         with open(index_dir / f'salmon_index_k{kmer}.log', 'w',
                   encoding='utf-8') as fl:
-            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True)
-        self.log(f"索引完成 {time.time()-t0:.1f}s")
+            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True, timeout=7200)
+        self.log(f"索引完成 {time.time()-t0:.1f}s"
+                 f"（--keepDuplicates：保留全部重复参考，不折叠）")
         try:
             _write_index_fingerprint(idx_path / 'ref_fingerprint.json',
                                      ref_fingerprint(ref_fasta),
@@ -275,6 +290,24 @@ class SalmonEngine(VirusEngine):
             self.log(f"参考指纹写入失败 [{type(e).__name__}]: {e}",
                      level='warning')
         return idx_path
+
+    @staticmethod
+    def _index_collapsed_duplicates(idx_path):
+        """已有索引是否由「折叠重复参考」的旧参数建成（即需重建才能保留重复）。
+
+        判据优先读 salmon 的 info.json:keep_duplicates（2.x 明确记录）；
+        更旧的索引没有该字段时，以 duplicate_clusters.tsv 是否存在为准
+        （有该文件即说明建索引时发生了折叠）。
+        """
+        info = Path(idx_path) / 'info.json'
+        try:
+            with open(info, encoding='utf-8') as f:
+                kd = json.load(f).get('keep_duplicates')
+            if kd is not None:
+                return kd is False
+        except (OSError, ValueError):
+            pass
+        return (Path(idx_path) / 'duplicate_clusters.tsv').exists()
 
     def align(self, index_path, sample, out_dir, threads=None):
         threads = threads or self.threads
@@ -332,7 +365,7 @@ class SalmonEngine(VirusEngine):
         if not (self.samtools and self.pandepth):
             self.log('samtools/pandepth 不可用：不产出比对 BAM，覆盖度/深度退到'
                      '「reads×读长」估算', level='warning')
-            res.total, res.mapped = self._parse_counts(logf, res.reads)
+            res.total, res.mapped = self._meta_counts(quant_dir, logf, res.reads)
             res.has_positions = False
             try:
                 bam_raw.unlink()     # 不会再用；GB 级原始 BAM 不留盘
@@ -368,9 +401,34 @@ class SalmonEngine(VirusEngine):
 
         res.sam_path = sorted_bam
         res.refstats = refstats
-        res.mapped = sum(mapped_reads.values())
-        res.total = backend.count_records(sorted_bam)
+        # 比对率口径修正：idxstats 的每参考计数含 secondary/supplementary
+        # （多映射记录），求和的 mapped 会超过 -F 0x4 -F 0x100 的 total，
+        # 比对率虚高甚至 >100%。统一改读 salmon 自己的 meta_info.json
+        # （num_processed / num_mapped），与 BAM 统计无关。
+        res.total, res.mapped = self._meta_counts(quant_dir, logf, res.reads)
         return res
+
+    def _meta_counts(self, quant_dir, logf, reads):
+        """salmon 的输入/比对片段数：优先 aux_info/meta_info.json。
+
+        meta_info.json 是 salmon 自己写的权威统计（num_processed 输入片段、
+        num_mapped 比对上片段），不依赖 BAM 里记录的 flag 口径；
+        缺失/不可读时退回日志解析（_parse_counts）。
+        """
+        try:
+            with open(Path(quant_dir) / 'aux_info' / 'meta_info.json',
+                      encoding='utf-8') as f:
+                meta = json.load(f)
+            total = int(meta.get('num_processed') or 0)
+            mapped = int(meta.get('num_mapped') or 0)
+            if total > 0:
+                return total, mapped
+            self.log('meta_info.json 的 num_processed=0，比对统计退回日志解析',
+                     level='warning')
+        except (OSError, ValueError) as e:
+            self.log(f'读取 meta_info.json 失败（{e}），比对统计退回日志解析',
+                     level='warning')
+        return self._parse_counts(logf, reads)
 
     def _parse_counts(self, logf, reads):
         """salmon 的比对统计口径：num_processed / num_mapped
@@ -457,7 +515,7 @@ class BwaEngine(VirusEngine):
         t0 = time.time()
         cmd = [self.exe, 'index', str(ref_fasta), str(prefix)]
         with open(sub / 'index.log', 'w', encoding='utf-8') as fl:
-            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True)
+            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True, timeout=7200)
         self.log(f"索引完成 {time.time()-t0:.1f}s")
         try:
             _write_index_fingerprint(sub / 'ref_fingerprint.json',
@@ -505,11 +563,16 @@ class BwaEngine(VirusEngine):
         with open(logf, 'ab') as ef:
             p_map = subprocess.Popen(map_cmd, stdout=subprocess.PIPE,
                                      stderr=ef)
+            # 注册进任务取消表：任务硬停止/超时时 TaskManager 可杀到
+            # 管道两进程（此前仅靠外层 6h 兜底——2026-10-04 审查 P3）
+            from Virus_Platform_Core.utils import task_register_proc
+            task_register_proc(p_map)
             p_bam = subprocess.Popen([self.samtools, 'view', '-b', '-o',
                                       str(bam_raw), '-'],
                                      stdin=p_map.stdout,
                                      stdout=subprocess.DEVNULL,
                                      stderr=ef)
+            task_register_proc(p_bam)
             p_map.stdout.close()
             rc_bam = p_bam.wait()
             rc_map = p_map.wait()
@@ -527,7 +590,9 @@ class BwaEngine(VirusEngine):
                 max(rc_map, rc_bam), 'minibwa map | samtools view -b',
                 stderr=f'详见 {logf}'.encode())
         with open(logf, 'a', encoding='utf-8') as fl:
-            fl.write(' '.join(map_cmd) + ' | samtools view -b\n')
+            import shlex as _shlex
+            fl.write(_shlex.join(str(x) for x in map_cmd)
+                     + ' | samtools view -b')
         elapsed = time.time() - t0
 
         # 输入总量在过滤前数：主记录数（SE=read 数，PE=2×对数），
@@ -572,15 +637,29 @@ class BwaEngine(VirusEngine):
 
         res.sam_path = sorted_bam
         res.refstats = refstats
-        # 真比对的"定量"就是每参考的真实比对计数（无 EM 分摊）
+        # 真比对的"定量"就是每参考的真实比对计数（无 EM 分摊）。
+        # 注意：idxstats 的每参考计数**含 secondary/supplementary 多映射记录**
+        # （实测：一条 secondary + 一条 supplementary 都被计入参考行），
+        # 与 identify 表的 Uniq_Reads 同口径保留；但样本级比对率不能拿它
+        # 求和——会超过主记录总数（>100%）。统一按主记录口径另算：
+        #   total  = -F 0x900（全部主记录，含未比对，见 _count_primary）
+        #   mapped = -F 0x904（已比对主记录）
         res.reads = {acc: float(n) for acc, n in mapped_reads.items()}
-        res.mapped = sum(mapped_reads.values())
+        res.mapped = self._count_mapped_primary(sorted_bam)
         return res
 
     def _count_primary(self, bam):
-        """主记录总数（去 secondary/supplementary/unmapped 前的口径对齐）。"""
+        """主记录总数（-F 0x900：去 secondary/supplementary，保留未比对主记录）"""
         r = subprocess.run(
             [self.samtools, 'view', '-c', '-F', '0x900', str(bam)],
+            capture_output=True, text=True, encoding='utf-8',
+            errors='replace')
+        return int((r.stdout or '0').strip() or 0)
+
+    def _count_mapped_primary(self, bam):
+        """已比对主记录数（-F 0x904：去 secondary/supplementary/unmapped）"""
+        r = subprocess.run(
+            [self.samtools, 'view', '-c', '-F', '0x904', str(bam)],
             capture_output=True, text=True, encoding='utf-8',
             errors='replace')
         return int((r.stdout or '0').strip() or 0)
@@ -654,7 +733,7 @@ class BamCoverageBackend:
             cmd = [self.samtools, 'view', '-b', '-q', str(min_mapq),
                    '-o', str(bam), str(sam_path)]
         with open(logf, 'w', encoding='utf-8') as fl:
-            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True)
+            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True, timeout=7200)
 
         sorted_bam = out_dir / f'{name}.sorted.bam'
         # -m 512M：samtools sort 默认每线程 768MB 提交内存，病毒 BAM 通常
@@ -663,11 +742,11 @@ class BamCoverageBackend:
         cmd = [self.samtools, 'sort', '-m', '256M', '-@', str(self.threads),
                '-o', str(sorted_bam), str(bam)]
         with open(logf, 'a', encoding='utf-8') as fl:
-            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True)
+            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True, timeout=7200)
 
         cmd = [self.samtools, 'index', str(sorted_bam)]
         with open(logf, 'a', encoding='utf-8') as fl:
-            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True)
+            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True, timeout=7200)
 
         try:
             bam.unlink()
@@ -678,13 +757,17 @@ class BamCoverageBackend:
     def count_mapped_by_ref(self, sorted_bam):
         """每个参考的比对记录数（samtools idxstats）
 
+        ⚠️ 口径：idxstats 第 3 列**含 secondary/supplementary 多映射记录**
+        （实测：secondary、supplementary 各一条时该参考计数为 3，主记录仅 1）——
+        下游 identify 表的 Uniq_Reads 即此口径，用于「该参考拿到多少条 reads」；
+        但样本级比对率（mapped/total）不可用它求和，BwaEngine.align 另按
+        -F 0x904 的主记录口径统计。
+
         pandepth 的 .chr.stat.gz 只有 Coverage(%)/MeanDepth，没有读数；
         原管线在 traditional 分支用 samtools view -c 拿总记录数，
         这里按参考细分，同一工具、同一口径。
 
         实现：用 samtools idxstats 一次调用拿全部参考的映射数（第 3 列）。
-        实测与逐参考 `samtools view -F 0x4 -F 0x100 -c <bam> <ref>`
-        数值完全一致（本平台病毒库 8464 条参考对拍，含 0 值与非 0 值）。
         旧实现对 8464 条参考逐条启动 samtools（一次进程几十毫秒），
         单样本要多花几分钟；idxstats 是毫秒级。
         """
@@ -722,8 +805,10 @@ class BamCoverageBackend:
         采样，同一条 BAM 上结果差异在小数第二位上随机波动，不影响阈值判定；
         阈值 95% 与 99% ANI 的区分远大于此。
 
-        返回 {reference: ani_percent(2 位小数)}。
-        无 NM tag 的记录按 NM=0 计（原管线 `except KeyError: nm = 0` 同口径）。
+        返回 {reference: ani_percent(2 位小数)}。<br>缺 NM tag 的记录**不再按
+        NM=0 计**（那会把 ANI 顶到 100% 且无告警）：逐参考统计无 NM 记录占比，
+        >10% 的参考 ANI 置 None（未测定，由分流逻辑按「未测定不拦截」处理）
+        并打 WARN；≤10% 的参考缺 NM 记录直接跳过分子/分母（不计入均值）。
         """
         # 流式逐行读：capture_output 会把整个 SAM 文本读进内存，
         # 大样品（数百万条比对，数 GB 文本）直接 MemoryError 且 ANI 静默置空
@@ -748,26 +833,38 @@ class BamCoverageBackend:
                 aln_len = _cigar_query_aln_len(p[5])
                 if aln_len <= 0:
                     continue
-                nm = 0
+                nm = None
                 for tag in p[11:]:
                     if tag.startswith('NM:i:'):
                         try:
                             nm = int(tag[5:])
                         except ValueError:
-                            nm = 0
+                            nm = None
                         break
                 if cur is None:
-                    acc[ref] = [aln_len - nm, aln_len, 1]
-                else:
-                    cur[0] += aln_len - nm
-                    cur[1] += aln_len
-                    cur[2] += 1
+                    acc[ref] = cur = [0, 0, 0, 0]   # [分子, 分母, 记录数, 缺NM数]
+                cur[2] += 1
+                if nm is None:
+                    cur[3] += 1
+                    continue
+                cur[0] += aln_len - nm
+                cur[1] += aln_len
         finally:
             proc.stdout.close()
             proc.wait()
         out = {}
-        for ref, (num, den, n) in acc.items():
-            out[ref] = round(num / den * 100.0, 2) if den > 0 else None
+        no_nm_refs = []
+        for ref, (num, den, n, no_nm) in acc.items():
+            if n > 0 and no_nm / n > 0.1:
+                out[ref] = None            # 无 NM 占比过高 → 未测定，不给假 ANI
+                no_nm_refs.append(ref)
+            else:
+                out[ref] = round(num / den * 100.0, 2) if den > 0 else None
+        if no_nm_refs:
+            shown = ', '.join(no_nm_refs[:5]) + ('…' if len(no_nm_refs) > 5 else '')
+            self.log(f"ANI：{len(no_nm_refs)} 条参考的无 NM tag 记录占比 >10%，"
+                     f"已置为未测定（None），不再按 NM=0 记成 100%：{shown}",
+                     level='warning')
         return out
 
     def coverage_samtools(self, sorted_bam, out_dir, name='coverage'):
@@ -776,8 +873,9 @@ class BamCoverageBackend:
         raw = out_dir / f'{name}.samtools_cov.tsv'
         cmd = [self.samtools, 'coverage', str(sorted_bam)]
         with open(raw, 'w', encoding='utf-8') as fl:
-            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True)
+            subprocess.run(cmd, stdout=fl, stderr=subprocess.STDOUT, check=True, timeout=7200)
 
+        _reset_parse_failures()
         refstats = {}
         with open(raw, 'r', encoding='utf-8') as f:
             header = f.readline().rstrip('\n').split('\t')
@@ -794,7 +892,16 @@ class BamCoverageBackend:
                     'Coverage(%)': _to_float(p[ci['coverage']]),
                     'MeanDepth': _to_float(p[ci['meandepth']]),
                 }
+        self._warn_parse_failures('samtools coverage')
         return refstats
+
+    def _warn_parse_failures(self, tool):
+        """解析失败显式告警（静默返 0 是假阴性来源）。"""
+        n = _PARSE_FAILURES['int'] + _PARSE_FAILURES['float']
+        if n:
+            self.log(f"{tool} 输出解析失败 {n} 处（已按 0 处理）："
+                     f"覆盖度/深度可能偏低，阈值判定受影响，请检查输出文件",
+                     level='warning')
 
     def coverage_pandepth(self, sorted_bam, out_dir, name='coverage',
                           min_mapq=None):
@@ -826,6 +933,7 @@ class BamCoverageBackend:
             raise RuntimeError(f"pandepth 未产生 {stat_gz}")
 
         # 原管线解析：跳过 # 行，取第 5 列 Cov / 第 6 列 Dep
+        _reset_parse_failures()
         refstats = {}
         with gzip.open(stat_gz, 'rt', encoding='utf-8') as f:
             for line in f:
@@ -839,13 +947,26 @@ class BamCoverageBackend:
                         'Coverage(%)': _to_float(p[4]),
                         'MeanDepth': _to_float(p[5]),
                     }
+        self._warn_parse_failures('pandepth')
         return refstats
+
+
+# pandepth/samtools 输出解析失败计数（模块级）：失败静默返 0 会让覆盖度/深度
+# 偏低却照常参与阈值判定（假阴性来源）。每个覆盖度统计调用前清零、
+# 结束后 _warn_parse_failures 显式告警（kv_engines 第 20 项）。
+_PARSE_FAILURES = {'int': 0, 'float': 0}
+
+
+def _reset_parse_failures():
+    _PARSE_FAILURES['int'] = 0
+    _PARSE_FAILURES['float'] = 0
 
 
 def _to_int(v):
     try:
         return int(float(v))
     except (TypeError, ValueError):
+        _PARSE_FAILURES['int'] += 1
         return 0
 
 
@@ -853,6 +974,7 @@ def _to_float(v):
     try:
         return float(v)
     except (TypeError, ValueError):
+        _PARSE_FAILURES['float'] += 1
         return 0.0
 
 
@@ -899,6 +1021,14 @@ def make_engine(name, tools, threads=8, logger=None, min_mapq=10,
             "共识段内部固定 minibwa，不经本工厂）")
     tools.require(name)
     tool = (coverage_tool or 'pandepth').lower()
+    if tool == 'builtin':
+        # builtin（自研 SAM/CIGAR 解析器）已删除：原管线覆盖度只有 pandepth
+        # 一条口径，自研实现属平行口径。历史取值（旧前端/旧脚本）不再直接
+        # ValueError 崩掉，告警后回退 pandepth（缺件时再由下面逻辑降级）。
+        if logger:
+            logger.warning("coverage_tool=builtin 已弃用（自研解析器已删除），"
+                           "自动回退 pandepth")
+        tool = 'pandepth'
     if tool not in ('pandepth', 'samtools'):
         raise ValueError(f"不支持的覆盖度后端: {tool}（可选 pandepth / samtools）")
     samtools = tools.paths.get('samtools')

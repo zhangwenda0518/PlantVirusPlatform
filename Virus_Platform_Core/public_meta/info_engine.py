@@ -28,7 +28,6 @@ import warnings
 import datetime
 import secrets
 import requests
-import builtins
 import concurrent.futures
 import pandas as pd
 import xmltodict
@@ -48,12 +47,12 @@ warnings.filterwarnings("ignore", category=UserWarning, module="scipy")
 warnings.filterwarnings("ignore", category=FutureWarning, module="seaborn")
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
-# 拦截 print，防进度条撕裂
-def safe_print(*args, **kwargs):
-    kwargs.pop('end', None)
-    msg = " ".join(map(str, args))
-    tqdm.write(msg)
-builtins.print = safe_print
+# 本模块输出统一走显式通道 _write（= tqdm.write），避免与进度条撕裂。
+# 历史实现是 `builtins.print = safe_print`——它有两个致命副作用：
+#   ① 丢掉 end/flush 关键字，进程内其它模块 print(..., flush=True) 直接 TypeError；
+#   ② 导入即生效，污染 Flask 进程全局（web/settings 的 selfcheck、mem_check 都会被牵连）。
+# 因此改为模块内局部名，不再改动 builtins。
+_write = tqdm.write
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
@@ -202,15 +201,32 @@ def get_retry_session(retries=5, backoff_factor=2.0):
     return session
 
 def apply_fill_date(df, fill_date=False, is_gsa=False):
+    """时间兜底：用 ReleaseDate/LoadDate 回填缺口的 CollectionDate。
+
+    provenance 口径（item 27）：填充值一律打来源标记，新增 CollectionDate_source 列
+      - 'submitted'：CollectionDate 原本就有值（来自提交元数据，未改写）
+      - 'release'  ：由 ReleaseDate 回填
+      - 'load'     ：由 LoadDate 回填（GSA）
+    Core14 主列（CollectionDate）口径不变；来源列随 Full/Core14 一起输出。
+    """
     if not fill_date: return df
     missing_vals = ['nan', 'none', 'null', 'not_provided', 'not provided', 'missing', 'unknown', '', '<na>']
     if 'CollectionDate' not in df.columns: df['CollectionDate'] = pd.NA
     df['CollectionDate'] = df['CollectionDate'].astype(object)
     mask = df['CollectionDate'].astype(str).str.strip().str.lower().isin(missing_vals) | df['CollectionDate'].isna()
+    # 来源列：先给所有行标 'submitted'（原值即提交值），回填行再改写为 release/load
+    if 'CollectionDate_source' not in df.columns:
+        df['CollectionDate_source'] = pd.NA
+    df['CollectionDate_source'] = df['CollectionDate_source'].astype(object)
+    df.loc[df['CollectionDate_source'].isna(), 'CollectionDate_source'] = 'submitted'
     fallback_col = 'LoadDate' if is_gsa and 'LoadDate' in df.columns else ('ReleaseDate' if 'ReleaseDate' in df.columns else None)
     if fallback_col:
-        valid_mask = ~df[fallback_col].astype(str).str.strip().str.lower().isin(missing_vals)
+        # notna() 必须显式判：astype(str) 对 pd.NA 会产出 NA 而非 'nan'，
+        # 只靠 str 白名单会把"回退列本身为空"的行也算作有效填充
+        valid_mask = ~df[fallback_col].astype(str).str.strip().str.lower().isin(missing_vals) \
+            & df[fallback_col].notna()
         df.loc[mask, 'CollectionDate'] = df.loc[mask, fallback_col].where(valid_mask)
+        df.loc[mask & valid_mask, 'CollectionDate_source'] = ('load' if fallback_col == 'LoadDate' else 'release')
     return df
 
 def save_dual_format(df, base_path):
@@ -1013,7 +1029,7 @@ def generate_global_datavzrd(file_path, out_dir):
     """
     import shutil
     if not shutil.which('datavzrd'):
-        print("ℹ️ 未安装 datavzrd，跳过交互式报告生成（不影响元数据输出）")
+        _write("ℹ️ 未安装 datavzrd，跳过交互式报告生成（不影响元数据输出）")
         return None
 
     abs_path = os.path.abspath(file_path).replace('\\', '/')
@@ -1070,19 +1086,59 @@ views:
         f.write(yaml_content)
 
     try:
-        print(f"📊 正在为 {file_name} 生成交互式报告...")
+        _write(f"📊 正在为 {file_name} 生成交互式报告...")
         result = subprocess.run(['datavzrd', yaml_path, '--output', report_dir],
                                capture_output=True, text=True)
         # 完整的状态判定与错误打印，杜绝静默失败
         if result.returncode == 0:
-            print(f"✅ 报告已就绪: \033[94m{os.path.join(report_dir, 'index.html')}\033[0m")
+            _write(f"✅ 报告已就绪: \033[94m{os.path.join(report_dir, 'index.html')}\033[0m")
             return os.path.join(report_dir, 'index.html')
         else:
-            print("❌ datavzrd 生成失败！")
-            print(f"【详细错误原因】:\n{result.stderr}")
+            _write("❌ datavzrd 生成失败！")
+            _write(f"【详细错误原因】:\n{result.stderr}")
     except Exception as e:
-        print(f"❌ datavzrd 遇到致命异常: {e}")
+        _write(f"❌ datavzrd 遇到致命异常: {e}")
     return None
+
+def _values_differ(a, b):
+    """逐元素比较两个 Series 是否不等（NA/NaN 视为相等）。返回布尔 Series。"""
+    a2, b2 = a.astype(object), b.astype(object)
+    same = (a2.isna() & b2.isna()) | (a2.fillna('\x00') == b2.fillna('\x00'))
+    return ~same
+
+
+def _same_scalar(a, b):
+    """标量等值比较（NA/NaN 视为相等），用于改写判定。"""
+    def _na(v):
+        try:
+            return v is None or bool(pd.isna(v))
+        except (TypeError, ValueError):
+            return False
+    if _na(a) and _na(b):
+        return True
+    if _na(a) or _na(b):
+        return False
+    return str(a) == str(b)
+
+
+def stamp_provenance(df, col, before, mask, source):
+    """改写前留存原值 + 标注来源（不改变主列口径）。
+
+    mask 为 True 的行：新增/写入 `<col>_original`（改写前的原值）并把
+    `<col>_source` 标为 source（'AI' / 'rule' / 'original'）。列仅在确有改写时
+    才新增；未改写行 `<col>_source` 保持 'original'。Location 的来源标注即
+    Location_source（GeoLoc 口径），Tissue/Age_GrowthStage 同理。
+    """
+    if mask is None or not bool(mask.any()):
+        return
+    oc, sc = f'{col}_original', f'{col}_source'
+    if oc not in df.columns:
+        df[oc] = before.copy()          # 改写前的整列原值
+    if sc not in df.columns:
+        df[sc] = 'original'
+    df.loc[mask, oc] = before[mask]
+    df.loc[mask, sc] = source
+
 
 def standardize_metadata_df(df, api_client, ai_model):
     if df is None: return pd.DataFrame()
@@ -1090,14 +1146,20 @@ def standardize_metadata_df(df, api_client, ai_model):
     
     df = df.copy()
     null_words = {'not collected', 'missing', 'none', 'unknown', 'na', 'n/a', 'not applicable', 'not provided', '-', 'null', ''}
-    for col in df.columns:
+    for col in list(df.columns):
         if df[col].dtype == object:
+            before = df[col].copy()
             df[col] = df[col].apply(lambda x: pd.NA if str(x).strip().lower().replace('_', ' ') in null_words else x)
+            # 规则清洗（清空占位词）→ <col>_original 留原值，来源标 'rule'
+            stamp_provenance(df, col, before, _values_differ(before, df[col]), 'rule')
     
     if 'Tissue' in df.columns:
+        before = df['Tissue'].copy()
         df['Tissue'] = df['Tissue'].apply(lambda x: str(x).strip().lower() if pd.notna(x) else x)
         mapping = {'leaves': 'leaf', 'fruits': 'fruit', 'roots': 'root', 'stems': 'stem', 'flowers': 'flower', 'seeds': 'seed', 'myceliums': 'mycelium'}
         df['Tissue'] = df['Tissue'].replace(mapping)
+        # 规则规范化（单复数统一）→ 来源标 'rule'
+        stamp_provenance(df, 'Tissue', before, _values_differ(before, df['Tissue']), 'rule')
         
     if 'Location' in df.columns and api_client:
         unique_locs = df['Location'].dropna().unique().tolist()
@@ -1119,17 +1181,21 @@ def standardize_metadata_df(df, api_client, ai_model):
                     mapped_locs.update(batch_res)
                 except Exception: pass
             if mapped_locs:
+                before = df['Location'].copy()
                 df['Location'] = df['Location'].map(mapped_locs).fillna(df['Location'])
+                # AI 地理位置规范化 → Location_original 留原值，Location_source='AI'
+                stamp_provenance(df, 'Location', before,
+                                 _values_differ(before, df['Location']), 'AI')
     return df
 
 def merge_global_results(df_sra, df_gsa, out_dir, fill_date, mode, api_client, ai_model, ncbi_api, use_scholar):
     if df_sra is None: df_sra = pd.DataFrame()
     if df_gsa is None: df_gsa = pd.DataFrame()
 
-    print("\n" + "="*65)
-    print("🌍 正在执行 Global Unification (大一统合并与语义净化正交化)...")
+    _write("\n" + "="*65)
+    _write("🌍 正在执行 Global Unification (大一统合并与语义净化正交化)...")
     
-    print("🧹 正在对合并前数据进行深度清洗 (清理无效占位符 / 规范部位 / AI地理位置规范化)...")
+    _write("🧹 正在对合并前数据进行深度清洗 (清理无效占位符 / 规范部位 / AI地理位置规范化)...")
     df_sra = standardize_metadata_df(df_sra, api_client, ai_model)
     df_gsa = standardize_metadata_df(df_gsa, api_client, ai_model)
     
@@ -1144,8 +1210,11 @@ def merge_global_results(df_sra, df_gsa, out_dir, fill_date, mode, api_client, a
 
     # 🚀 AI 9列正交化自检防火墙 (专治 GSA 的长文本小作文和物种名混入杂质)
     if api_client:
-        print("🤖 正在启动 AI 9列正交化自检防火墙 (隔离语义污染并浓缩长文本)...")
+        _write("🤖 正在启动 AI 9列正交化自检防火墙 (隔离语义污染并浓缩长文本)...")
         cols_to_check = ['CollectionDate', 'Location', 'Source', 'Tissue', 'Age_GrowthStage', 'ScientificName', 'LibrarySource', 'CenterName', 'BioProject']
+        # provenance 快照：改写前整列原值（<col>_original 列惰性物化时用快照，
+        # 否则逐行改写会让"原值"混入本行之前已被 AI 改过的值）
+        _ai_orig_snap = {k: df_global[k].copy() for k in cols_to_check if k in df_global.columns}
         
         for idx, row in tqdm(df_global.iterrows(), total=len(df_global), desc="Data Sanitization"):
             target_dict = {k: row.get(k, "Not_Provided") for k in cols_to_check if k in df_global.columns}
@@ -1159,6 +1228,17 @@ def merge_global_results(df_sra, df_gsa, out_dir, fill_date, mode, api_client, a
                         val = str(clean_data[k]).strip()
                         # 忽略大小写，防止 AI 输出小写的 not_provided 覆盖掉已填补的时间
                         if val.lower() not in ["", "none", "nan", "not_provided"]:
+                            old_val = df_global.at[idx, k]
+                            # provenance：AI 改写前留原值（<col>_original），来源标 'AI'
+                            if _same_scalar(old_val, val):
+                                continue
+                            oc, sc = f'{k}_original', f'{k}_source'
+                            if oc not in df_global.columns:
+                                df_global[oc] = _ai_orig_snap.get(k, df_global[k]).copy()
+                            if sc not in df_global.columns:
+                                df_global[sc] = 'original'
+                            df_global.at[idx, oc] = old_val
+                            df_global.at[idx, sc] = 'AI'
                             df_global.at[idx, k] = val
             except Exception: pass
     # 强制将 TaxID 转为字符串并去除 .0 后缀
@@ -1168,7 +1248,7 @@ def merge_global_results(df_sra, df_gsa, out_dir, fill_date, mode, api_client, a
     if 'TaxID' not in df_global.columns: df_global['TaxID'] = pd.NA
     df_global['TaxID'] = df_global['TaxID'].astype(object)
 
-    print("🧬 正在连接 NCBI Taxonomy 引擎查缺补漏...")
+    _write("🧬 正在连接 NCBI Taxonomy 引擎查缺补漏...")
     missing_tax_mask = df_global['TaxID'].isna() | df_global['TaxID'].astype(str).str.strip().str.lower().isin(['not_provided', 'nan', 'none', 'unknown', '', 'pd.na', '<na>'])
     unique_names = df_global.loc[missing_tax_mask, 'ScientificName'].dropna().unique().tolist()
     if unique_names:
@@ -1188,7 +1268,7 @@ def merge_global_results(df_sra, df_gsa, out_dir, fill_date, mode, api_client, a
         bp_cache_dir = os.path.join(bp_res_dir, "1_cache")
         os.makedirs(bp_cache_dir, exist_ok=True)
         
-        print("\n" + "="*65 + f"\n📖 发现 {len(orphan_bps)} 个未查明文献的项目，启动深度溯源引擎...")
+        _write("\n" + "="*65 + f"\n📖 发现 {len(orphan_bps)} 个未查明文献的项目，启动深度溯源引擎...")
         tracer = BioProjectTracer(ncbi_api, api_client, ai_model, use_scholar)
         pmid_mapping, trace_details = {}, []
         success, failed = 0, 0
@@ -1234,18 +1314,22 @@ def merge_global_results(df_sra, df_gsa, out_dir, fill_date, mode, api_client, a
             with safe_open(trace_f, 'wt') as f:
                 pd.DataFrame(trace_details).to_csv(f, index=False, encoding='utf-8-sig', lineterminator='\n')
         df_global.loc[missing_pmid_mask, 'PMID'] = df_global.loc[missing_pmid_mask, 'BioProject'].map(pmid_mapping).fillna(df_global.loc[missing_pmid_mask, 'PMID'])
-        print(f"📊 溯源战报：成功追溯 {success} 项。详情见 BioProject_Results 目录。")
+        _write(f"📊 溯源战报：成功追溯 {success} 项。详情见 BioProject_Results 目录。")
 
     for col in FINAL_14:
         if col not in df_global.columns: df_global[col] = pd.NA
+    # CollectionDate 来源统计（report 口径：多少行是回填的、回填自哪个字段）
+    if 'CollectionDate_source' in df_global.columns:
+        _vc = df_global['CollectionDate_source'].value_counts(dropna=False)
+        _write("🗓 CollectionDate 来源统计: " + " | ".join(f"{k}={int(v)}" for k, v in _vc.items()))
     df_final_14 = df_global[FINAL_14].copy().replace(["Not_Provided", "not_provided", "None", ""], pd.NA)
     save_dual_format(df_final_14, os.path.join(out_dir, "Global_Unified_Metadata_Core14"))
     full_f = save_dual_format(df_global, os.path.join(out_dir, "Global_Unified_Metadata_Full"))
     generate_global_datavzrd(full_f, out_dir)
     
-    print("🎉 完美收工！数据已纯净化。")
-    print("👉 【全维溯源表】: Global_Unified_Metadata_Full.csv")
-    print("👉 【核心标准表】: Global_Unified_Metadata_Core14.tsv")
+    _write("🎉 完美收工！数据已纯净化。")
+    _write("👉 【全维溯源表】: Global_Unified_Metadata_Full.csv")
+    _write("👉 【核心标准表】: Global_Unified_Metadata_Core14.tsv")
 
 def main():
     parser = argparse.ArgumentParser(description="🌍 Global Metadata Engine v12.11 终极完备版")
@@ -1270,8 +1354,11 @@ def main():
             args.outdir = './Global_Metadata_Results'
 
     if args.ncbi_api: os.environ["NCBI_API_KEY"] = args.ncbi_api
-    # 环境变量回退 (export DEEPSEEK_API_KEY / NCBI_API_KEY)
-    if not args.deepseek_api and os.environ.get("DEEPSEEK_API_KEY"):
+    # Key 读取口径：环境变量优先（宿主进程经 env 注入，密钥不进命令行/进程表）；
+    # --deepseek-api/--kimi-api 仍保留兼容，但不再是主通道。
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        if args.deepseek_api and args.deepseek_api != os.environ["DEEPSEEK_API_KEY"]:
+            _write("提示: 优先采用环境变量 DEEPSEEK_API_KEY（命令行 key 已忽略）")
         args.deepseek_api = os.environ["DEEPSEEK_API_KEY"]
     if not args.ncbi_api and os.environ.get("NCBI_API_KEY"):
         args.ncbi_api = os.environ["NCBI_API_KEY"]
@@ -1280,17 +1367,18 @@ def main():
     if args.mode in ['api', 'both']:
         if args.kimi_api:
             client, model = OpenAI(api_key=args.kimi_api, base_url="https://api.moonshot.cn/v1"), "moonshot-v1-32k"
-            print("🤖 挂载引擎: Kimi")
+            _write("🤖 挂载引擎: Kimi")
         elif args.deepseek_api:
             client, model = OpenAI(api_key=args.deepseek_api, base_url="https://api.deepseek.com"), args.deepseek_model
-            print(f"🤖 挂载引擎: DeepSeek ({model})")
+            _write(f"🤖 挂载引擎: DeepSeek ({model})")
         else: parser.error("API模式需提供 Key (--deepseek-api 或 export DEEPSEEK_API_KEY)")
 
     os.makedirs(args.outdir, exist_ok=True)
-    input_data = [line.strip() for line in open(args.input, 'r')] if os.path.isfile(args.input) else [args.input]
+    input_data = [line.strip() for line in open(args.input, 'r', encoding='utf-8-sig',
+                                               errors='replace')] if os.path.isfile(args.input) else [args.input]
     input_list = list(dict.fromkeys([x for x in input_data if x]))
     sra_list, gsa_list, _ = get_lists_by_regex(input_list)
-    print(f"\n🚀 路由分流 | SRA: {len(sra_list)} | GSA: {len(gsa_list)}")
+    _write(f"\n🚀 路由分流 | SRA: {len(sra_list)} | GSA: {len(gsa_list)}")
     
     df_sra, df_gsa = pd.DataFrame(), pd.DataFrame()
     if sra_list: df_sra = SRAPipeline(args.mode, client, model, args.outdir, args.fill_date).process_all(sra_list, args.threads)

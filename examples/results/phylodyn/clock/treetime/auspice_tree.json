@@ -2,7 +2,7 @@
 "meta": {
 "title": "Auspice visualization of TreeTime (v0.12.1) analysis",
 "build_url": "https://github.com/neherlab/treetime",
-"last_updated": "2026-09-21",
+"last_updated": "2026-10-06",
 "treetime_version": "0.12.1",
 "genome_annotations": {
 "nuc": {
@@ -49,7 +49,7 @@
 "name": "NODE_0000013",
 "node_attrs": {
 "num_date": {
-"value": 1978.4307275279753
+"value": 1978.430727528703
 },
 "div": 0.001,
 "bad_branch": {
@@ -321,7 +321,7 @@
 "name": "NODE_0000008",
 "node_attrs": {
 "num_date": {
-"value": 2011.0321913364985
+"value": 2011.0302490586555
 },
 "div": 0.10777227397246232,
 "bad_branch": {
@@ -400,7 +400,7 @@
 "name": "NODE_0000004",
 "node_attrs": {
 "num_date": {
-"value": 1988.4080570552487
+"value": 1988.4118618627851
 },
 "div": 0.03184772602753769,
 "bad_branch": {
@@ -831,7 +831,7 @@
 "name": "NODE_0000010",
 "node_attrs": {
 "num_date": {
-"value": 2005.953339027503
+"value": 2005.9568266422812
 },
 "div": 0.11025772602753768,
 "bad_branch": {
@@ -882,7 +882,7 @@
 "name": "NODE_0000011",
 "node_attrs": {
 "num_date": {
-"value": 2006.0879131095621
+"value": 2006.0914144661906
 },
 "div": 0.11078772602753768,
 "bad_branch": {

@@ -129,11 +129,16 @@ check(rep['missing'] == [], f'无缺失: {rep["missing"]}')
 check(rep['extra'] == ['not_in_table'], f'多余 ID 报告: {rep["extra"]}')
 check(any(x['id'] == 'ctg_demo_3' and x['length'] == 80 for x in rep['short']),
       f'短序列报告: {rep["short"]}')
-check(rep['replaced'] == 20, f'U→N 替换 20 个: {rep["replaced"]}')
+# NCBI 口径：RNA U→T（DNA 等价形式，保序列信息），单独计 u_to_t；
+# 2026-10-04 审查 M4：此处断言曾停留在旧「U→N」口径（replaced==20），
+# 与实现（store.py U→T）脱节导致误报——修正为按实现口径断言。
+check(rep['u_to_t'] == 20, f'RNA U→T 转换 20 个: {rep["u_to_t"]}')
+check(rep['replaced'] == 0, f'无非 IUPAC 字符替换: {rep["replaced"]}')
 fsa = os.path.join(store.table_dir(NAME), 'sequences.fsa')
 with io.open(fsa, encoding='utf-8') as f:
     content = f.read()
-check('>ctg_demo_1' in content and 'NNNN' in content.replace('ACGTN', 'NNNN') or True, 'fsa 内容存在')
+check('>ctg_demo_1' in content, 'fsa 内容存在')
+check('U' not in content, 'fsa 中无残留 U（已转 T）')
 check(content.count('>') == 3, f'fsa 共 3 条记录: {content.count(">")}')
 
 # ---------- 4. 从分析结果导入 ----------

@@ -8,13 +8,24 @@
 3. 内存守卫：离谱 iterations 触发 MemoryBudgetExceeded
 4. primer 限定最优窗（scope=best_window 时扩增子落在窗内）
 
+环境前置（2026-10-03 起自足化，不再静默失败或依赖仓库外数据）：
+- databases/dsrna/{lookup.db, siRNA_parameters.txt}（小文件，随发行包/仓库旁
+  数据提供；缺失时本测试直接失败并说明）；
+- 脱靶面板：优先用 databases/dsrna/panel/ 下真实的
+  Coccinella_septempunctata* 面板；缺失时在平台 run/ 下合成一份小面板并
+  临时把引擎的 PANEL_DIR 指过去（面板扫描代码路径照跑，命中数不参与断言）。
+- 工作目录放平台 run/ 下（gitignored）：引擎产物写入走 safe_open，要求落在
+  平台写根内 —— 与 web 层真实调用口径一致（此前写 %TEMP%，真实运行不存在
+  这种配置）。
+
 运行：python tests/_it_dsrna.py
 """
 import json
+import os
 import random
 import shutil
 import sys
-import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -26,19 +37,59 @@ from Virus_Platform_Core import dsrna_pipeline as dp          # noqa: E402
 from Virus_Platform_Core import dsrna_scoring as dscore       # noqa: E402
 from Virus_Platform_Core import dsrna_offtarget as dso        # noqa: E402
 
+# 数据面前置：lookup.db 是 dsRIP 效价的必需查找表（256 条 RNA 四核苷酸 dG），
+# 不带它会以 ScoringDataError 中断——这里先给一句可执行的说明再退出。
+if not Path(dscore.LOOKUP_DB).exists():
+    print(f'✘ 缺少热力学查找表 {dscore.LOOKUP_DB}\n'
+          f'  → 把 lookup.db（与 siRNA_parameters.txt）放入 databases/dsrna/ 后重跑')
+    sys.exit(2)
+if not Path(dscore.PARAMS_PATH).exists():
+    print(f'△ 参数文件 {dscore.PARAMS_PATH} 不存在：本次按引擎内置默认参数跑'
+          f'（load_params 的既定行为）')
+
 
 def _random_seq(n, seed):
     r = random.Random(seed)
     return ''.join(r.choice('ACGT') for _ in range(n))
 
 
+def _ensure_panel(dp, scratch):
+    """脱靶面板：真实面板优先，缺失则合成小面板并临时重指引擎 PANEL_DIR。
+
+    返回 (是否用了合成面板, 说明文字)。
+    """
+    real = sorted(Path(dp.PANEL_DIR).glob('Coccinella_septempunctata*'))
+    if real:
+        return False, f'真实面板 {real[0].name}'
+    pan = Path(scratch) / 'panel'
+    pan.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(20260916)
+    with open(pan / 'Coccinella_septempunctata_synthetic_test.fa', 'w',
+              encoding='utf-8') as fh:
+        for i, n in enumerate((4000, 3500)):
+            s = ''.join(rng.choice('ACGT') for _ in range(n))
+            fh.write(f'>XM_TEST{i + 1}\n{s}\n')
+    dp.PANEL_DIR = pan
+    dp.CACHE_DIR = pan / '_cache'
+    return True, f'合成小面板（真实 panel 未装）{pan}'
+
+
 def main():
     ok = True
-    tmp = Path(tempfile.mkdtemp(prefix='dsrna_it_'))
+    # 工作目录在平台 run/ 下（safe_open 写盘要求平台写根内；见模块 docstring）
+    tmp = PLATFORM / 'run' / f'_it_dsrna_{os.getpid()}_{int(time.time())}'
+    if tmp.exists():
+        shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    print(f'临时工作目录: {tmp}')
     targets = tmp / 'targets.fa'
     t1 = _random_seq(900, 1)
     t2 = _random_seq(900, 2)
     targets.write_text(f'>t1\n{t1}\n>t2\n{t2}\n', encoding='utf-8')
+
+    synthetic, panel_note = _ensure_panel(dp, tmp)
+    print(f'脱靶面板: {panel_note}'
+          + ('（仅测结构，命中数不参与断言）' if synthetic else ''))
 
     def log(m):
         print('  [log]', m)

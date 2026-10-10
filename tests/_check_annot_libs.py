@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""真浏览器验证「功能注释」页的注释层选择（prot / pfam / cdd，Playwright）。
+"""真浏览器验证「功能注释」页的注释层选择（prot / pfam / bfvd，Playwright）。
 
 覆盖：
   1. 三个勾选框默认全选；引擎/库下拉可用，「全部层」按钮存在
@@ -7,6 +7,7 @@
   3. 三个全取消 → 点运行只弹提示、不创建运行目录
   4. 只勾 pfam 用方式 B 实跑 → run.log 出现「启用层 pfam」与
      「层1 序列同源搜索按选择跳过」，summary.json 的 libs==['pfam']、engine 为空
+（bfvd = BFVD 病毒域层，2026-09-29 起 CDD 的替代。）
 用法：python tests/_check_annot_libs.py
 """
 import json
@@ -26,7 +27,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 ORIGIN = 'http://127.0.0.1:8765'
 BASE = ORIGIN + '/annotation'
-LIB_IDS = ('oa_lib_prot', 'oa_lib_pfam', 'oa_lib_cdd')
+LIB_IDS = ('oa_lib_prot', 'oa_lib_pfam', 'oa_lib_bfvd')
 
 
 def _get(path):

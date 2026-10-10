@@ -261,6 +261,22 @@ SP_SYNONYMS = ['Species_NCBI', 'Species_ICTV', 'taxonomy', 'Species', 'descripti
 SEG_SYNONYMS = ['Segment', 'segment']
 
 
+def read_text_lossless(path):
+    """读文本文件，优先 UTF-8，其次 GBK，都失败才用 replace 兜底。
+
+    同 kv_variant.read_text_lossless 口径（Windows 中文环境下外部工具/人工
+    整理的表可能是系统 ANSI 代码页 936/GBK；只按 UTF-8 读 + replace 会把
+    GBK 字节不可逆地替换成 U+FFFD，物种名「柑橘」变一串替换符）。
+    """
+    raw = Path(path).read_bytes()
+    for enc in ('utf-8-sig', 'utf-8', 'gbk'):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode('utf-8', errors='replace')
+
+
 def load_ref_info(ref_info_tsv, logger=None):
     """
     读参考注释表，返回
@@ -274,65 +290,66 @@ def load_ref_info(ref_info_tsv, logger=None):
         return info
 
     idx = {}
-    with open(ref_info_tsv, 'r', encoding='utf-8', errors='replace') as f:
-        header = None
-        for line in f:
-            if line.startswith('####') or not line.strip():
-                continue
-            parts = line.rstrip('\n').split('\t')
-            if header is None:
-                header = [h.strip() for h in parts]
+    header = None
+    # 编码兜底：GBK 表按 UTF-8+replace 读会把中文列变 U+FFFD（不可逆），
+    # 这里用无损解码（utf-8 → gbk 回退，同 kv_variant.read_text_lossless 口径）
+    for line in read_text_lossless(ref_info_tsv).splitlines():
+        if line.startswith('####') or not line.strip():
+            continue
+        parts = line.rstrip('\n').split('\t')
+        if header is None:
+            header = [h.strip() for h in parts]
 
-                def find(syns):
-                    return next((header.index(s) for s in syns if s in header), -1)
+            def find(syns):
+                return next((header.index(s) for s in syns if s in header), -1)
 
-                idx = {
-                    'acc': find(ACC_SYNONYMS), 'tax': find(TAX_SYNONYMS),
-                    'sp': find(SP_SYNONYMS), 'seg': find(SEG_SYNONYMS),
-                    'mol': find(['Molecule_type2', 'Molecule_Type2', 'Molecule_type']),
-                    'host': find(['Host', 'host']),
-                    'geo': find(['Geo_Location', 'Geo_Location/Year', 'geo']),
-                    'gbtitle': find(['GenBank_Title', 'GenBank Title']),
-                    'mol1': find(['Molecule_type', 'Molecule_Type']),
-                }
-                if idx['acc'] == -1:
-                    if logger:
-                        logger.error(f"ref_info 找不到 Accession 列，实际列: {header[:8]}")
-                    return {}
-                continue
-
-            if len(parts) <= idx['acc']:
-                continue
-            acc = parts[idx['acc']].strip()
-            if not acc:
-                continue
-
-            def get(key):
-                i = idx.get(key, -1)
-                return parts[i].strip() if i != -1 and len(parts) > i else ''
-
-            rec = {
-                'taxid': get('tax') or 'Unannotated',
-                'species': get('sp') or acc,
-                'segment': get('seg'),
-                'molecule': get('mol'),
-                # 宿主/地理/GenBank 标题：识别表一并提供（此前只导出 4 列，
-                # 用户反馈「提取信息不全」——库里 26 列注释大多被丢掉）
-                'host': get('host'),
-                'geo': get('geo'),
-                'genbank_title': get('gbtitle'),
-                'molecule_type': get('mol1'),
+            idx = {
+                'acc': find(ACC_SYNONYMS), 'tax': find(TAX_SYNONYMS),
+                'sp': find(SP_SYNONYMS), 'seg': find(SEG_SYNONYMS),
+                'mol': find(['Molecule_type2', 'Molecule_Type2', 'Molecule_type']),
+                'host': find(['Host', 'host']),
+                'geo': find(['Geo_Location', 'Geo_Location/Year', 'geo']),
+                'gbtitle': find(['GenBank_Title', 'GenBank Title']),
+                'mol1': find(['Molecule_type', 'Molecule_Type']),
             }
-            info[acc] = rec
-            # 去版本号别名：同一 accession 多版本时后写入者胜出，
-            # 会让物种名静默错配。检测到冲突就报警。
-            bare = acc.split('.')[0]
-            if bare in info and info[bare].get('species') != rec.get('species'):
+            if idx['acc'] == -1:
                 if logger:
-                    logger.warning(f"ref_info 多版本冲突: {bare} "
-                                   f"({info[bare].get('species')} vs "
-                                   f"{rec.get('species')})，使用后者")
-            info[bare] = rec  # 去版本号别名
+                    logger.error(f"ref_info 找不到 Accession 列，实际列: {header[:8]}")
+                return {}
+            continue
+
+        if len(parts) <= idx['acc']:
+            continue
+        acc = parts[idx['acc']].strip()
+        if not acc:
+            continue
+
+        def get(key):
+            i = idx.get(key, -1)
+            return parts[i].strip() if i != -1 and len(parts) > i else ''
+
+        rec = {
+            'taxid': get('tax') or 'Unannotated',
+            'species': get('sp') or acc,
+            'segment': get('seg'),
+            'molecule': get('mol'),
+            # 宿主/地理/GenBank 标题：识别表一并提供（此前只导出 4 列，
+            # 用户反馈「提取信息不全」——库里 26 列注释大多被丢掉）
+            'host': get('host'),
+            'geo': get('geo'),
+            'genbank_title': get('gbtitle'),
+            'molecule_type': get('mol1'),
+        }
+        info[acc] = rec
+        # 去版本号别名：同一 accession 多版本时后写入者胜出，
+        # 会让物种名静默错配。检测到冲突就报警。
+        bare = acc.split('.')[0]
+        if bare in info and info[bare].get('species') != rec.get('species'):
+            if logger:
+                logger.warning(f"ref_info 多版本冲突: {bare} "
+                               f"({info[bare].get('species')} vs "
+                               f"{rec.get('species')})，使用后者")
+        info[bare] = rec  # 去版本号别名
 
     if logger:
         logger.info(f"参考注释载入: {len(info)//2} 条（含去版本号别名）")

@@ -106,8 +106,8 @@ def normalize_contig_table(src_tsv, out_dir, fasta=None, threads=None,
 
 # 分类层级深度（级联优先级）
 _LEVEL_RANK = {'Species': 4, 'Genus': 3, 'Family': 2, 'Order': 1}
-_CONF_RANK = {'High': 3, 'Medium': 2, 'Low (Singleton/Rare)': 1,
-              'Low (Shared Genus)': 1, 'Unknown': 0}
+# 注：曾有 _CONF_RANK（Confidence_Level → 序）死常量，无处引用、且级联排序
+# 用的是 Integrated_Confidence 数值，2026-10-03 审计后删除（见 P2 置信度门槛）。
 
 # NCBI taxonomy 内的宿主类别锚点 taxid → 类别
 _TAXID_CATS = [
@@ -148,7 +148,11 @@ def _default_prob_dir():
 
 
 def load_prob_table(path, key_col):
-    """加载宿主概率表 → {taxon: {...}}（与参考 C7 输出同构）。"""
+    """加载宿主概率表 → {taxon: {...}}（与参考 C7 输出同构）。
+
+    除 Predicted_Host / Confidence_Level / Integrated_Confidence 外，
+    一并读入 P_Max（该分类单元最大宿主概率），供输出表与置信度门槛使用。
+    """
     if not os.path.isfile(path):
         return {}
     lookup = {}
@@ -161,10 +165,15 @@ def load_prob_table(path, key_col):
                 conf = float(row.get('Integrated_Confidence', 0) or 0)
             except ValueError:
                 conf = 0.0
+            try:
+                pmax = float(row.get('P_Max', 0) or 0)
+            except ValueError:
+                pmax = 0.0
             lookup[taxon] = {
                 'Predicted_Host': row.get('Predicted_Host', 'Unknown'),
                 'Confidence_Level': row.get('Confidence_Level', 'Unknown'),
                 'Integrated_Confidence': conf,
+                'P_Max': pmax,
             }
     return lookup
 
@@ -173,7 +182,7 @@ def cascade_lookup(order, family, genus, species, tables):
     """C9 级联查表：Species→Genus→Family→Order 优先，加列错位容错。
 
     返回 dict(Predicted_Host, Confidence_Level, Integrated_Confidence,
-    Determination_Level)；无命中返回 Unknown。
+    P_Max, Determination_Level)；无命中返回 Unknown。
     """
     ord_l, fam_l, gen_l, sp_l = tables
     entries = [('Order', order or '', ord_l),
@@ -193,7 +202,8 @@ def cascade_lookup(order, family, genus, species, tables):
                 candidates.append((level, lv2 + '*', t2[value]))
     if not candidates:
         return {'Predicted_Host': 'Unknown', 'Confidence_Level': 'Unknown',
-                'Integrated_Confidence': 0.0, 'Determination_Level': 'None'}
+                'Integrated_Confidence': 0.0, 'P_Max': 0.0,
+                'Determination_Level': 'None'}
     candidates.sort(key=lambda x: (_LEVEL_RANK.get(x[1].rstrip('*'), 0),
                                    x[2].get('Integrated_Confidence', 0)),
                     reverse=True)
@@ -201,13 +211,16 @@ def cascade_lookup(order, family, genus, species, tables):
     return {'Predicted_Host': info['Predicted_Host'],
             'Confidence_Level': info['Confidence_Level'],
             'Integrated_Confidence': info['Integrated_Confidence'],
+            'P_Max': info.get('P_Max', 0.0),
             'Determination_Level': f'{real_level}(via {col})'}
 
 
 def _load_info_map(info_tsv):
     """病毒库 info.tsv → (按 accession 索引, 按 taxid 索引)。
 
-    每条: {species, genus, family, host_meta}（ICTV 分类 + NCBI 宿主元数据）。
+    每条: {species, genus, family, order, host_meta}（ICTV 分类 + NCBI 宿主
+    元数据）。order 取 Lin_Order（virus_ref 规范化元数据的谱系列）或
+    VMR_Order；缺失时空串（级联自动跳过 Order 级）。
     """
     by_acc, by_taxid = {}, {}
     with safe_open(info_tsv) as f:
@@ -219,6 +232,8 @@ def _load_info_map(info_tsv):
                             or row.get('Species_NCBI') or '').strip(),
                 'genus': (row.get('VMR_Genus') or '').strip(),
                 'family': (row.get('VMR_Family') or '').strip(),
+                'order': (row.get('Lin_Order') or row.get('VMR_Order')
+                          or '').strip(),
                 'host_meta': (row.get('Host') or '').strip(),
             }
             if acc:
@@ -385,8 +400,15 @@ def _lineage_map_for(taxids_needed, tax_dir, cache_path):
 
 
 def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
-                  logger=None, force=False):
-    """对 ③组装 产出的病毒 contigs 做 ICTV 宿主预测。返回 summary dict。"""
+                  logger=None, force=False, min_confidence=None):
+    """对 ③组装 产出的病毒 contigs 做 ICTV 宿主预测。返回 summary dict。
+
+    min_confidence: ICTV 级联命中的置信度门槛（0-1 小数，与概率表的
+        Integrated_Confidence 同量纲）。默认 None=不过滤，行为与历史一致。
+        启用后，Integrated_Confidence 或 P_Max 任一低于门槛的预测，
+        在输出表 confidence_flag 列标注 'Low_confidence'（预测结果本身
+        不改写），并把门槛值与命中数写入 summary。
+    """
     step = 'host_analysis'
     out_dir = check_path(os.path.join(sample_dir, '08_host_analysis'),
                          must_exist=False, in_platform=True)
@@ -437,6 +459,13 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
         if logger:
             logger.log(f"virus_ref 元数据: {len(acc_meta)} 条 / "
                        f"物种级已知宿主 {len(sp_hosts)} 个物种")
+        if not acc_meta and not sp_hosts and logger:
+            # 静默空是此前的坑：数据根没落齐（如 databases/virus_ref/ 为空
+            # 而实际数据在 virusref_db/plant_ref 或 _dl_staging）时，
+            # 交叉验证整列悄悄变空、host_check 全空。显式告警（2026-10-03 审计 P2）。
+            logger.log("已知宿主交叉验证不可用：virus_ref 元数据为空"
+                       "（数据根候选 virus_ref / virusref_db/plant_ref / "
+                       "_dl_staging 均未命中）", "WARN")
     except Exception as e:
         if logger:
             logger.log(f"virus_ref 元数据不可用（跳过已知宿主交叉验证）: {e}",
@@ -499,6 +528,7 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
                         tax = {'species': lin.get('species', ''),
                                'genus': lin.get('genus', ''),
                                'family': lin.get('family', ''),
+                               'order': lin.get('order', ''),
                                'host_meta': ''}
                         tax_src = 'kunpeng_lineage'        # LCA 上级节点 → 谱系解析
             if not tax:
@@ -512,7 +542,10 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
                            'genus': '', 'family': (row.get('blast_family') or '').strip(),
                            'host_meta': ''}
             src_stat[tax_src] += 1
-            order = ''
+            # ICTV 级联四级恢复：Order 取谱系解析（kunpeng_lineage）或 info 表
+            # 的 Lin_Order/VMR_Order。此前硬编码空串，cascade_lookup 的
+            # Order 级永不触发（2026-10-03 审计 P2）。
+            order = tax.get('order', '')
             hit = cascade_lookup(order, tax.get('family', ''),
                                  tax.get('genus', ''), tax.get('species', ''),
                                  tables)
@@ -521,6 +554,14 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
                 if meta_name else 'Unknown'
             ictv = hit['Predicted_Host']
             ictv_conf = hit['Confidence_Level']
+            # 置信度门槛（min_confidence=None 时不过滤，行为与历史一致）：
+            # Integrated_Confidence 或 P_Max 任一低于门槛 → 在输出表打
+            # 'Low_confidence' 标注（预测本身不改写）。
+            conf_flag = ''
+            if min_confidence is not None:
+                if (hit['Integrated_Confidence'] < min_confidence
+                        or hit['P_Max'] < min_confidence):
+                    conf_flag = 'Low_confidence'
             # 决策
             if ictv != 'Unknown' and meta not in ('', 'Unknown'):
                 if ictv == meta:
@@ -572,6 +613,8 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
                 'host_ictv': ictv,
                 'confidence_level': ictv_conf,
                 'integrated_confidence': hit['Integrated_Confidence'],
+                'p_max': hit['P_Max'],
+                'confidence_flag': conf_flag,
                 'determination': hit['Determination_Level'],
                 'host_meta': meta_name,
                 'host_meta_cat': meta,
@@ -635,6 +678,8 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
         'stage': step,
         'n_contigs': len(rows),
         'n_host_warn': sum(1 for r in rows if r.get('host_check') == 'WARN'),
+        'min_confidence': min_confidence,
+        'n_low_confidence': sum(1 for r in rows if r.get('confidence_flag')),
         'categories': dict(sorted(cats.items(), key=lambda x: -x[1])),
         'decision_methods': methods,
         'class_source': src_stat,
@@ -689,4 +734,8 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
         logger.log(f"宿主预测完成: {len(rows)} 条 contigs → "
                    + ', '.join(f'{k} {v}' for k, v in
                                list(summary['categories'].items())[:6]))
+        if min_confidence is not None:
+            logger.log(f"置信度门槛 min_confidence={min_confidence}: "
+                       f"{summary['n_low_confidence']}/{len(rows)} 条标注 "
+                       f"Low_confidence")
     return summary

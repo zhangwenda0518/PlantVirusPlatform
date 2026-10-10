@@ -16,18 +16,23 @@ import urllib.parse
 import urllib.request
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-PLATFORM = r'D:\桌面\植物病毒分析平台'
-REPO_FASTA = r'E:\谷歌下载\测试数据验证\VIROMOCKchallenge-master\Datasets\fasta'
-FA_P = (r'D:\桌面\植物病毒分析平台\databases\virusref_db\viromock_kv'
-        r'\reference.fasta')
-INFO_P = (r'D:\桌面\植物病毒分析平台\databases\virusref_db\viromock_kv'
-          r'\reference.ref_info.tsv')
-MANIFEST_P = (r'D:\桌面\植物病毒分析平台\databases\virusref_db\viromock_kv'
-              r'\manifest.json')
-LOCAL_FASTA_PPV = (r'E:\谷歌下载\测试数据验证\VIROMOCKchallenge-master'
-                   r'\Datasets\fasta\Plum_pox_virus_artificial_strain.fasta')
-LOCAL_FASTA_PVY = (r'E:\谷歌下载\测试数据验证\VIROMOCKchallenge-master'
-                   r'\Datasets\fasta\Potato_virus_Y_artificial_strain.fasta')
+# 平台根：默认自动推导（tests/bench/ 上溯 3 层 = 平台根），
+# 可用环境变量 VP_ROOT 覆盖（换机/换目录不用改代码）。
+PLATFORM = (os.environ.get('VP_ROOT')
+            or os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__)))))
+# 基准数据集（作者本机路径）：可用环境变量 VP_BENCH_DATA 覆盖
+BENCH_DATA = os.environ.get('VP_BENCH_DATA', r'E:\谷歌下载\测试数据验证')
+REPO_FASTA = os.path.join(BENCH_DATA, 'VIROMOCKchallenge-master',
+                          'Datasets', 'fasta')
+VKV = os.path.join(PLATFORM, 'databases', 'virusref_db', 'viromock_kv')
+FA_P = os.path.join(VKV, 'reference.fasta')
+INFO_P = os.path.join(VKV, 'reference.ref_info.tsv')
+MANIFEST_P = os.path.join(VKV, 'manifest.json')
+LOCAL_FASTA_PPV = os.path.join(REPO_FASTA,
+                               'Plum_pox_virus_artificial_strain.fasta')
+LOCAL_FASTA_PVY = os.path.join(REPO_FASTA,
+                               'Potato_virus_Y_artificial_strain.fasta')
 
 # (accession, taxid, species)
 REFS = [

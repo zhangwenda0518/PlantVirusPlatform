@@ -139,7 +139,14 @@ async function queueClear() {
   loadQueue();
 }
 
-async function selectSample(name) {
+/* source='auto'：页面加载时自动恢复上次选中的样品（app.js 初始化调用）。
+   这条路径失败几乎都是 localStorage 残留的样品名已不在磁盘上（被删除/
+   归档/换过数据根），属过期状态：清回全局上下文（vp-ctx 既有逻辑会
+   curSample=null、重载样品列表、恢复占位文案）+ toast 提示，不能弹
+   阻塞式 alert——alert 会卡住事件循环，样品列表就停在「加载中…」。
+   手动点击/URL 显式指定（source 缺省）失败时才弹 alert，且带上样品名
+   与后端返回的错误详情。 */
+async function selectSample(name, source) {
   curSample = name;
   // 写进全局上下文（跨模块共享）；取代原来只写不读的 vp_last_sample
   VP_CTX.setSample(name || '');
@@ -147,9 +154,22 @@ async function selectSample(name) {
   try {
     const r = await fetch('/api/pipeline/' + encodeURIComponent(name) +
                           '?lang=' + encodeURIComponent(VP_LANG));
-    if (!r.ok) { alert(t('c.loadFail', '读取失败')); return; }
+    if (!r.ok) {
+      const err = (await r.json().catch(() => ({}))).error || ('HTTP ' + r.status);
+      if (source === 'auto') {
+        VP_CTX.setSample('');
+        toast(t('pp.staleSample', '上次选中的样品已不可用'),
+              t('pp.staleSampleD',
+                '「{s}」已不在当前数据目录（可能已删除、归档或切换过数据目录），已自动取消选中')
+                .replace('{s}', name) + '：' + err,
+              { kind: 'failed', ttl: 10000 });
+      } else {
+        alert(t('c.loadFail', '读取失败') + '（' + name + '）：' + err);
+      }
+      return;
+    }
     renderPipe(await r.json());
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error('pipeline 加载失败:', e); }
 }
 
 /* 管道 DAG 视图：③组装后的下游分支互不依赖（依赖关系见 Virus_Platform_Core/pipeline.py STAGE_REGISTRY），
@@ -169,7 +189,7 @@ const PIPE_TEMPLATES = [
     tip: '已知病毒识别与定量 → 共识序列与变异',
     stages: ['kvsuite', 'consensus'] },
   { id: 'asm',  label: '⚡ 组装·kunpeng鉴定分类·宿主预测·再结构域鉴定',
-    tip: '③ 组装（kunpeng 鉴定分类·提取 viral_contigs）→ ④ ICTV 宿主预测 → ③b blastx/CDD 再结构域鉴定',
+    tip: '③ 组装（kunpeng 鉴定分类·提取 viral_contigs）→ ④ ICTV 宿主预测 → ③b blastx/BFVD 再结构域鉴定',
     stages: ['assembly', 'hostana', 'verify'] },
   { id: 'anno', label: '⚡ 注释三连',
     tip: '⑥ ORF 预测 → ⑥b 功能注释 → ⑨ 基因组图谱；完成后可到「数据提交」页准备 NCBI 提交包',
@@ -205,7 +225,7 @@ async function adoptSubmit(sample) {
         + d.name + '：' + parts.join('，'), { ttl: 8000 });
     location.href = '/submit?open=' + encodeURIComponent(d.name);
   } catch (e) {
-    setConnBanner(true);
+    if (netFail(e)) setConnBanner(true);
     alert(t('c.connFail', '无法连接平台服务') + ': ' + e);
   }
 }
@@ -251,7 +271,7 @@ function renderPipe(d) {
       (s.status === 'unavailable' ?
         `<span class="hint" style="margin:0">${t('pp.installHint')}</span>` : '');
     const viewBtn = s.view
-      ? ` <button class="btn small" data-sample="${esc(d.sample)}" data-dir="${esc(s.dir)}" data-view="${esc(s.view.split('/').pop())}" data-stage="${esc(s.stage)}"
+      ? ` <button class="btn small" data-sample="${esc(d.sample)}" data-dir="${esc(s.dir)}" data-view="${esc(s.view)}" data-stage="${esc(s.stage)}"
               onclick="previewStageFile(this.dataset.sample,this.dataset.dir,this.dataset.view,this.dataset.stage)">📊 ${t('c.view')}</button>` : '';
     const files = (s.outputs || []).map(o =>
       `<span>📄 ${esc(o.name.split('/').pop())} · ${fmtSize(o.size)}</span>`).join('');
@@ -450,13 +470,13 @@ const STAGE_PARAMS = {
       opts: [['all', 'all'], ['plants', 'plants'], ['fungi', 'fungi'],
              ['bacteria', 'bacteria'], ['invertebrates', 'invertebrates'],
              ['vertebrates', 'vertebrates'], ['algae', 'algae'],
-             ['protozoa', 'protozoa'], ['archaea', 'archaea']] },
+             ['protists', 'protists'], ['archaea', 'archaea']] },
     { id: 'verify_methods', label: 'pp.verify_methods', type: 'multichk',
-      def: ['blastx', 'cdd'],
-      opts: [['blastx', 'blastx'], ['cdd', 'CDD']] },
+      def: ['blastx', 'bfvd'],
+      opts: [['blastx', 'blastx'], ['bfvd', 'BFVD']] },
     { id: 'verify_combine', label: 'pp.verify_combine', type: 'select',
       def: 'union',
-      opts: [['union', 'union'], ['intersect', 'intersect']] },
+      opts: [['union', 'union'], ['intersection', 'intersection']] },
   ],
   phylo: [
     { id: 'do_trim', label: 'pp.do_trim', type: 'chk', def: true },
@@ -602,7 +622,7 @@ async function runStages(sample, stages) {
     startPolling();
     const tb = $('tasks');
     if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  } catch (e) { setConnBanner(true); alert(t('c.connFail', '无法连接平台服务') + ': ' + e); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); alert(t('c.connFail', '无法连接平台服务') + ': ' + e); }
 }
 
 function runUpTo(sample, stage) {

@@ -24,6 +24,12 @@ class MEMORYSTATUSEX(ctypes.Structure):
 
 
 def main():
+    # GlobalMemoryStatusEx 是 Windows 独有 API：非 Windows 环境没有
+    # ctypes.windll 属性，直接调用会 AttributeError 崩在自检第一步。
+    if sys.platform != 'win32':
+        print('环境内存自检仅支持 Windows（依赖 kernel32.GlobalMemoryStatusEx）。')
+        print(f'当前平台 {sys.platform}：请用 /proc/meminfo 或 free -h 自行查看。')
+        return
     stat = MEMORYSTATUSEX()
     stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
     ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))

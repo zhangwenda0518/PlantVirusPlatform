@@ -41,9 +41,11 @@ from urllib.parse import urlparse
 
 from .config import DIRS, get_config, db_path
 from .utils import (check_path, safe_open, safe_remove, run_cmd, iter_fasta,
-                    count_fasta_seqs, is_step_done, mark_step_done)
-from .hmm_annot import (hmm_available, annotate_orfs_hmm, cdd_search_orfs,
-                        merge_hmm_cdd, cdd_db_prefix, available_libs)
+                    count_fasta_seqs, is_step_done, mark_step_done, db_trace)
+from .hmm_annot import (hmm_available, annotate_orfs_hmm,
+                        merge_layer2, available_libs, lib_trace)
+from .bfvd_search import (search_orfs as bfvd_search_orfs, bfvd_db,
+                          db_trace as bfvd_db_trace)
 from .genome_diag import render_sample_diagrams
 
 DB_DIR = db_path('annot', 'prot')
@@ -128,9 +130,14 @@ class _WhitelistRedirectHandler(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_WhitelistRedirectHandler)
 
 
-def _download_whitelisted(url, dest, logger=None, progress=None):
+def _download_whitelisted(url, dest, logger=None, progress=None,
+                          label='RefSeq 病毒蛋白库'):
     """https 下载（域名白名单 + 拒绝解析到私网/环回/保留地址 + 重定向逐跳
-    复检），带字节进度。dest 为模块内部固定路径（DB_DIR 下）。"""
+    复检），带字节进度。dest 为模块内部固定路径（DB_DIR 下）。
+
+    label 仅用于日志标题（universal_ref 下载 NCBI accession2taxid 时复用本
+    函数，标题需区分，2026-10-03 审计 P3）。
+    """
     u = urlparse(url)
     if u.scheme != 'https' or u.hostname not in _DL_HOSTS:
         raise ValueError(f"下载域名不在白名单: {u.hostname}")
@@ -140,7 +147,7 @@ def _download_whitelisted(url, dest, logger=None, progress=None):
                 or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
             raise ValueError(f"域名解析到受限地址: {ip}")
     if logger:
-        logger.log(f"下载 RefSeq 病毒蛋白库: {url}")
+        logger.log(f"下载 {label}: {url}")
     req = urllib.request.Request(url, headers={'User-Agent': 'vp-orf-annot'})
     # 注意：不能直接 safe_open 写 .gz（会被 crabz 管道再压一层）——保存的是
     # NCBI 原生 gzip 字节流。先写 .part 临时名（普通二进制写），完成后原子改名。
@@ -273,8 +280,21 @@ def _build_organism_tax(faa, dest, logger=None):
     return n, len(org2tid)
 
 
+def _search_db_trace(db, engine, faa):
+    """搜索库可追溯信息 → (db_files, db_versions)（含蛋白库 FASTA 与
+    物种索引；blastp 库是 db + .p?? 一组文件）。"""
+    paths = [db, faa, os.path.join(DB_DIR, 'organism_tax.tsv')]
+    if engine == 'blastp':
+        paths += sorted(glob.glob(db + '.p??'))
+    return db_trace(paths, n_max=40)
+
+
 def _ensure_search_db(faa, engine, exe, logger=None, force=False):
-    """按引擎构建/复用搜索库。返回引擎侧的库路径。"""
+    """按引擎构建/复用搜索库。返回 (引擎侧库路径, db_files, db_versions)。
+
+    库文件清单（文件名+size+mtime）与版本锚点一并维护在 db_info.json
+    （可追溯：2026-10-03 审计 P2）。
+    """
     meta_f = os.path.join(DB_DIR, 'db_info.json')
     meta = {}
     try:
@@ -294,7 +314,19 @@ def _ensure_search_db(faa, engine, exe, logger=None, force=False):
         cached = os.path.join(DB_DIR, cached)
     if (not force and meta.get('engine') == engine
             and meta.get('db_ready') and cached and os.path.exists(cached)):
-        return cached
+        # 缓存命中也要有库清单：预置库（随包分发）的 db_info.json 里可能
+        # 没有 db_files——现算一次，与已记录不一致才回写，避免每次运行
+        # 都改文件 mtime。
+        db_files, db_versions = _search_db_trace(cached, engine, faa)
+        if (meta.get('db_files') != db_files
+                or meta.get('db_versions') != db_versions):
+            meta.update({'db_files': db_files, 'db_versions': db_versions})
+            try:
+                with safe_open(meta_f, 'wt') as f:
+                    json.dump(meta, f, ensure_ascii=False, indent=1)
+            except OSError:
+                pass
+        return cached, db_files, db_versions
 
     if engine == 'diamond':
         db = os.path.join(DB_DIR, 'viral_prot.dmnd')
@@ -332,17 +364,25 @@ def _ensure_search_db(faa, engine, exe, logger=None, force=False):
         db_store = db if _rel.startswith('..') else _rel
     except ValueError:
         db_store = db
-    meta.update({'engine': engine, 'db_ready': True, 'db_path': db_store})
+    # 库文件清单（文件名+size+mtime）与版本锚点写进 db_info.json：结果表/报告
+    # 可回溯"这张注释是用哪个库、哪个版本的库跑出来的"（2026-10-03 审计 P2）。
+    db_paths = [db, faa, os.path.join(DB_DIR, 'organism_tax.tsv')]
+    if engine == 'blastp':
+        db_paths += sorted(glob.glob(db + '.p??'))
+    db_files, db_versions = db_trace(db_paths, n_max=40)
+    meta.update({'engine': engine, 'db_ready': True, 'db_path': db_store,
+                 'db_files': db_files, 'db_versions': db_versions})
     with safe_open(meta_f, 'wt') as f:
         json.dump(meta, f, ensure_ascii=False, indent=1)
-    return db
+    return db, db_files, db_versions
 
 
 def ensure_viral_prot_db(logger=None, force=False, local_faa=None,
                          progress=None, engine=None):
     """确保 RefSeq 病毒蛋白参考库就绪（下载→解压→物种索引→搜索库）。
 
-    progress(frac 0~1, msg) 反映整个建库过程。返回 db_info dict。
+    progress(frac 0~1, msg) 反映整个建库过程。返回 db_info dict
+    （含 db_files/db_versions 库文件清单与版本锚点，供 summary 记录）。
     engine: 指定搜索引擎；None 自动探测。
     """
     os.makedirs(DB_DIR, exist_ok=True)
@@ -398,11 +438,13 @@ def ensure_viral_prot_db(logger=None, force=False, local_faa=None,
     if progress:
         progress(0.6, '构建搜索引擎库')
 
-    db = _ensure_search_db(faa, engine, exe, logger=logger, force=force)
+    db, db_files, db_versions = _ensure_search_db(faa, engine, exe,
+                                                  logger=logger, force=force)
     if progress:
         progress(1.0, '参考库就绪')
     return {'faa': faa, 'engine': engine, 'db': db,
-            'tax_tsv': tax_tsv, 'n_proteins': None}
+            'tax_tsv': tax_tsv, 'n_proteins': None,
+            'db_files': db_files, 'db_versions': db_versions}
 
 
 # ------------------------------------------------------------------
@@ -484,8 +526,11 @@ def _run_search(engine, exe, faa, db, out_tsv, threads, logger=None):
         env['PATH'] = os.path.dirname(exe) + os.pathsep + env.get('PATH', '')
         tmp = out_tsv + '.mmseqs_tmp'
         try:
+            # identity 必须用 OUTFMT_PIDENT（0-100），不能用 fident（0-1）：
+            # 下游 pident 列与 DIAMOND/blastp 同量纲比较，用 fident 会让
+            # identity 整体缩小 100 倍（2026-10-03 审计 P1）。
             run_cmd([exe, 'easy-search', faa, db, out_tsv, tmp,
-                     '--format-output', 'query,target,fident,qstart,qend,'
+                     '--format-output', 'query,target,pident,qstart,qend,'
                                         'evalue,'
                                         'bits,qlen',
                      '-e', '1e-5', '--max-seqs', '8', '-s', '7.5',
@@ -502,14 +547,20 @@ def _run_search(engine, exe, faa, db, out_tsv, threads, logger=None):
                  '-out', out_tsv], logger=logger)
 
 
-def _parse_search(engine, path):
-    """解析搜索引擎输出 → {query: [hit, ...]}（文件已按分数降序）。"""
+def _parse_search(engine, path, logger=None):
+    """解析搜索引擎输出 → {query: [hit, ...]}（文件已按分数降序）。
+
+    pident 统一按 0-100 量纲（DIAMOND/blastp 原样；mmseqs 用 OUTFMT_PIDENT）。
+    防御：mmseqs 命中里出现 ≤1.0 的 identity 视为旧格式串残留的 fident
+    （0-1 量纲），×100 修正并告警——否则该命中的 identity 会小 100 倍。
+    """
     by_q = {}
+    n_scaled = 0
     with safe_open(path) as f:
         for line in f:
             p = line.rstrip('\n').split('\t')
             if engine == 'mmseqs':
-                # 列序: query,target,fident,qstart,qend,evalue,bits,qlen
+                # 列序: query,target,pident,qstart,qend,evalue,bits,qlen
                 # （query/target 均为完整头部）
                 if len(p) < 8:
                     continue
@@ -527,7 +578,13 @@ def _parse_search(engine, path):
                      'ev': float(ev), 'bits': float(bits), 'title': title}
             except ValueError:
                 continue
+            if engine == 'mmseqs' and 0.0 < h['pid'] <= 1.0:
+                h['pid'] *= 100.0
+                n_scaled += 1
             by_q.setdefault(h['q'], []).append(h)
+    if n_scaled and logger:
+        logger.log(f"mmseqs 命中中 {n_scaled} 条 identity ≤1.0，疑似 fident "
+                   f"量纲（0-1），已按 ×100 修正为 pident", "WARN")
     return by_q
 
 
@@ -579,10 +636,22 @@ def _load_ictv_tables():
 
 
 _GFF_BAD = str.maketrans({c: ' ' for c in ';=,\t\r'})
+#: GFF3 规范保留字符 → 百分号转义（% ; = & , 与制表/换行/回车）。
+#: 注意未用 urllib.parse.quote(safe='')：那会把中文与空格也转成 %XX，
+#: 而 gbdraw CLI 直接消费本 GFF3 渲染 feature 标签（gbdraw_plot.py 把
+#: --gff 透传给命令行），标签会变成 %E5%A4%96... 乱码。按保留字符转义
+#: 既满足 GFF3 规范，又保持标签可读（2026-10-03 审计 P3）。
+_GFF_ESC = str.maketrans({c: '%%%02X' % ord(c) for c in '%;=&,\t\r\n'})
 
 
 def _gff_clean(v):
     return (v or '').translate(_GFF_BAD).strip()
+
+
+def _gff_val(v):
+    """GFF3 属性值：先 _gff_clean 清洗（分号/等号/逗号/制表 → 空格），
+    再对保留字符做百分号转义。"""
+    return _gff_clean(v).translate(_GFF_ESC)
 
 
 # ------------------------------------------------------------------
@@ -621,14 +690,18 @@ def _pick_orf_input(sample_dir, model=None):
 
 
 # ------------------------------------------------------------------
-# 注释分层选择（prot 序列同源 / pfam HMM / cdd 结构域）
+# 注释分层选择（prot 序列同源 / pfam HMM / bfvd 病毒域）
 # ------------------------------------------------------------------
 #: 可选的注释层，顺序即执行顺序与展示顺序。
-ANNOT_LIBS = ('prot', 'pfam', 'cdd')
+# 历史层 'cdd'（CDD 结构域，mmseqs2）因本地库 prefilter 索引 ~5GB 反复
+# OOM，2026-09-29 移除；同日改接 'bfvd'（BFVD 病毒域，与 SUVTK 提交链
+# 同库同命名，见 Virus_Platform_Core/bfvd_search.py）。旧调用传入 'cdd'
+# 会按无法识别的层忽略并告警。
+ANNOT_LIBS = ('prot', 'pfam', 'bfvd')
 LIB_LABELS = {
     'prot': '层1 序列同源（RefSeq 病毒蛋白）',
     'pfam': '层2 Pfam HMM（Pfam-A-Viruses）',
-    'cdd': '层2 CDD 结构域（mmseqs2）',
+    'bfvd': '层2 BFVD 病毒域（mmseqs2，与 NCBI 提交同源）',
 }
 #: 兼容别名 → 规范层名（大小写不敏感）。
 _LIB_ALIASES = {
@@ -637,14 +710,15 @@ _LIB_ALIASES = {
     'refseq': 'prot', 'protein': 'prot', 'layer1': 'prot', 'l1': 'prot',
     'hmm': 'pfam', 'hmmer': 'pfam', 'pyhmmer': 'pfam', 'pfam-a': 'pfam',
     'pfam_a': 'pfam', 'pfam-a-viruses': 'pfam', 'layer2': 'pfam',
-    'domain': 'cdd', 'domains': 'cdd', 'cdd/pfam': 'cdd', 'cdd-pfam': 'cdd',
+    'domain': 'bfvd', 'domains': 'bfvd', 'bfvd': 'bfvd',
+    'bfvd_domain': 'bfvd',
 }
 
 
 def normalize_libs(libs=None):
     """规范化注释层选择，返回 (规范层元组, 无法识别的原始项列表)。
 
-    libs: None / '' / [] → 全部层；'prot,pfam' 字符串；['prot','cdd'] 列表。
+    libs: None / '' / [] → 全部层；'prot,pfam' 字符串；['prot','bfvd'] 列表。
     已识别的层按 ANNOT_LIBS 顺序去重返回；全部无法识别时回退为全部层。
     """
     if libs is None or libs == '' or libs == []:
@@ -668,15 +742,21 @@ def normalize_libs(libs=None):
 
 
 def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
-                       progress=None, min_pident=0.0, engine=None, db=None,
-                       model=None, libs=None):
+                       progress=None, min_pident=None, engine=None, db=None,
+                       model=None, libs=None, min_qcov=None):
     """⑥b ORF 功能注释主入口。返回 summary dict。
 
     engine: 指定搜索引擎（'diamond'/'mmseqs'/'blastp'），None 自动探测。
     db: 参考蛋白库。None=默认 RefSeq 病毒蛋白；路径=自备本地蛋白 FASTA。
     model: ORF 基因模型。'pyrodigal_rv'（默认优先）/ 'pyrodigal'；None=rv 优先。
-    libs: 启用的注释层，见 ANNOT_LIBS。None/空=全部层（prot+pfam+cdd）。
-          只选 'pfam'/'cdd' 时不触发 DIAMOND/库下载，纯 HMM/结构域注释。
+    libs: 启用的注释层，见 ANNOT_LIBS。None/空=全部层（prot+pfam+bfvd）。
+          只选 'pfam'/'bfvd' 时不触发 DIAMOND/库下载，纯 HMM/域注释。
+    min_pident / min_qcov: 层1 命中的 identity / query 覆盖度过滤门槛，
+          百分数（0-100，与输出 pident/qcov 列同量纲）。默认 None=不过滤，
+          与历史结果完全一致。搜索引擎侧默认只有 e≤1e-5 一道门槛（DIAMOND
+          默认口径），短 ORF / 远端同源会带出低 identity、低覆盖的命中；
+          要收紧到"高质量同源"可试验 min_pident=30、min_qcov=50（阈值为
+          经验起点，建议按所用库与数据分布标定后再定值）。
     """
     step = 'orfa'
     out_dir = check_path(os.path.join(sample_dir, '04b_orf_annot'),
@@ -697,7 +777,7 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
     except (OSError, ValueError):
         n_orfs = 0
     sel, bad_libs = normalize_libs(libs)
-    do_prot, do_pfam, do_cdd = ('prot' in sel, 'pfam' in sel, 'cdd' in sel)
+    do_prot, do_pfam, do_bfvd = ('prot' in sel, 'pfam' in sel, 'bfvd' in sel)
     if bad_libs and logger:
         logger.log("忽略无法识别的注释层: " + ', '.join(bad_libs), "WARN")
     if logger:
@@ -736,7 +816,7 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
             progress(0.52, '解析命中 + 类别投票')
 
         # ---- 解析合并 ----
-        by_q = _parse_search(engine_name, hits_tsv)
+        by_q = _parse_search(engine_name, hits_tsv, logger=logger)
     elif logger:
         logger.log("层1 序列同源搜索按选择跳过")
     # ORF 坐标与所属 contig：搜索引擎 qseqid 只保留首词，pyrodigal/orfipy
@@ -778,9 +858,35 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
                 if progress else None)
 
     rows = []
-    # 逐 ORF 建行（不是逐命中建行）：层2 HMM/CDD 兜底只能更新已存在的行，
+    # 层1 命中过滤（min_pident/min_qcov，默认 None=不过滤）。在"逐 ORF 建行"
+    # 前统一过滤：命中列表被过滤后，类别投票与 top 命中都只看通过门槛的命中。
+    def _hit_qcov(h):
+        try:
+            return (abs(int(h['qe']) - int(h['qs'])) + 1) \
+                / max(int(h['qlen']), 1) * 100
+        except (ValueError, KeyError, ZeroDivisionError):
+            return 0.0
+
+    def _pass_filters(h):
+        if min_pident is not None and float(h.get('pid') or 0) < min_pident:
+            return False
+        if min_qcov is not None and _hit_qcov(h) < min_qcov:
+            return False
+        return True
+
+    n_hits_filtered = 0
+    if min_pident is not None or min_qcov is not None:
+        n_before = sum(len(v) for v in by_q.values())
+        by_q = {k: [h for h in v if _pass_filters(h)] for k, v in by_q.items()}
+        n_hits_filtered = n_before - sum(len(v) for v in by_q.values())
+        if logger:
+            logger.log(f"层1 命中过滤: min_pident={min_pident} "
+                       f"min_qcov={min_qcov} 百分数口径，剔除 "
+                       f"{n_hits_filtered}/{n_before} 条命中")
+
+    # 逐 ORF 建行（不是逐命中建行）：层2 HMM/BFVD 兜底只能更新已存在的行，
     # 若只为层1 命中的 ORF 建行，"无 RefSeq 同源命中"的 ORF 就永远得不到
-    # HMM 注释——正是层2 存在的意义（实测 10 个 ORF 只出 8 行）。
+    # 层2 注释——正是层2 存在的意义（实测 10 个 ORF 只出 8 行）。
     total_q = max(len(orf_meta), 1)
     for i, (qid, (cid, s, e, strand)) in enumerate(orf_meta.items()):
         if i % 200 == 0 and progress:
@@ -795,7 +901,7 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
             'pident': '', 'qcov': 0.0, 'bitscore': '', 'evalue': '',
             'genus': '', 'family': '', 'host_source': '',
             'genome_composition': '', 'category': _UNKNOWN,
-            'informative': 'N', 'hmm_hits': '', 'cdd_hits': '',
+            'informative': 'N', 'hmm_hits': '', 'bfvd_hits': '',
             'evidence': '',
         }
         if hits:
@@ -826,10 +932,10 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
     rows.sort(key=lambda r: (r['contig'],
                              r['start'] if r['start'] is not None else 0))
 
-    # ---- 层2：HMM（Pfam 病毒库，viral_fams 双门槛）+ CDD 结构域 ----
+    # ---- 层2：HMM（Pfam 病毒库，viral_fams 双门槛）+ BFVD 病毒域 ----
     # 过滤口径：域级 i-Evalue ≤ 1e-3 且 HMM 模型覆盖率 ≥ 0.5
-    # 两层各自独立开关：CDD 不依赖 HMM 库，反之亦然。
-    hmm_by_q, cdd_by_q = {}, {}
+    # 两层各自独立开关：BFVD 不依赖 HMM 库，反之亦然。
+    hmm_by_q, bfvd_by_q = {}, {}
     pfam_libs = []
     if do_pfam:
         if hmm_available() and available_libs():
@@ -842,15 +948,15 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
             pfam_libs = list(pfam_libs or ())
         elif logger:
             logger.log("层2 Pfam HMM 跳过（pyhmmer 未安装或无 HMM 库）", "WARN")
-    if do_cdd:
-        if cdd_db_prefix():
+    if do_bfvd:
+        if bfvd_db():
             if progress:
-                progress(0.84, 'CDD 结构域搜索（mmseqs2）')
-            cdd_by_q = cdd_search_orfs(faa, out_dir, threads=threads,
-                                       logger=logger) or {}
+                progress(0.84, 'BFVD 病毒域搜索（mmseqs2）')
+            bfvd_by_q = bfvd_search_orfs(faa, out_dir, threads=threads,
+                                         logger=logger) or {}
         elif logger:
-            logger.log("层2 CDD 结构域跳过（mmseqs2 或 CDD 库不可用）", "WARN")
-    n_hmm_only, n_cdd_only = merge_hmm_cdd(rows, hmm_by_q, cdd_by_q,
+            logger.log("层2 BFVD 病毒域跳过（mmseqs2 或 BFVD 库不可用）", "WARN")
+    n_hmm_only, n_bfvd_only = merge_layer2(rows, hmm_by_q, bfvd_by_q,
                                            classify_product)
     # 层2 兜底行可能新给出科：补查 ICTV 宿主/基因组类型
     for r in rows:
@@ -865,7 +971,7 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
               'hit_accession', 'product', 'organism', 'pident', 'qcov',
               'bitscore', 'evalue', 'genus', 'family', 'host_source',
               'genome_composition', 'category', 'informative',
-              'evidence', 'hmm_hits', 'cdd_hits']
+              'evidence', 'hmm_hits', 'bfvd_hits']
     with safe_open(os.path.join(out_dir, 'orf_annotation.tsv'), 'wt') as f:
         f.write('\t'.join(fields) + '\n')
         for r in rows:
@@ -928,15 +1034,15 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
                 m = re.search(r'ID=([^;]+)', p[8])
                 r = annot_by_id.get(m.group(1)) if m else None
                 if r:
-                    attrs = (f"{p[8]};product={_gff_clean(r['product'])}"
-                             f";organism={_gff_clean(r['organism'])}"
-                             f";category={_gff_clean(r['category'])}"
-                             f";family={_gff_clean(r['family'])}"
-                             f";evidence={_gff_clean(r.get('evidence', ''))}"
-                             + (f";hmm={_gff_clean(r['hmm_hits'])}"
+                    attrs = (f"{p[8]};product={_gff_val(r['product'])}"
+                             f";organism={_gff_val(r['organism'])}"
+                             f";category={_gff_val(r['category'])}"
+                             f";family={_gff_val(r['family'])}"
+                             f";evidence={_gff_val(r.get('evidence', ''))}"
+                             + (f";hmm={_gff_val(r['hmm_hits'])}"
                                 if r.get('hmm_hits') else '')
-                             + (f";cdd={_gff_clean(r['cdd_hits'])}"
-                                if r.get('cdd_hits') else ''))
+                             + (f";bfvd={_gff_val(r['bfvd_hits'])}"
+                                if r.get('bfvd_hits') else ''))
                     n_gff += 1
                 else:
                     attrs = p[8]
@@ -960,6 +1066,28 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
         ev = r.get('evidence') or ('seq' if r['informative'] == 'Y' else 'none')
         ev_counts[ev] = ev_counts.get(ev, 0) + 1
 
+    # 库版本可追溯（2026-10-03 审计 P2）：层1 搜索库（RefSeq 蛋白）的文件
+    # 清单/版本锚点来自 db_info.json；层2 补 HMM（Pfam press 派生件）与
+    # BFVD（bfvd.version）——结果表可回溯"用哪个库、哪版跑的"。
+    db_files = dict((info or {}).get('db_files') or {})
+    db_versions = dict((info or {}).get('db_versions') or {})
+    if pfam_libs:
+        try:
+            _f, _v = lib_trace()
+            db_files.update(_f)
+            db_versions.update(_v)
+        except Exception as e:
+            if logger:
+                logger.log(f"HMM 库版本记录失败: {e}", "WARN")
+    if do_bfvd and bfvd_db():
+        try:
+            _f, _v = bfvd_db_trace()
+            db_files.update(_f)
+            db_versions.update(_v)
+        except Exception as e:
+            if logger:
+                logger.log(f"BFVD 库版本记录失败: {e}", "WARN")
+
     summary = {
         'stage': step,
         'model': model,
@@ -967,12 +1095,16 @@ def run_orf_annotation(sample_dir, threads=None, logger=None, force=False,
         'libs': list(sel),
         'libs_labels': [LIB_LABELS[l] for l in sel],
         'pfam_libs': pfam_libs,
+        'filters': {'min_pident': min_pident, 'min_qcov': min_qcov,
+                    'n_hits_filtered': n_hits_filtered},
+        'db_files': db_files,
+        'db_versions': db_versions,
         'n_orfs': len(rows),
         'n_annotated': n_annot,
         'n_families': len(fams),
         'gff_annotated': n_gff,
         'n_hmm_only': n_hmm_only,
-        'n_cdd_only': n_cdd_only,
+        'n_bfvd_only': n_bfvd_only,
         'evidence': dict(sorted(ev_counts.items())),
         'categories': dict(sorted(cats.items(), key=lambda x: -x[1])),
         'families': dict(sorted(fams.items(), key=lambda x: -x[1])),

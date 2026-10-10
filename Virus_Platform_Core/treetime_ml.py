@@ -1014,6 +1014,13 @@ def run_clock(argv, out_dir, tree=None, aln=None, dates=None, seq_len=None,
       · `max_iter=3` ≡ `run(max_iter=3)`。
     ⚠️ `--gtr` 不给时 treetime 默认是 `infer`（**推断** GTR 模型），
     不是 JC69 —— 要"固定成 JC69"必须显式传。
+    ⚠️⚠️ 2026-10-03 实测并落定：本函数（**CLI 顶层通路**）的 `--gtr` **传了也不
+    生效** —— treetime 0.12.1 的 `wrappers.py` 把 `infer_gtr` 算出来后没有传进
+    `TreeTime.run`（详见 `API_DRIVER_SRC` 的注释），替换模型**一律被推断**。
+    所以返回结果里**不再**写 `'gtr': <入参>`（那会被下游误读成"这批数字用的是
+    固定模型"），改成如实的两项：`gtr_used=False`（固定模型确实没生效）+
+    `gtr_requested=<入参>`（调用方原本请求的值，仅供追溯）。要真正固定替换模型
+    必须走 `run_clock_api()`（API 旁路，`infer_gtr` 已接线）。
 
     `verbose`：`None` ＝ 沿用 1（原行为）；`4` ＝ 打**逐轮** `rate=` / `R^2=`。
     TreeTime-RTT 用 4 是为了留下收敛过程 —— `molecular_clock.txt` 只写收敛值，
@@ -1037,11 +1044,25 @@ def run_clock(argv, out_dir, tree=None, aln=None, dates=None, seq_len=None,
            'coalescent': None, 'skyline': [], 'skyline_meta': {},
            'outputs': {}, 'warnings': [], 'stdout_tail': '',
            'tree_in': tree, 'n_skyline': n_skyline,
-           # 替换模型 / 迭代轮数 / 枝长模式：None ＝ 没传 flag（走 treetime 默认）。
-           # 记进结果是为了让"这次到底用了什么模型"可追溯 —— 同一个 `--rate`
-           # 在不同替换模型下不可比。
-           'gtr': gtr, 'max_iter': max_iter,
+           # ⚠️ 替换模型（2026-10-03 修复）：CLI 通路的 `--gtr` 是**空转**的 ——
+           # treetime 0.12.1 顶层 CLI 把 `infer_gtr=True` 写死（wrappers.py 算出的
+           # infer_gtr 没传进 `TreeTime.run`，见 API_DRIVER_SRC 与 docstring），
+           # 固定模型从未生效。旧实现把入参原样记成 `'gtr': 'JC69'`，下游会误读成
+           # "这批数字用过 JC69"。现在拆成两项如实记录：
+           #   gtr_used=False       —— 固定模型**没有**生效（模型一律被推断）
+           #   gtr_requested=<入参> —— 调用方原本请求的值，仅作追溯
+           # 真正要固定模型请走 run_clock_api()。
+           'gtr_used': False, 'gtr_requested': gtr,
+           'max_iter': max_iter,
            'branch_length_mode': branch_length_mode, 'verbose': verbose,
+           # 定年口径的**实际生效值**（2026-10-03 补，供报告/结果文件追溯）：
+           # clock_filter None ＝ 没传 flag（treetime 默认 4.0 剔叶）；
+           # time_marginal None ＝ 没传；reroot 记 'keep-root' 或 reroot 串/None。
+           'clock_filter': (int(clock_filter) if clock_filter is not None
+                            else None),
+           'time_marginal': (str(time_marginal) if time_marginal else None),
+           'reroot': ('keep-root' if keep_root
+                      else (str(reroot) if reroot else None)),
            # 用户指定的固定速率（None＝照常做 ML 估计）。见 docstring 的口径说明。
            'clock_rate_fixed': (float(clock_rate) if clock_rate else None)}
     if not argv:
@@ -1127,7 +1148,12 @@ def run_clock(argv, out_dir, tree=None, aln=None, dates=None, seq_len=None,
             with io.open(p, 'w', encoding='utf-8', newline='\n') as f:
                 f.write(nwk + '\n')
             res['outputs']['timetree_nwk'] = p
-            res['timetree_tips'] = len(re.findall(r'[(),]', nwk)) and None
+            # ⚠️ 真实叶数（2026-10-03 修复）：旧写
+            # `len(re.findall(...)) and None` 是恒为 None 的死表达式（没有任何
+            # 调用方读得到数）。这里用本模块已有的树解析器数"无子节点的节点"。
+            _root = parse_annotated_newick(nwk)
+            res['timetree_tips'] = sum(1 for _n in iter_pre(_root)
+                                       if not _n['children'])
         except (OSError, ValueError) as e:
             res['warnings'].append(f'timetree.nwk 未导出：{type(e).__name__}: {e}')
 
@@ -1523,11 +1549,11 @@ def run_mugration(argv, tree, states, out_dir, attribute='region',
                 '走廊表里这些**按原代号给**，不要当成区划名读'
                 % (summ['n_labels_unmapped'], len(summ.get('confidence_labels_raw') or []),
                    ','.join((summ.get('confidence_labels_unmapped') or [])[:8])))
-        elif not summ.get('confidence_labels_mapped') and rows:
-            res['warnings'].append(
-                'confidence.csv 的状态列完全没能翻译（表头是 %s）—— '
-                '走廊表里按原字母给，**不要**当成区划名读'
-                % ','.join(summ.get('confidence_labels_raw') or []))
+        # ⚠️ 原先这里还有一个 `elif not summ.get('confidence_labels_mapped') and rows:`
+        #    分支（"状态列完全没能翻译"），其实**不可达**（2026-10-03 删除）：
+        #    `confidence_labels_mapped = bool(mapping)`，mapping 为空 ⇒ 所有表头列
+        #    都在 `n_labels_unmapped` 里；而 rows 非空 ⇒ 表头至少有 1 个状态列
+        #    ⇒ 上面的 if 必中。留着只会误导后人以为它兜住了什么。
         res['state_of'] = {r['name']: r['best'] for r in rows}
         if summ.get('n_below_0_7'):
             res['warnings'].append(

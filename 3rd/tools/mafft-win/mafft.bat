@@ -1,17 +1,34 @@
 @echo off
+setlocal enabledelayedexpansion
+cls; 1>&2
+chcp 65001 1>&2
+for /f "usebackq tokens=*" %%i IN (`cd`) DO @set current_dir=%%i
+if /i "%current_dir%" == "%systemroot%" (
+  set mafft_working_dir="%~dp0"
+) else (
+  set mafft_working_dir="%current_dir%"
+)
+pushd "%mafft_working_dir%"
 
-setlocal
+echo; 1>&2
+echo Preparing environment to run MAFFT on Windows. 1>&2
+echo This may take a while, if real-time scanning by anti-virus software is on. 1>&2
 
-if not "x%PROCESSOR_ARCHITECTURE%" == "xAMD64" goto _NotX64
-set COMSPEC=%WINDIR%\SysWOW64\cmd.exe
-%COMSPEC% /c %0 %*
-goto EOF
-:_NotX64
+set ROOTDIR=%~d0%~p0
+set PATH=/usr/bin/:%PATH%
+set MAFFT_BINARIES=/usr/lib/mafft
+set TMPDIR=%TMP%
+set MAFFT_TMPDIR=%TMPDIR%
 
-set ROOTDIR="%~d0%~p0\ms"
-set PATH=/bin/
-set MAFFT_BINARIES=/lib/mafft
+REM set TMPDIR=%ROOTDIR%/tmp
+REM set MAFFT_TMPDIR=%TMPDIR%
+REM If you do not have write permission for Windows temporary folder
+REM (typically C:\Users\username\AppData\Local\Temp\), then
+REM uncomment (remove REM) the above two lines to use an alternative 
+REM temporary folder.
 
-%ROOTDIR%\bin\sh %ROOTDIR%\bin\mafft %*
+"%ROOTDIR%\usr\bin\bash" "/usr/bin/mafft" %*
+set MAFFT_EC=%errorlevel%
 
-:EOF
+popd
+exit /b %MAFFT_EC%

@@ -19,15 +19,44 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__),
                                                 '..', '..', '..')))
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-KV_REF = os.path.join(REPO, 'databases', 'virusref_db', 'kv_index', 'reference.fasta')
-KV_INFO = os.path.join(REPO, 'databases', 'virusref_db', 'kv_index', 'reference.ref_info.tsv')
-KV_DIR = os.path.join(REPO, 'databases', 'virusref_db', 'kv_index')
-BLAST_DB = os.path.join(REPO, 'databases', 'virusref_db', 'blast', 'virus')
+# 基准鉴定库（评测快照 = 2026-09 的 kv_index，2026-09-29 起被 plant_ref 取代）。
+# 路径优先级：spec['db_dir'] > 环境变量 VP_BENCH_DB > 默认旧路径
+# （databases/virusref_db/kv_index/，现已不存在）。缺库时 main() 报清晰中文
+# 错误（见 resolve_db）。BLAST 库默认 databases/virusref_db/blast/virus，
+# 可用环境变量 VP_BENCH_BLAST 覆盖。
+KV_DIR_DEFAULT = os.path.join(REPO, 'databases', 'virusref_db', 'kv_index')
+KV_DIR = KV_DIR_DEFAULT
+KV_REF = os.path.join(KV_DIR, 'reference.fasta')
+KV_INFO = os.path.join(KV_DIR, 'reference.ref_info.tsv')
+BLAST_DB_DEFAULT = os.path.join(REPO, 'databases', 'virusref_db', 'blast', 'virus')
+BLAST_DB = os.environ.get('VP_BENCH_BLAST') or BLAST_DB_DEFAULT
 
 
-def load_ref_info():
+def resolve_db(spec):
+    """按 spec['db_dir'] > VP_BENCH_DB > 默认旧路径解析基准库并校验存在。
+
+    返回 (kv_ref, kv_info, kv_dir)；缺失时抛 FileNotFoundError 并附中文修复
+    指引（旧路径 kv_index 已被 plant_ref 取代，复现需重建等价快照库）。
+    """
+    db_dir = (spec.get('db_dir') or os.environ.get('VP_BENCH_DB')
+              or KV_DIR_DEFAULT)
+    ref = os.path.join(db_dir, 'reference.fasta')
+    info = os.path.join(db_dir, 'reference.ref_info.tsv')
+    if not (os.path.isfile(ref) and os.path.isfile(info)):
+        raise FileNotFoundError(
+            f'[基准库缺失] 找不到参考库：{ref}\n'
+            f'说明：本评测快照绑定 2026-09 的 kv_index 库（含 TSWV 注入记录，'
+            f'manifest 2026-09-19），2026-09-29 起平台默认库已改为 '
+            f'virusref_db/plant_ref/，旧 kv_index 目录已移除。\n'
+            f'复现请先重建等价库；或显式指定库目录：环境变量 '
+            f'VP_BENCH_DB=<库目录>，或 spec 里传 "db_dir"'
+            f'（目录内需有 reference.fasta / reference.ref_info.tsv）。')
+    return ref, info, db_dir
+
+
+def load_ref_info(kv_info=None):
     out = {}
-    with open(KV_INFO, encoding='utf-8') as f:
+    with open(kv_info or KV_INFO, encoding='utf-8') as f:
         for row in csv.reader(f, delimiter='\t'):
             if row and not row[0].startswith('#') and len(row) > 2:
                 out[row[0]] = row[2]
@@ -35,19 +64,24 @@ def load_ref_info():
 
 
 def run_kv(spec, out_dir):
-    """平台鉴定（known_virus_suite identify，salmon/minibwa 引擎，平台默认库）。"""
+    """平台鉴定（known_virus_suite identify，salmon/minibwa 引擎，平台默认库）。
+
+    库路径见 resolve_db（spec['db_dir'] > VP_BENCH_DB > 旧默认 kv_index）。
+    """
     name = spec['name']
+    kv_ref, kv_info, kv_dir = resolve_db(spec)
     os.makedirs(out_dir, exist_ok=True)
     r1, r2 = spec['r1'], spec.get('r2')
-    # 子采样（深度稀释实验）：取前 N 对/条 reads（fastq 顺序对齐）
+    # 深度稀释实验：随机抽样 N 对/条 reads（seed 默认可复现，记录进输出元数据）
     if spec.get('subsample'):
         n = int(spec['subsample'])
+        seed = int(spec.get('subsample_seed', 42))
         sub1 = os.path.join(out_dir, f'sub_R1.fastq')
-        _head_fastq(r1, sub1, n)
+        _sample_fastq(r1, sub1, n, seed)
         r1 = sub1
         if r2:
             sub2 = os.path.join(out_dir, 'sub_R2.fastq')
-            _head_fastq(r2, sub2, n)
+            _sample_fastq(r2, sub2, n, seed)
             r2 = sub2
     sheet = os.path.join(out_dir, 'sheet.tsv')
     with open(sheet, 'w', encoding='utf-8') as f:
@@ -56,9 +90,9 @@ def run_kv(spec, out_dir):
     engine = spec.get('engine', 'salmon')
     cmd = [sys.executable, '-m',
            'Virus_Platform_Core.known_virus_suite.known_virus_suite',
-           'identify', '--out', out_dir, '--reference', KV_REF,
-           '--ref-info', KV_INFO, '--engine', engine,
-           '--align-threads', '4', '--index-dir', KV_DIR,
+           'identify', '--out', out_dir, '--reference', kv_ref,
+           '--ref-info', kv_info, '--engine', engine,
+           '--align-threads', '4', '--index-dir', kv_dir,
            '--sample-sheet', sheet]
     if r2:
         # 批量表支持 r2 列
@@ -75,6 +109,26 @@ def run_kv(spec, out_dir):
          encoding='utf-8').write(log)
 
     res = {'wall_s': round(wall, 1), 'returncode': r.returncode}
+    # spec 指纹（P1-7）：续跑判定据此比对——同名实验但输入/参数/脚本变了
+    # 不能沿用旧 RESULT。
+    import hashlib
+    res['spec_sha1'] = hashlib.sha1(
+        json.dumps(spec, ensure_ascii=False, sort_keys=True)
+        .encode('utf-8')).hexdigest()
+    if r.returncode != 0:
+        # 非零退出 = 本轮无效（审查 P1-7）：不解析任何盘上产物表，直接
+        # 以 error 收场（RESULT 由文件尾的统一出口打印，此处只返回，
+        # 否则 stdout 会出现两行 RESULT）。此前旧 TSV 残留会被读成本轮结果。
+        res['error'] = (f'identify 引擎退出码 {r.returncode}（本轮作废，'
+                        '详见 identify_run.log 尾部）')
+        tail = log[-400:]
+        res['error_tail'] = tail
+        return res
+    # 采样元数据（仅深度稀释实验；记录 seed 与抽样量以便复现）
+    if spec.get('subsample'):
+        res['subsample'] = {'n_reads': int(spec['subsample']),
+                            'seed': int(spec.get('subsample_seed', 42)),
+                            'mode': 'random'}
     # 索引构建提示行（k15/k31 自动切换是否触发）
     m = re.search(r'检测到超短 reads[^\n]*', log)
     res['srna_adapted'] = bool(m)
@@ -188,16 +242,31 @@ def run_asm(spec, out_dir):
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-def _head_fastq(src, dst, n_records):
-    """取前 n_records 条 reads（4 行/条），支持 gz 输入，输出明文 fastq。"""
+def _sample_fastq(src, dst, n_records, seed=42):
+    """从 src 随机抽取 n_records 条 reads（4 行/条），支持 gz 输入，输出明文 fastq。
+
+    2026-10-03 方法变更：此前为"顺序截取前 N 条"（无种子、受 fastq 排序影响）；
+    现改为 random.Random(seed).sample 全量索引后随机抽样，seed 默认 42 并写入
+    输出元数据（res['subsample']）。注意：已发表的 50K 深度稀释数字基于旧的
+    顺序截取实现（见 BENCHMARK_zh.md §2.3 方法变更记录），结论不受影响但抽样
+    实现不同。
+    """
     import gzip
+    import random
     opener = gzip.open if str(src).lower().endswith('.gz') else open
+    # 先流式计数记录数，再抽索引，第二遍按索引写出（不做全量驻留）
+    n_total = 0
+    with opener(src, 'rt', encoding='utf-8', errors='replace') as f:
+        for _ in f:
+            n_total += 1
+    n_total //= 4
+    idx = set(random.Random(seed).sample(range(n_total),
+                                         min(n_records, n_total)))
     with opener(src, 'rt', encoding='utf-8', errors='replace') as f, \
             open(dst, 'w', encoding='utf-8') as w:
         for i, ln in enumerate(f):
-            if i >= n_records * 4:
-                break
-            w.write(ln)
+            if i // 4 in idx:
+                w.write(ln)
 
 
 def run_chain(spec, out_dir):

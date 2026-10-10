@@ -108,6 +108,7 @@ tests/_audit_*report*
 # 例：git show 38243d2:webapp/templates/tools.html.bak_nodeid_20260909
 *.bak_*
 *.bak
+*.bak.lightbox
 *.orig
 
 # ---------- 9. 测试运行器互斥锁（tests/_run_all.py 运行期临时文件） ----------

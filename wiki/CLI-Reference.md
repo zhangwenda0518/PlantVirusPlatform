@@ -72,8 +72,29 @@ python main.py host-analysis --sample NAME [--force]
 ### `orfa` — ⑥b ORF 功能注释
 
 ```bat
-python main.py orfa --sample NAME [--threads N] [--libs prot,pfam,cdd] [--force]
+python main.py orfa --sample NAME [--threads N] [--libs prot,pfam,bfvd] [--force]
 ```
+
+## CRISPR 检测设计
+
+### `crispr-design` — Cas12a/Cas13a 检测位点与引物设计（2026-10-06 新增）
+
+```bat
+python main.py crispr-design -i isolates.fasta [--near close_relatives.fasta] ^
+       [--no-host] [--no-group] ^
+       [--amp RPA|PCR] [--profile strict|relaxed] ^
+       [--nuclease cas12a|cas13a] [--spacer-len N] [--probe none|exo|nfo] ^
+       [--top-n 20] [--flank 250] [--margin 25] ^
+       [--product-min N] [--product-max N] ^
+       [-o run/tool_runs/crispr_cli_<时间戳>] [-t N]
+```
+
+- `-i` 目标 FASTA（多分离物；header 含 `RNA1` / `S2` 等标签时**自动按片段分组**，`--no-group` 关掉）；
+- `--near` 近缘病毒 FASTA（特异性排除用）；宿主基因组筛查默认启用 `host-db`，`--no-host` 跳过；
+- `--profile strict`（默认）为通用口径，`relaxed` 对高变异 RNA 病毒放松；
+- `--spacer-len 0` 表示按酶档案默认（Cas12a 20 / Cas13a 30，允许区间 20–24 / 27–30）；
+- `--product-min/max 0` 表示用档位默认产物长度区间；
+- 产物含 crRNA 候选表、引物对、评分与订购信息，落盘在 `-o` 指定目录（默认 `run/tool_runs/crispr_cli_<时间戳>`）。
 
 ## 参考序列
 
@@ -127,12 +148,43 @@ python main.py meta-info --runs <列表文件|单个Run> [--out DIR] [--mode loc
 python main.py meta-plot --input <检索表|Core14|Full.csv> [--out SCI_Figures_Output]
 ```
 
-### `host-genome` — 宿主参考基因组下载
+### `host-genome` — 宿主参考基因组下载（NCBI taxon/accession / gget·Ensembl）
 
 ```bat
-python main.py host-genome --species "Lycium barbarum" [--out DIR] ^
-       [--include-organelles] [--ncbi-api KEY] [--min-length N] ^
-       [--verify-only] [--skip-datasets]
+python main.py host-genome --species "Lycium barbarum" [--source ncbi|gget] ^
+       [--out DIR] [--release 60] [--taxid 112863] [--include-organelles] ^
+       [--ncbi-api KEY] [--min-length N] [--verify-only] [--skip-datasets]
+
+rem accession 精确下载（datasets，支持染色体过滤；taxid 从报告自动解析）
+python main.py host-genome --accession GCF_000001405.40 --chromosomes X,Y
+
+rem gget/Ensembl Plants 源（补 NCBI 覆盖不到的植物宿主；需先 pip install "gget==0.30.5"）
+python main.py host-genome --species "Oryza sativa" --source gget
+```
+
+### `datasets` — NCBI datasets CLI 全模式下载（genome / gene / taxonomy / virus）
+
+```bat
+python main.py datasets genome --taxon "bos taurus"
+python main.py datasets genome --accession GCF_000001405.40 --chromosomes X,Y --include genome
+python main.py datasets gene --gene-id 672
+python main.py datasets gene --symbol brca1 --taxon "mus musculus"
+python main.py datasets gene --accession NP_000483.3
+python main.py datasets taxonomy --taxon human,sars-cov-2
+python main.py datasets virus --taxon sars-cov-2 --host dog
+python main.py datasets virus --protein S --host dog --out SARS2-spike-dog
+python main.py datasets virus --taxon "tomato brown rugose fruit virus" --name tobrfv
+
+rem virus 模式默认落平台数据集布局（virusref_db/<名>/reference.fasta +
+rem reference.ref_info.tsv）→ 数据库构建页「原始数据集」卡即时识别、一键建库；
+rem 加 --no-dataset 存通用目录 datasets_dl/。
+
+### `datasets-setup` — 安装/更新 NCBI datasets CLI
+
+```bat
+python main.py datasets-setup
+rem 从 NCBI 官方（域名白名单内）下载 win64 exe 到 3rd/tools/datasets/，
+rem PATH 与平台内置位置都会被自动探测；旧版 --exclude-* 旗标自动翻译为 --include
 ```
 
 ## LOGAN 溯源

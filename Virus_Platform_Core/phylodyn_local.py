@@ -139,12 +139,25 @@ _ISO_RE = re.compile(r'^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$')
 _RANGE_RE = re.compile(r'^\[\s*([^:]+?)\s*:\s*([^]]+?)\s*\]$')
 
 
-def to_decimal_year(v, mode='mid'):
+def to_decimal_year(v, mode='mid', stats=None):
     """日期 → 十进制年。认 `2013` / `2013.42` / `2013-05` / `2013-05-01` /
     `[2013.2:2013.7]`（区间取中点）。
 
     返回 `(decimal_year 或 None, 是否精确到日)`。**认不出就返回 None**，
     绝不猜 —— 猜错会让整条链的年份轴错位。
+
+    `stats`（可选 dict）：给了就累加本函数遇到的**二义日期**计数
+    （`stats['n_ambiguous_frac']`，形如 `2019.5` 这种"小数年 vs 年.月"写法）；
+    不给就不统计（纯转换调用零副作用）。
+
+    ⚠️ 小数年快路径（2026-10-03 修，与 `phylodyn_govern.parse_date` 对齐）
+    ----------------------------------------------------------------
+    原实现 `if '.' in s: return float(s)` 带**前导零**的两位小数会走错口径：
+    `2014.11` 被当小数年 2014.11（≈2 月），而唯一权威 `parse_date` 判它是
+    「年.月」= 2014-11（≈11 月中）—— 同一份数据两个答案，差 **0.76 年**。
+    现在快路径**只放行小数位 ≥3** 的写法（`2014.056`，explorer 导出的
+    小数年都是这个形状）；其余（`.01`–`.12` 的「年.月」、`.5` 这种二义短小数）
+    一律交回 `parse_date`，口径由它定，二义写法经 `stats` 计数上报。
 
     ⚠️ 口径（2026-09-18 修 P0，唯一实现见 `phylodyn_govern.parse_date`）
     ----------------------------------------------------------------
@@ -174,6 +187,8 @@ def to_decimal_year(v, mode='mid'):
         return None, False
     m = _RANGE_RE.match(s)
     if m:
+        # 区间写法 `[2013.2:2013.7]` 本身就声明了"小数年" → 端点**不**计二义
+        # （不把 stats 往下传，否则 `[2013.2:…]` 的两个端点会被当成二义写法）
         a, _ = to_decimal_year(m.group(1), mode=mode)
         b, _ = to_decimal_year(m.group(2), mode=mode)
         if a is not None and b is not None:
@@ -183,21 +198,35 @@ def to_decimal_year(v, mode='mid'):
     #    光秃秃的 `2013` **不能**走这条路：服务器口径把它当"只给年"→ 6 月 15 日
     #    （2013.4556），而 `float('2013')=2013.0` 是"年初"，差 0.46 年。
     #    两条路径（本地 A0 vs 服务器 BEAST）必须给同一个答案，所以这里收紧。
-    if '.' in s:
+    #
+    #    ⚠️ 2026-10-03：快路径再收紧到**小数位 ≥3**（`2014.056`）。原来只要含
+    #    '.' 就直通 float，于是 `2014.11` 被读成 2 月（2014.11），而
+    #    `phylodyn_govern.parse_date` 判它是「年.月」= 11 月中（2014.8722）——
+    #    同一份数据两个答案，差 **0.76 年**。`.01`–`.12` 这种"年.月"写法与
+    #    `.5` 这种二义短小数现在一律交回 parse_date（唯一权威实现）定夺；
+    #    小数位 ≥3 的（explorer 导出的小数年形状）才走快路径。
+    _frac = s.rsplit('.', 1)
+    if '.' in s and len(_frac) == 2 and _frac[0].isdigit() and _frac[1].isdigit() \
+            and len(_frac[1]) >= 3:
         try:
             return float(s), False
         except ValueError:
             pass
     if not _ISO_RE.match(s):
-        # 服务器口径接受 `YYYY/MM/DD`（`decimal_year.to_decimal_year` 会先 replace）→ 跟着收
+        # 服务器口径接受 `YYYY/MM/DD`（`decimal_year.to_decimal_year` 会先 replace）→ 跟着收；
+        # 小数年形状（`2014.5` / `2014.11`）同样放行去 parse_date（口径唯一权威）
         s = s.replace('/', '-')
-        if not _ISO_RE.match(s):
+        if not _ISO_RE.match(s) and not re.fullmatch(r'\d{4}\.\d+', s):
             return None, False
     # 交给唯一实现（stdlib-only，无循环导入；懒加载避免包初始化顺序问题）
     from Virus_Platform_Core.phylodyn_govern import parse_date
     info = parse_date(s, mode=mode)
     if info.decimal is None:
         return None, False
+    if stats is not None and info.ambiguous_frac:
+        # 二义写法（`2019.5`：既是 5 月也可能是小数年 0.5）按小数年处理，
+        # 但**必须计数**：调用方要把这个数报出去，否则"选了哪一个"没人知道。
+        stats['n_ambiguous_frac'] = stats.get('n_ambiguous_frac', 0) + 1
     return info.decimal, (info.precision == 'day')
 
 
@@ -583,7 +612,9 @@ def apply_rename_map(aln, meta, tree, map_path, out_dir,
     import re as _re
     from Bio import SeqIO as _SeqIO
     m = {}
-    for line in open(map_path, encoding='utf-8-sig'):
+    # errors='replace'：与同模块其余读入口径一致 —— 非 UTF-8 字节不让整条链
+    # 因 UnicodeDecodeError 中止（坏字节在 ID 上会明显到用户能看出来）
+    for line in open(map_path, encoding='utf-8-sig', errors='replace'):
         line = line.strip()
         if not line or line.startswith('#'):
             continue
@@ -617,10 +648,10 @@ def apply_rename_map(aln, meta, tree, map_path, out_dir,
     # ② 元数据（键列：优先 name，否则首列）
     meta_new, n_meta = meta, 0
     if meta and os.path.exists(meta):
-        with open(meta, encoding='utf-8-sig', newline='') as f:
+        with open(meta, encoding='utf-8-sig', errors='replace', newline='') as f:
             sample = f.readline()
         delim = '\t' if sample.count('\t') >= sample.count(',') else ','
-        with open(meta, encoding='utf-8-sig', newline='') as f:
+        with open(meta, encoding='utf-8-sig', errors='replace', newline='') as f:
             rows = list(_csv.DictReader(f, delimiter=delim))
         if rows:
             key = next((c for c in rows[0] if c.strip().lower() == name_col),
@@ -663,8 +694,13 @@ def stage_prep(aln, meta, tree, out_dir, date_col=None, trait='region',
                prune_max_reps=3, prune_min_snp_diff=2, prune_clade_cutoff=5):
     """A0 数据准备：FASTA × 元数据 → 日期表 / 状态表 / 规范化比对 / 树。
 
-    **匹配率必须 100% 才算通过**；不通过时把未匹配名单原样列出（红线 7）——
-    TreeTime 那边名字对不上是**静默算错**，不报就是埋雷。
+    ⚠️ 匹配门槛的**真实口径**（2026-10-03 校正：原 docstring 写"匹配率必须 100%
+    才算通过"，与实现不符 —— 实际是半数放行，照它读会误判链路的严格程度）：
+      · 缺日期：逐条**告警**（A1 定年时缺日期的叶会被剔除，树变小；**一条日期
+        都解析不出**才 error 中止）；
+      · 缺区划：告警；**超过半数**拿不到区划才 error（多半是列名/表头格式不对）；
+    未匹配名单原样列出（红线 7）—— TreeTime 那边名字对不上是**静默算错**，
+    不报就是埋雷。完成日志同时报出实际缺失比例（缺日期 x/y、缺区划 x/y）。
 
     `prune=True` 时先做**冗余剪枝**（对齐上游 phymap-workflow `--prune`）：
     按 (区划, 日期组[, SNP 支系]) 去冗余，默认关闭。**有损**，详见
@@ -765,6 +801,7 @@ def stage_prep(aln, meta, tree, out_dir, date_col=None, trait='region',
     # ---- 逐序列取日期与区划 ----
     dates, states, no_date, no_state, date_src, state_src = {}, {}, [], [], {}, {}
     raw_dates = {}                                  # 原始日期串（剪枝按它归组）
+    _dstats = {}                                    # 二义日期计数（见 to_decimal_year）
     for n in names:
         row = meta_map.get(n) or {}
         if not row and meta_map:                    # 前缀/包含兜底（同 phylogeo 口径）
@@ -775,18 +812,18 @@ def stage_prep(aln, meta, tree, out_dir, date_col=None, trait='region',
         dv = None
         if row:
             if date_col and date_col in row:
-                dv, _p = to_decimal_year(row[date_col])
+                dv, _p = to_decimal_year(row[date_col], stats=_dstats)
                 if dv is not None:
                     date_src[n] = f'元数据列 {date_col}'
                     raw_dates[n] = row[date_col]
             if dv is None and date_trait and date_trait in row:
-                dv, _p = to_decimal_year(row[date_trait])
+                dv, _p = to_decimal_year(row[date_trait], stats=_dstats)
                 if dv is not None:
                     date_src[n] = f'元数据列 {date_trait}'
                     raw_dates[n] = row[date_trait]
         if dv is None:                              # 退回 FASTA 头（REGION_ACC_YEAR）
             tr = pg._header_traits(n)
-            dv, _p = to_decimal_year(tr.get('year'))
+            dv, _p = to_decimal_year(tr.get('year'), stats=_dstats)
             if dv is not None:
                 date_src[n] = 'FASTA 头（名称_登录号_年）'
                 raw_dates[n] = tr.get('year')
@@ -885,6 +922,16 @@ def stage_prep(aln, meta, tree, out_dir, date_col=None, trait='region',
                 'unmatched_state': no_state[:50],
                 'date_source_mix': _tally(date_src.values()),
                 'state_source_mix': _tally(state_src.values())})
+
+    if _dstats.get('n_ambiguous_frac'):
+        # 二义日期必须报数（to_decimal_year 的 stats 累加）：`2019.5` 按小数年
+        # 处理是平台口径（数据源是 explorer 的 date 列），但"选了哪一个"要让用户看见。
+        res['n_date_ambiguous_frac'] = _dstats['n_ambiguous_frac']
+        res['warnings'].append(
+            '%d 条序列的日期形如 `2019.5`（既是 5 月、也可能是小数年 0.5）—— '
+            '本平台按**小数年**处理（数据源是 explorer 的 date 列）；'
+            '若这批数据来自 BioAider 那种"年.月"写法，请改用它导出的 ISO'
+            % _dstats['n_ambiguous_frac'])
 
     if no_date:
         res['warnings'].append(
@@ -1063,7 +1110,11 @@ def stage_prep(aln, meta, tree, out_dir, date_col=None, trait='region',
     res['state_counts'] = _tally(states.values())
     res['ok'] = not res['error']
     prog('prep', 1.0, f'prep 完成：{len(dates)} 日期 / {len(states)} 区划')
-    say(f'A0 完成：日期 {len(dates)}/{len(names)}，区划 {len(states)}/{len(names)}，'
+    _n_seq = max(1, len(names))
+    say(f'A0 完成：日期 {len(dates)}/{len(names)}（缺 {len(no_date)} 条 = '
+        f'{100.0 * len(no_date) / _n_seq:.1f}%），'
+        f'区划 {len(states)}/{len(names)}（缺 {len(no_state)} 条 = '
+        f'{100.0 * len(no_state) / _n_seq:.1f}%），'
         f'年份跨度 {res.get("date_span")} 年，'
         f'树 {res.get("tree_tips")} 叶（{res.get("tree_source")}）')
     _dump(res, os.path.join(out_dir, 'prep_report.json'))
@@ -1387,11 +1438,9 @@ def stage_clock(prep, out_dir, methods=('treetime',), aln=None, tree=None,
     out['clock_stats'] = p
     res['n_methods_ok'] = len(stats)
     res['n_methods_usable'] = sum(1 for s in stats if not s.get('suspect'))
-    if len(stats) > 1:
-        res['warnings'].append(
-            '本次并列跑了 %d 条定年通路 —— `clock_stats.tsv` 里的速率来自'
-            '**不同的钟模型**，不可直接比较、不可取平均（实测同数据差 7–9%%）'
-            % len(stats))
+    # ⚠️ 2026-10-03 删：这里原有一条 `if len(stats) > 1:` 的"多通路速率不可比"
+    #    告警，但 A1 自 2026-09-17 收敛到 CLOCK_METHODS=('treetime',) 之后
+    #    stats 至多 1 条 → 分支**永不成立**（死代码），故删除。
     res['ok'] = not res['error']
     prog('clock', 1.0, 'A1 完成')
     say(f"A1 完成：时间树来源 {res['timetree_source']}；成功通路 {len(stats)} 条")
@@ -1458,21 +1507,14 @@ def _gate_clock_stats(stats, dates_map, res):
 
 
 def _slim_clock(c):
+    # clock_filter/time_marginal/reroot/argv：定年的关键开关必须随结果落盘
+    # 可追溯（clock_filter 缺省时 TreeTime CLI 默认 4.0 会剔叶，与 RTT 卡的
+    # 显式 0 语义不同，丢失后无法区分两种口径）。
     return {k: c.get(k) for k in ('ok', 'error', 'returncode', 'clock', 'relax',
                                   'coalescent', 'skyline_meta', 'warnings',
-                                  'stdout_tail', 'clock_rate_fixed')}
-
-
-def _slim_generic(r):
-    if not isinstance(r, dict):
-        return {'ok': False, 'error': '返回不是 dict'}
-    out = {}
-    for k, v in r.items():
-        if isinstance(v, (str, int, float, bool)) or v is None:
-            out[k] = v
-        elif k in ('stats', 'match', 'r_env'):
-            out[k] = v
-    return out
+                                  'stdout_tail', 'clock_rate_fixed',
+                                  'clock_filter', 'time_marginal', 'reroot',
+                                  'argv')}
 
 
 def _lsd2_tree_path(lr):
@@ -1498,30 +1540,29 @@ def _lsd2_tree_path(lr):
     return None
 
 
-def _copy_text(src, dst):
-    with safe_open(src) as f:
-        body = f.read()
-    if isinstance(body, bytes):
-        body = body.decode('utf-8', 'replace')
-    with open_write(dst) as f:
-        f.write(body)
-    return dst
-
-
 def _load_dates_map(dates_path):
-    """日期表 → {叶名: 十进制年}。"""
+    """日期表 → {叶名: 十进制年}。
+
+    ⚠️ 2026-10-03：改用 `csv.reader` 解析 —— 写端是 `treetime_ml.write_dates_csv`
+    的 `_csv_cell`（含逗号/引号/换行的单元格会**加引号**），原来手撕
+    `split(',')` + `strip('"')` 遇到 `"a,b"` 这种叶名会切错列、数据静默错位。
+    读写两端统一走 csv 口径。
+    """
     out = {}
     if not dates_path or not os.path.isfile(dates_path):
         return out
-    with io.open(dates_path, encoding='utf-8-sig', errors='replace') as f:
-        for i, ln in enumerate(f):
-            cells = [c.strip().strip('"') for c in ln.rstrip('\n').split(',')]
-            if i == 0 and cells and cells[0].lower().lstrip('#') == 'name':
+    with io.open(dates_path, encoding='utf-8-sig', errors='replace',
+                 newline='') as f:
+        for i, cells in enumerate(csv.reader(f)):
+            if not cells:                       # 空行（csv 给出 []）
                 continue
-            if len(cells) >= 2 and cells[0]:
-                v, _p = to_decimal_year(cells[1])
+            if i == 0 and (cells[0] or '').strip().lower().lstrip('#') == 'name':
+                continue
+            name = (cells[0] or '').strip()
+            if len(cells) >= 2 and name:
+                v, _p = to_decimal_year(cells[1].strip())
                 if v is not None:
-                    out[cells[0]] = v
+                    out[name] = v
     return out
 
 
@@ -1734,16 +1775,22 @@ def stage_phylogeo(clock, prep, out_dir, trait='region',
             prog('phylogeo', 0.75, f'RSPP bootstrap {rssp_bs} 复本')
             try:
                 aln = (prep.get('outputs') or {}).get('prep_fasta')
-                obs = {'n_changes': nf, 'counts': {'%s->%s' % k: v
-                                                   for k, v in fc.items()}}
+                # ⚠️ 2026-10-03 修：`observed` 参数要的是**迁移数（数值）**，
+                #    不是 dict —— 原实现把 {'n_changes': …} 传进去，`lo <= observed <= hi`
+                #    直接 TypeError，被下面的 except 吞成"RSPP 未完成"，于是 A2 的
+                #    bootstrap 置信区间**永远拿不到**。这里传 Fitch 的真实迁移数 nf。
                 rb = pg.rssp_bootstrap(aln, leaf_states,
                                        os.path.join(out_dir, '_rssp'),
                                        'fasttree', int(rssp_bs), seed,
-                                       None, obs)
+                                       None, nf)
+                # 返回键按 rssp_bootstrap 的实际返回结构取（见 phylogeo.py）。
                 res['rssp'] = {k: rb.get(k) for k in (
-                    'n_boot', 'n_ok', 'corridor_support', 'support_bands',
-                    'note', 'warnings')}
-                say(f"RSPP 完成：{rb.get('n_ok')}/{rb.get('n_boot')} 复本有效")
+                    'n_boot', 'n_ok', 'failed', 'observed', 'observed_in_range',
+                    'transitions', 'corridor_support', 'note', 'clades')}
+                say(f"RSPP 完成：{rb.get('n_ok')}/{rb.get('n_boot')} 复本有效"
+                    + ('' if rb.get('observed_in_range') is not False
+                       else f"；点估计 {nf} 落在 bootstrap 区间外"
+                            '（迁移数对拓扑选择敏感，解读以区间为准）'))
             except Exception as e:
                 res['warnings'].append(f'RSPP 未完成：{type(e).__name__}: {e}')
     except Exception as e:
@@ -1863,16 +1910,25 @@ def stage_phylogeo(clock, prep, out_dir, trait='region',
 
 
 def _load_states_map(states_path):
+    """州/区划表 → {叶名: 状态}。
+
+    ⚠️ 2026-10-03：同 `_load_dates_map`，改用 `csv.reader` —— 写端
+    `treetime_ml.write_states_csv` 会给含逗号/引号的单元格加引号，手撕
+    `split(',')` 会切错列。读写两端同一口径。
+    """
     out = {}
     if not states_path or not os.path.isfile(states_path):
         return out
-    with io.open(states_path, encoding='utf-8-sig', errors='replace') as f:
-        for i, ln in enumerate(f):
-            cells = [c.strip().strip('"') for c in ln.rstrip('\n').split(',')]
-            if i == 0 and cells and cells[0].lower().lstrip('#') == 'name':
+    with io.open(states_path, encoding='utf-8-sig', errors='replace',
+                 newline='') as f:
+        for i, cells in enumerate(csv.reader(f)):
+            if not cells:
                 continue
-            if len(cells) >= 2 and cells[0]:
-                out[cells[0]] = cells[1] or 'Unknown'
+            if i == 0 and (cells[0] or '').strip().lower().lstrip('#') == 'name':
+                continue
+            name = (cells[0] or '').strip()
+            if len(cells) >= 2 and name:
+                out[name] = (cells[1] or '').strip() or 'Unknown'
     return out
 
 
@@ -2120,7 +2176,12 @@ def _render_report(stages, params, files, warns, errs):
     if ck.get('stats'):
         L.append('## 二、定年结果（**每条都带方法名，不可互相比较**）')
         L.append('')
-        L.append('| 方法 | 钟模型 | 速率（每位点每年） | R² | tMRCA | CoV | 备注 |')
+        # ⚠️ 两个 "R²" **不是同一个量**，必须各自标注（2026-10-03 修复）：
+        #    · 本表列 = 每条定年方法的**时钟拟合 R²**（TreeTime molecular_clock.txt，
+        #      TreeTime 口径）；
+        #    · 下面 DRT 行的 real_r2 = **DRT 最大根位 R²**（逐候选根位取最大，
+        #      与时钟拟合 R² 不可直接比较，数值差异主要来自"根位搜索"）。
+        L.append('| 方法 | 钟模型 | 速率（每位点每年） | R²（时钟拟合, TreeTime 口径） | tMRCA | CoV | 备注 |')
         L.append('|---|---|---|---|---|---|---|')
         for s in ck['stats']:
             L.append('| %s | %s | %s | %s | %s | %s | %s |' % (
@@ -2135,9 +2196,11 @@ def _render_report(stages, params, files, warns, errs):
         if ck.get('drt'):
             d = ck['drt']
             L.append(f"时间信号检验（DRT，{d.get('n_valid')} 次有效置换）："
-                     f"R²={_fnum(d.get('real_r2'), 4)}，"
+                     f"R²（DRT 最大根位）={_fnum(d.get('real_r2'), 4)}，"
                      f"经验 p={_fnum(d.get('p_value'), 4)}，"
-                     f"判据 **{'通过' if d.get('passed') else '不通过'}**。")
+                     f"判据 **{'通过' if d.get('passed') else '不通过'}**。"
+                     '（此 R² 与上表"时钟拟合"列的 R² 不是同一个量，'
+                     '不可互相比较。）')
             L.append('')
             if not d.get('passed'):
                 L.append('> ⚠️ **DRT 未通过 → 上面的速率与 tMRCA 只是记录，'

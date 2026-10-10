@@ -41,6 +41,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 
 import numpy as np
@@ -558,9 +559,17 @@ def tree_corridors(path, burnin=0.0, max_trees=2000, ci=0.95,
         warnings.append('已按 burn-in %.0f%% 丢弃前 %d 棵树（剩 %d 棵）'
                         % (b * 100.0, cut, len(trees)))
     if len(trees) > int(max_trees or 0) > 0:
-        warnings.append('树数 %d 超过上限 %d，只用了前 %d 棵'
-                        % (len(trees), int(max_trees), int(max_trees)))
-        trees = trees[:int(max_trees)]
+        # 等距抽样（审查 P1-10）：旧实现无说明地取**前** max_trees 棵——
+        # MCMC 链前段恰是收敛最差的部分，且按顺序截取没有抽稀依据。改为
+        # 覆盖 burn-in 后全段的等距抽样（确定性、可复现），并在警告里写明。
+        _n_burn = len(trees)
+        _mt = int(max_trees)
+        import numpy as _np
+        _idx = _np.linspace(0, len(trees) - 1, _mt).round().astype(int)
+        trees = [trees[i] for i in _idx]
+        warnings.append('burn-in 后树数 %d 超过上限 %d，已用**等距抽样**取'
+                        '%d 棵（覆盖全段，非简单截取前段）'
+                        % (_n_burn, _mt, len(trees)))
     n_used = len(trees)
     dates = dict(dates or {})
 
@@ -601,13 +610,17 @@ def tree_corridors(path, burnin=0.0, max_trees=2000, ci=0.95,
         rh, dist = _node_heights(tree, info)
         counts, events, branches = {}, [], []
         for v in info.values():
-            if v['clade'] is tree.root or v['loc'] is None:
+            if v['clade'] is tree.root:
                 continue
             p = v['parent']
             if p is None:
                 continue
             pv = info[id(p)]
-            if pv['loc'] is None:
+            # ⚠️ 两端都要检查（2026-10-03 修复）：旧实现只数"父端缺状态"，
+            #    子端缺状态在循环开头就被 `continue` 掉了（而下游告警原文写的
+            #    是"某一端没解析出状态"）→ n_unresolved 少报。现在按"任一端缺"
+            #    统一计数，与告警口径一致。
+            if pv['loc'] is None or v['loc'] is None:
                 n_unresolved += 1
                 continue
             n_branches += 1
@@ -801,9 +814,15 @@ def run_beast(xml_path, exe=None, seed=None, extra_args=(), timeout=None,
         if on_line:
             on_line(ln)
 
+    # Windows 下不给 CREATE_NO_WINDOW：BEAST 是 GUI 程序（beast.exe 带窗口），
+    # 代跑时会在桌面弹黑框/窗口干扰用户（同仓 utils/treetime_ml 的惯例）。
+    creationflags = 0
+    if sys.platform == 'win32':
+        creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True,
-                            encoding='utf-8', errors='replace', bufsize=1)
+                            encoding='utf-8', errors='replace', bufsize=1,
+                            creationflags=creationflags)
     killed = False
     try:
         for ln in iter(proc.stdout.readline, ''):

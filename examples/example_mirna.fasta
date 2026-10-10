@@ -6,7 +6,7 @@ UUUGGAUUGAAGGGAGCUCUA
 UCGCUUGGUGCAGGUCGGGAA
 >osa-miR408-3p Oryza sativa（PAmiRDB 原站 Quick Example 同款）
 CUGCACUGCCUCUUCCCUGGC
->Oryza_sativa-miRN73-5p Oryza sativa（PAmiRDB 生产命中对：vs ACMV，能量 -26.2）
+>Oryza_sativa-miRN73-5p Oryza sativa（PAmiRDB 生产命中对：vs ACMV NC_001467.1，miRanda 实测 MFE -22.8）
 CCAACCGGTGGCGGGCGGCCT
 >Theobroma_cacao_miRNA_00667 Theobroma cacao（对示例 CMV RNA3 有 strict 级预测命中，score 77 / ΔG -23.2）
 TTCAGGCGCTCTTTTGCATGAC

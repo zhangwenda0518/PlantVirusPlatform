@@ -52,7 +52,10 @@ sys.path.insert(0, ROOT)
 from Virus_Platform_Core import phylodyn_kit as pk      # noqa: E402
 from Virus_Platform_Core import phylodyn_trees as pt    # noqa: E402
 
-EX = r'D:\桌面\延伸基因组\MMPV-RNA\biosoft\VirPhyKit\Example'
+# 外部参照仓（延伸基因组/MMPV-RNA 工作区）：默认仍是维护者本机路径，
+# 可用环境变量 VP_EXT_ROOT 覆盖；EX 不存在时本脚本 [SKIP] 返回 0。
+EXT_ROOT = os.environ.get('VP_EXT_ROOT', r'D:\桌面\延伸基因组\MMPV-RNA')
+EX = os.path.join(EXT_ROOT, 'biosoft', 'VirPhyKit', 'Example')
 WORK = os.path.join(ROOT, 'run', '_check_phylodyn_example')
 FAILS = []
 CONSUMED = set()

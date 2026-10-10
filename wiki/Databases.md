@@ -13,7 +13,7 @@
 | `tax_db/` | NCBI Taxonomy：nodes/names/merged.dmp | ~545MB | 数据库页下载（~57MB 压缩包） |
 | `kunpeng_db/` | kunpeng 分类库：plant / ref / rvdb | ref 680MB | 预置 |
 | `virusref_db/` | 已知病毒**鉴定库** kv_index/（自包含：reference.fasta + ref_info + salmon_k31 索引）+ blast/ 本地检索库 | ~850MB | 预置 |
-| `annot_db/` | 注释库：prot/（RefSeq 病毒蛋白 ~550MB）· cdd/（CDD 结构域 ~437MB）· hmm/pfam/（Pfam 病毒子集 ~119MB） | ~1.09GB | prot/cdd 首次运行自动下载；pfam 预置 |
+| `annot_db/` | 注释库：prot/（RefSeq 病毒蛋白 ~550MB）· hmm/pfam/（Pfam 病毒子集 ~119MB）。（cdd/ CDD 结构域库已于 2026-09-29 移除：prefilter 索引 ~5GB 小内存机器反复 OOM；病毒域注释改用 misc_db/suvtk/ 内的 BFVD 库，与 SUVTK 提交链共用） | ~0.67GB + BFVD 212MB | prot 首次运行自动下载；pfam/BFVD 预置 |
 | `tree_db/` | 建树参考库：**plant_tree.db**（植物口径预下载）· **ictv_tree.db**（ICTV VMR 元数据 + 按需序列缓存） | ~37MB | 预置 + ictv-update |
 | `misc_db/` | host_prob（宿主概率表 5.9 万条）· suvtk · viroids | — | 预置 |
 | `virus_ref/`（**可选**） | 非冗余植物病毒参考库：8,465 条 98% ANI 聚类代表 + 5,773 条完整基因组 + ~199K 全量 + DATA_VERSION | 自备 | 外部获取后整体放入即启用 |
@@ -80,7 +80,7 @@ python main.py ref-status                   :: 参考库版本与统计
 
 - **prot**：NCBI RefSeq 病毒蛋白全量（首次自动下载 ~107MB 并建库）；换库：替换 `viral_prot.faa` 后删 `organism_tax.tsv`/`db_info.json` 自动重建；
 - **hmm/pfam**：Pfam-A-Viruses.hmm（1,074 profiles，自描述 DESC）；缺失时 HMM 层整体跳过；
-- **cdd**：mmseqs 格式 NCBI Cdd（放 `cdd_db` 前缀即启用）；整库失败自动 8 分片。
+- **bfvd**：mmseqs 格式 BFVD 病毒域库（`misc_db/suvtk/bfvd`，212MB，与 SUVTK 提交链共用；⑥b 注释层2 与 ③b 验证 B 路共用，product 命名同 `bfvd_uniprot_names.tsv`）。原 cdd（NCBI Cdd，~5GB 索引反复 OOM）已于 2026-09-29 移除。
 
 ## 数据库迁移与外置
 

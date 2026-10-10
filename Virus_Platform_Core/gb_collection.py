@@ -157,8 +157,18 @@ def parse_flatfile(gb_text):
 
 
 def _safe_acc_name(acc, idx):
+    """记录 → 落盘文件名（.gb）。
+
+    非法字符清洗后若不像 accession（如检索式命中的无号记录）→ record_N 兜底；
+    兜底名带短随机后缀：跨批次/多文件导入时 record_1 会撞名，撞名即被"续传
+    跳过"逻辑当成已有记录，静默丢数据。
+    """
     acc = re.sub(r'[^A-Za-z0-9_.\-]', '_', acc or '').rstrip('.')
-    return f'{acc}.gb' if _ACC_RE.match(acc or 'x') else f'record_{idx + 1}.gb'
+    if _ACC_RE.match(acc or 'x'):
+        return f'{acc}.gb'
+    import secrets as _secrets
+    tag = _secrets.token_hex(3)
+    return f'record_{idx + 1}_{tag}.gb'
 
 
 def _norm_acc(a):
@@ -203,7 +213,11 @@ def _write_manifest(cdir, logger=None):
     with safe_open(meta_path, 'wt') as f:
         f.write('\t'.join(_META_FIELDS) + '\n')
         for r in rows:
-            f.write('\t'.join(str(r.get(k, '')) for k in _META_FIELDS) + '\n')
+            # TSV 字段转义：tab/换行（organism/acc 等来自解析结果，可能含脏字符）
+            # 会破坏列结构 → 统一替换为空格
+            f.write('\t'.join(
+                re.sub(r'[\t\r\n]+', ' ', str(r.get(k, '')))
+                for k in _META_FIELDS) + '\n')
     # 警告随清单持久化：列表页（只读概览）无需重解析即可展示
     warn_path = os.path.join(cdir, 'warnings.txt')
     with safe_open(warn_path, 'wt') as f:
@@ -262,7 +276,7 @@ def _gb_cache_index():
         for fn in os.listdir(cache):
             if not fn.lower().endswith(_GB_EXTS):
                 continue
-            out[fn.rsplit('.', 1)[0].split('.')[0].upper()] = os.path.join(cache, fn)
+            out[_versionless(fn.rsplit('.', 1)[0])] = os.path.join(cache, fn)
     except OSError:
         return {}
     return out
@@ -290,6 +304,14 @@ def _fetch_accessions_gb(accs, log):
             todo.append(a)
             continue
         if got:
+            # 缓存命中后核对 accession 前缀一致（不含版本号部分相等即可）：
+            # 缓存串号/人工改名时静默采用会把不相关序列混进集合，必须退回联网取
+            got_ids = {_versionless(m.get('acc')) for _c, m in got}
+            if _versionless(a) not in got_ids:
+                log(f'缓存内容与 {a} 不一致（含 {sorted(got_ids)[:3]}），改为联网取',
+                    'WARN')
+                todo.append(a)
+                continue
             pairs.extend(got)
             n_cached += 1
         else:
@@ -421,7 +443,7 @@ def download_gb_collection(name, term=None, accessions=None, max_records=50,
         source, qinfo = 'accessions', {'accessions': accs}
         log(f'按 accession 直取 {n_target} 条')
 
-    existing = {f[:-3].upper() for f in os.listdir(cdir)
+    existing = {os.path.splitext(f)[0].upper() for f in os.listdir(cdir)
                 if f.lower().endswith(_GB_EXTS)}
     if existing:
         log(f'续传模式: 集合内已有 {len(existing)} 条，重复项将跳过')
@@ -455,12 +477,14 @@ def download_gb_collection(name, term=None, accessions=None, max_records=50,
     downloaded = skipped = 0
     for idx, (chunk, m) in enumerate(pairs):
         fname = _safe_acc_name(m['acc'], idx)
-        if fname[:-3].upper() in existing:
+        # 扩展名长度不固定（.gb/.gbk/.gbff），一律 os.path.splitext 剥
+        note_key = os.path.splitext(fname)[0].upper()
+        if note_key in existing:
             skipped += 1
             continue
         with safe_open(os.path.join(cdir, fname), 'wt') as f:
             f.write(chunk)
-        existing.add(fname[:-3].upper())
+        existing.add(note_key)
         downloaded += 1
     log(f'落盘 {downloaded} 条 GenBank 平文，跳过(已有/重复) {skipped} 条')
 
@@ -498,7 +522,7 @@ def import_local_gb(name, paths, logger=None, prog=None):
                    'date': time.strftime('%Y-%m-%d %H:%M:%S')},
                   f, ensure_ascii=False, indent=2)
 
-    existing = {f[:-3].upper() for f in os.listdir(cdir)
+    existing = {os.path.splitext(f)[0].upper() for f in os.listdir(cdir)
                 if f.lower().endswith(_GB_EXTS)}
     imported = skipped = 0
     for i, p in enumerate(paths):
@@ -513,12 +537,13 @@ def import_local_gb(name, paths, logger=None, prog=None):
             text = f.read()
         for idx, (chunk, m) in enumerate(parse_flatfile(text)):
             fname = _safe_acc_name(m['acc'], idx)
-            if fname[:-3].upper() in existing:
+            note_key = os.path.splitext(fname)[0].upper()
+            if note_key in existing:
                 skipped += 1
                 continue
             with safe_open(os.path.join(cdir, fname), 'wt') as f:
                 f.write(chunk)
-            existing.add(fname[:-3].upper())
+            existing.add(note_key)
             imported += 1
         log(f'已导入 {os.path.basename(path)}')
     rows, _ = _write_manifest(cdir, logger=logger)
@@ -580,6 +605,51 @@ def collection_records(name):
     if len(out) < 2:
         raise ValueError(f'集合 [{name}] 可用记录不足 2 条，无法比对建树')
     return out
+
+
+def _collection_diversity(name, molecule='genome'):
+    """建树前多样性快照：分子类型 / Segment / 物种。
+
+    返回 {'molecule_types': [...], 'segments': [...], 'organisms': [...],
+          'warn': [告警文本, ...]}；>1 种分子类型或 >1 个 Segment 时给 WARN
+    （分段病毒各片段、DNA/RNA 混比放同一棵树会出长枝伪影，但不阻断建树）。
+    """
+    from Bio import SeqIO
+    mol_types, segments, organisms = set(), set(), set()
+    cdir = gb_collection_dir(name)
+    try:
+        for fn in sorted(os.listdir(cdir)):
+            if not fn.lower().endswith(_GB_EXTS):
+                continue
+            for rec in SeqIO.parse(os.path.join(cdir, fn), 'genbank'):
+                mt = str(rec.annotations.get('molecule_type') or '').strip().lower()
+                if mt:
+                    mol_types.add(mt)
+                org = str(rec.annotations.get('organism') or '').strip()
+                if org:
+                    organisms.add(org)
+                for feat in rec.features:
+                    if feat.type != 'source':
+                        continue
+                    for k in ('segment', 'number', 'chromosome'):
+                        for v in feat.qualifiers.get(k, []) or []:
+                            if str(v).strip():
+                                segments.add(f'{k}={str(v).strip()}')
+                    break
+    except (OSError, ValueError):
+        pass
+    warn = []
+    if len(mol_types) > 1:
+        warn.append(f'集合内分子类型不止一种（{", ".join(sorted(mol_types))}）：'
+                    f'{molecule} 建树属"混比"，结果的长枝/拓扑可能失真')
+    if len(segments) > 1:
+        warn.append(f'集合内 Segment 编号不止一种（{", ".join(sorted(segments)[:6])}）：'
+                    f'分段病毒各片段不应放同一棵树比较')
+    if len(organisms) > 1 and molecule == 'genome':
+        warn.append(f'集合含 {len(organisms)} 个不同 organism（异源记录混比），'
+                    f'请确认比较对象是否同一分类单元')
+    return {'molecule_types': sorted(mol_types), 'segments': sorted(segments),
+            'organisms': sorted(organisms), 'warn': warn}
 
 
 def _gene_feature_seqs(name, gene, molecule):
@@ -833,6 +903,13 @@ def build_collection_phylo(name, tree_tool='fasttree', trim=True, threads=None,
     log(f'集合 [{name}] {molecule}: {len(recs)} 条序列，'
         f'长度 {min(len(s) for _, _, s in recs)}–{max(len(s) for _, _, s in recs)} {unit}')
 
+    # 建树前多样性检测（不阻断）：分段病毒各片段、异源记录、DNA/RNA 混比
+    # 放进同一棵树会造成长枝伪影/错误拓扑，必须 WARN 并在结果里标注
+    diversity = _collection_diversity(name, molecule)
+    if diversity.get('warn'):
+        for _w in diversity['warn']:
+            log(_w, 'WARN')
+
     if cancelled():
         raise RuntimeError('用户取消')
     if prog:
@@ -895,6 +972,7 @@ def build_collection_phylo(name, tree_tool='fasttree', trim=True, threads=None,
                'molecule': molecule,
                **({'gene': gene} if molecule != 'genome' else {}),
                'trim': trim_info,
+               'diversity': diversity,          # 分子类型/Segment/异源 混比标注
                'tree': os.path.basename(tree_file), **tree_extra,
                'records': [{'acc': a, 'organism': o, 'length': len(s)}
                            for a, o, s in recs]}

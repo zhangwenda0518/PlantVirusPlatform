@@ -172,7 +172,7 @@ def api_settings_get():
                  'host_src': DIRS.get('host_src')
                              or os.path.join(PLATFORM_ROOT, 'host-db'),
                  'virus_src': DIRS.get('virus_src')
-                              or os.path.join(PLATFORM_ROOT, 'databases',
+                              or os.path.join(DIRS['databases'],
                                               'virusref_db'),
                  'logs': DIRS['logs']},
     })
@@ -199,67 +199,111 @@ def api_selfcheck():
 def api_settings_set():
     """设置中心保存：language/email/threads/defaults（逐项校验后持久化）。"""
     body = request.get_json(force=True) or {}
-    from Virus_Platform_Core.config import Config
+    from Virus_Platform_Core.config import Config, _ensure_not_system_dir
     known = {k: t for k, t, *_r in Config.DEFAULT_FIELDS}
+
+    # ── ① 先整体校验，一个字节都不改 cfg ──
+    # 原实现逐项就地写 cfg：中途某一项校验失败时，前面已生效的项既留在内存
+    # 又可能已落盘（目录类 setter 内部各自 save 一次），配置处于"半套用"
+    # 状态。现在先把全部入参校验/规整到 pending，全部通过才统一改 + 统一 save。
+    pending = {}
     if 'language' in body:
         if body['language'] not in ('zh', 'en'):
             abort(400, 'language 仅支持 zh / en')
-        cfg.language = body['language']
+        pending['language'] = body['language']
     if 'email' in body:
-        cfg.email = str(body['email'] or '').strip()
+        pending['email'] = str(body['email'] or '').strip()
     if 'threads' in body:
         try:
-            cfg.threads = max(1, int(body['threads']))
+            pending['threads'] = max(1, int(body['threads']))
         except (TypeError, ValueError):
             abort(400, 'threads 必须是整数')
     if 'defaults' in body and isinstance(body['defaults'], dict):
+        merged = dict(cfg.defaults)          # 基于现值合并，逐键覆盖
         for k, v in body['defaults'].items():
             if k not in known:
                 continue
             kind = known[k]
             try:
                 if kind == 'int':
-                    cfg.defaults[k] = int(v)
+                    merged[k] = int(v)
                 elif kind == 'float':
-                    cfg.defaults[k] = float(v)
+                    merged[k] = float(v)
                 elif kind == 'bool':
-                    cfg.defaults[k] = bool(v)
+                    merged[k] = bool(v)
                 else:
-                    cfg.defaults[k] = str(v)
+                    merged[k] = str(v)
             except (TypeError, ValueError):
                 abort(400, f'参数 {k} 的值不合法: {v!r}')
-    if 'output_root' in body:
+        pending['defaults'] = merged
+
+    # 目录类四项：set_*_root 会建目录/重写 DIRS（有副作用的写），先按同一套
+    # 规则干校验（绝对路径 / 非系统关键目录 / 示例目录须存在 / 可创建），
+    # 全部通过后才统一应用。
+    root_setters = (
+        ('output_root', cfg.set_output_root, '输出目录'),
+        ('input_root', cfg.set_input_root, '输入目录'),
+        ('database_root', cfg.set_database_root, '数据库目录'),
+        ('examples_root', cfg.set_examples_root, '示例目录'),
+    )
+    roots_pending = []
+    for key, _setter, label in root_setters:
+        if key not in body:
+            continue
+        raw = str(body.get(key) or '').strip()
+        if raw:
+            if not os.path.isabs(raw):
+                abort(400, f'{label}需为绝对路径')
+            try:
+                _ensure_not_system_dir(raw)
+            except ValueError as e:
+                abort(400, f'{label}不合法: {e}')
+            if key == 'examples_root':
+                if not os.path.isdir(raw):
+                    abort(400, f'{label}不存在: {raw}')
+            else:
+                try:
+                    os.makedirs(raw, exist_ok=True)
+                except OSError as e:
+                    abort(400, f'{label}无法创建: {e}')
+        roots_pending.append((key, raw))
+
+    # ── ② 统一应用（校验已全过；万一仍出错则整体回滚，不留半套用）──
+    _snap = {'language': cfg.language, 'email': getattr(cfg, 'email', ''),
+             'threads': cfg.threads, 'defaults': dict(cfg.defaults),
+             'roots': {k: getattr(cfg, k, '') for k, _s, _l in root_setters}}
+
+    def _restore():
+        cfg.language = _snap['language']
+        cfg.email = _snap['email']
+        cfg.threads = _snap['threads']
+        cfg.defaults = _snap['defaults']
+        for k, setter, _l in root_setters:
+            try:                     # 回滚失败（磁盘/权限）也只能尽力
+                setter(_snap['roots'][k])
+            except Exception:        # noqa: BLE001
+                pass
         try:
-            cfg.set_output_root(str(body.get('output_root') or ''))
-        except ValueError as e:
-            abort(400, f'输出目录不合法: {e}')
-        except OSError as e:
-            abort(400, f'输出目录无法创建: {e}')
-    if 'input_root' in body:
-        try:
-            cfg.set_input_root(str(body.get('input_root') or ''))
-        except ValueError as e:
-            abort(400, f'输入目录不合法: {e}')
-        except OSError as e:
-            abort(400, f'输入目录无法创建: {e}')
-    if 'database_root' in body:
-        try:
-            cfg.set_database_root(str(body.get('database_root') or ''))
-        except ValueError as e:
-            abort(400, f'数据库目录不合法: {e}')
-        except OSError as e:
-            abort(400, f'数据库目录无法创建: {e}')
-    if 'examples_root' in body:
-        try:
-            cfg.set_examples_root(str(body.get('examples_root') or ''))
-        except ValueError as e:
-            abort(400, f'示例目录不合法: {e}')
-        except OSError as e:
-            abort(400, f'示例目录不可读: {e}')
+            cfg.save()
+        except OSError:
+            pass
+
+    _applying_roots = False
     try:
+        for k, v in pending.items():
+            setattr(cfg, k, v)
+        _setter_map = {k: s for k, s, _l in root_setters}
+        _applying_roots = True
+        for key, raw in roots_pending:
+            _setter_map[key](raw)        # setter 内部会 save 一次
+        _applying_roots = False
         cfg.save()
-    except OSError as e:
-        abort(500, f'配置保存失败: {e}')
+    except (ValueError, OSError) as e:
+        _restore()
+        # 目录类失败多是用户输入不可用（不可创建/权限/系统目录）→ 400；
+        # 落盘失败 → 500。两者都已整体回滚。
+        abort(400 if _applying_roots else 500,
+              f'配置保存失败（已回滚本次修改）: {e}')
     # 返回数据库就绪状态（前端切换 database_root 后可即时提示缺库）
     from Virus_Platform_Core.kunpeng import db_ready
     from Virus_Platform_Core.taxonomy import taxonomy_ready

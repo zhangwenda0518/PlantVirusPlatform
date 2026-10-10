@@ -114,15 +114,20 @@ def find_depth_file(depth_dir, sample):
     candidates = [
         f"{sample}.SiteDepth", f"{sample}.chr.SiteDepth",
         f"{sample}.SiteDepth.gz", f"{sample}.chr.SiteDepth.gz",
+        # 平台产物精确名（pandepth 前缀链：<样本>_pandepth.pandepth.SiteDepth.gz）
+        f"{sample}_pandepth.pandepth.SiteDepth.gz",
     ]
     for name in candidates:
         p = os.path.join(str(depth_dir), name)
         if os.path.exists(p):
             return p
-    # 兜底：pandepth 带前缀的产物名，如 S1_pandepth.pandepth.SiteDepth.gz
+    # 兜底：pandepth 带前缀的产物名。glob 必须锚定 <样本>_pandepth 前缀——
+    # 旧写法 f"{sample}*SiteDepth*" 对样本 S1 会命中 S10/S1x 的深度表
+    # （样本名互为前缀时张冠李戴）。
     d = Path(depth_dir)
     if d.is_dir():
-        hits = sorted(d.glob(f"{sample}*SiteDepth*"))
+        hits = [h for h in sorted(d.glob(f"{sample}_pandepth*"))
+                if 'SiteDepth' in h.name]
         if hits:
             return str(hits[0])
     return None
@@ -258,7 +263,12 @@ def plot_one_virus(sample, virus, chrom_df, v_stat, virus_genes, out_dir,
     mean_depth = float(v_stat.get('MeanDepth', 0) or 0)
     tax = str(v_stat.get('taxonomy', '') or '').strip()
     cov = float(v_stat.get('Coverage(%)', 0) or 0)
-    reads = int(v_stat.get('MappedReads', v_stat.get('Uniq_Reads', 0)) or 0)
+    # reads 口径与均值一致（2026-10-04 目检：Uniq_Reads 是 read pair 数，
+    # 双端映射记录 = 2×pair，且深度均值本就按双端记录累计）：
+    # 优先用 MappedReads（真实映射记录数），缺省时 Uniq_Reads×2 折算
+    reads = int(v_stat.get('MappedReads', 0) or 0)
+    if not reads:
+        reads = 2 * int(v_stat.get('Uniq_Reads', 0) or 0)
     safe_tax = safe_name(tax)
     safe_vname = safe_name(virus)
     # 未注释参考的 taxonomy 会等于 accession，避免文件名重复
@@ -274,8 +284,8 @@ def plot_one_virus(sample, virus, chrom_df, v_stat, virus_genes, out_dir,
     tax_disp = textwrap.shorten(tax, width=55, placeholder='…') if tax else ''
     main_title = virus if (not tax_disp or tax_disp == str(virus)) \
         else f"{tax_disp} ({virus})"
-    subtitle = (f"Sample {sample} · coverage {cov:.1f}% · "
-                f"mean depth {mean_depth:.2f}× · {reads} reads")
+    subtitle = (f"Sample {sample} · coverage {cov:.2f}% · "
+                 f"mean depth {mean_depth:.2f}× · {reads:,} reads")
     tpm = v_stat.get('TPM')
     if 'TPM' in v_stat and pd.notna(tpm):
         subtitle += f" · TPM {float(tpm):.2f}"
@@ -297,8 +307,9 @@ def plot_one_virus(sample, virus, chrom_df, v_stat, virus_genes, out_dir,
     ax.set_ylabel('Read depth (×)', fontsize=9.5)
     ax.set_ylim(0, max(1.0, float(np.max(y_smooth)) if len(y_smooth) else 1.0) * 1.1)
     ax.set_xlim(0, max_x * 1.01)
-    ax.legend(loc='upper right', fontsize=8, handlelength=1.8,
-              borderaxespad=0.4, frameon=True, framealpha=0.78,
+    # 图例放左上（右半常是高深度峰区，upper right 会压峰尖）且降透明度
+    ax.legend(loc='upper left', fontsize=8, handlelength=1.8,
+              borderaxespad=0.4, frameon=True, framealpha=0.45,
               facecolor='white', edgecolor='none')
     ax.grid(axis='y', color='#d9d9d9', lw=0.6, alpha=0.8)
     ax.set_axisbelow(True)

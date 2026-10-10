@@ -33,8 +33,9 @@ def _exr():
 
 
 def _ex_in():
-    return DIRS.get('examples') or os.path.join(PLATFORM_ROOT, 'databases',
-                                                'examples')
+    # 回退分支也走 DIRS['databases']（分发版数据库外置会重定向）
+    # —— 2026-10-07 审查 P1-2 同类
+    return DIRS.get('examples') or os.path.join(DIRS['databases'], 'examples')
 
 # 可内联预览的文本类扩展名（其余按下载/图片处理）
 _TEXT_EXT = {'.json', '.tsv', '.csv', '.txt', '.md', '.nwk', '.gff', '.gff3',
@@ -149,7 +150,7 @@ def api_example(module):
 def api_example_input(name):
     """取示例**输入**文件（<示例根>/ 下，只读）。
 
-    前端「✨ 示例」需要把示例 FASTA 正文填进 textarea（CDD / BLAST 走粘贴入口、
+    前端「✨ 示例」需要把示例 FASTA 正文填进 textarea（BLAST 走粘贴入口、
     LOGAN 粘贴框），而 databases/ 不经 HTTP 暴露，故单开只读路由。
     """
     root = _ex_in()

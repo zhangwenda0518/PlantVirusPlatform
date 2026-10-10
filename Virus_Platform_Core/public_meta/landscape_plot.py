@@ -50,6 +50,13 @@ def clean_series(series):
 def wrap_labels(labels, width=35):
     return [textwrap.fill(str(label), width=width) for label in labels]
 
+def _note_empty(ax, msg='No valid data'):
+    """面板无可用数据时给出居中占位提示，而不是留一张空坐标轴。"""
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.text(0.5, 0.5, msg, ha='center', va='center', transform=ax.transAxes,
+            fontsize=14, color='#888888', style='italic')
+
 def add_bar_labels(ax, values, is_horizontal=True):
     max_val = max(values) if len(values) > 0 else 1
     offset = max_val * 0.02
@@ -108,29 +115,39 @@ def _prep(df):
 # 1. 六个面板的独立绘制函数（合并图与单图共用）
 # ==========================================
 def _pnl_a_temporal(ax, df):
-    """A. 时间分布趋势。"""
+    """A. 时间分布趋势。年份少（≤12）画柱状图——稀疏折线加大面积填充
+    会把整个坐标区糊成色块；年份多时保留折线+填充体现趋势。"""
     df_valid_years = df[df['Year'] > 2000]
     year_counts = df_valid_years['Year'].value_counts().sort_index()
-    if year_counts.empty:
-        ax.text(0.5, 0.5, 'No valid release dates', ha='center', va='center',
-                transform=ax.transAxes, fontsize=13, color='#888888')
-        ax.set_title('A. Temporal Distribution of Sequencing Data', loc='left',
-                     fontsize=18, fontweight='bold')
-        return
-    ax.plot(year_counts.index, year_counts.values, marker='o', linestyle='-', linewidth=3.5,
-            markersize=10, color='#0072B2', markerfacecolor='white', markeredgewidth=2.5, zorder=3)
-    ax.fill_between(year_counts.index, year_counts.values, color='#0072B2', alpha=0.15, zorder=2)
-    ax.grid(axis='y', linestyle='--', alpha=0.6, color='#D3D3D3', zorder=1)
-    for x, y in zip(year_counts.index, year_counts.values):
-        ax.text(x, y + (max(year_counts.values)*0.03), str(y), ha='center', va='bottom',
-                fontsize=13, fontweight='bold', color='#333333')
-    ax.set_title('A. Temporal Distribution of Sequencing Data', loc='left', fontsize=18, fontweight='bold')
+    ax.set_title('A. Temporal Distribution of Sequencing Data', loc='left',
+                 fontsize=18, fontweight='bold')
     ax.set_xlabel('Release Year', fontsize=14)
-    ax.set_ylabel('Number of Runs', fontsize=14, labelpad=12,
-                  rotation=0, ha='right', va='center')
-    ax.yaxis.set_label_coords(-0.12, 0.5)
-    ax.tick_params(axis='x', rotation=45, labelsize=12)
-    ax.set_xticks(year_counts.index)
+    ax.set_ylabel('Number of Runs', fontsize=14)
+    if year_counts.empty:
+        _note_empty(ax, 'No valid release dates')
+        return
+    years = list(year_counts.index)
+    vals = list(year_counts.values)
+    if len(years) <= 12:
+        ax.bar(range(len(years)), vals, width=0.6, color='#0072B2', zorder=3)
+        for i, v in enumerate(vals):
+            ax.text(i, v + max(vals) * 0.02, str(v), ha='center', va='bottom',
+                    fontsize=13, fontweight='bold', color='#333333', zorder=4)
+        ax.set_xticks(range(len(years)))
+        ax.set_xticklabels([str(y) for y in years], fontsize=12)
+        ax.set_ylim(0, max(vals) * 1.15)
+    else:
+        ax.plot(years, vals, marker='o', linestyle='-', linewidth=3.5,
+                markersize=10, color='#0072B2', markerfacecolor='white',
+                markeredgewidth=2.5, zorder=3)
+        ax.fill_between(years, vals, color='#0072B2', alpha=0.15, zorder=2)
+        for x, y in zip(years, vals):
+            ax.text(x, y + (max(vals) * 0.03), str(y), ha='center', va='bottom',
+                    fontsize=13, fontweight='bold', color='#333333')
+        # 年份多时交给自动刻度定位（每年一ticks会挤成一团并把绘图区压窄）
+        ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=8, integer=True))
+        ax.tick_params(axis='x', labelsize=12)
+    ax.grid(axis='y', linestyle='--', alpha=0.6, color='#D3D3D3', zorder=1)
 
 def _pnl_b_database(ax, df):
     """B. 数据来源比例环形图。"""
@@ -144,49 +161,64 @@ def _pnl_b_database(ax, df):
         wedgeprops=dict(width=0.55, edgecolor='w', linewidth=3),
         radius=1.0,
     )
-    ring_center = 1.0 - 0.55 / 2
-    label_r = ring_center * 0.95
-    for i, wedge in enumerate(wedges):
-        ang = math.radians((wedge.theta1 + wedge.theta2) / 2)
-        arc_deg = abs(wedge.theta2 - wedge.theta1)
-        fs = max(9, min(14, arc_deg * 0.06))
-        name = db_counts.index[i]
-        val = db_counts.values[i]
-        pct = val / total * 100
-        label = f"{name}\n{pct:.1f}%  (n={val})"
-        ax.text(label_r * math.cos(ang), label_r * math.sin(ang),
-                label, ha='center', va='center',
-                fontsize=fs, fontweight='bold', color='white',
-                linespacing=1.2)
+    if len(db_counts) == 1:
+        # 单一来源：比例文字印在环心（印在圆环上会溢出）
+        name = db_counts.index[0]
+        ax.text(0, 0, f'{name}\n100%\n(n={total})', ha='center', va='center',
+                fontsize=15, fontweight='bold', color=COLORS_DB.get(name, '#555555'),
+                linespacing=1.4)
+    else:
+        ring_center = 1.0 - 0.55 / 2
+        label_r = ring_center * 0.95
+        for i, wedge in enumerate(wedges):
+            ang = math.radians((wedge.theta1 + wedge.theta2) / 2)
+            arc_deg = abs(wedge.theta2 - wedge.theta1)
+            fs = max(9, min(14, arc_deg * 0.06))
+            name = db_counts.index[i]
+            val = db_counts.values[i]
+            pct = val / total * 100
+            label = f"{name}\n{pct:.1f}%  (n={val})"
+            ax.text(label_r * math.cos(ang), label_r * math.sin(ang),
+                    label, ha='center', va='center',
+                    fontsize=fs, fontweight='bold', color='white',
+                    linespacing=1.2)
     ax.set_title('B. Proportion of Data Origin', loc='left', fontsize=18, fontweight='bold', pad=30)
 
 def _pnl_c_organizations(ax, df):
     """C. 核心贡献机构 Top10。"""
     org_counts = clean_series(df['Organization_CenterName']).value_counts().head(10).sort_values(ascending=True)
-    n = len(org_counts)
-    y_pos = range(n)
-    ax.barh(y_pos, org_counts.values, height=0.65, color='#4C72B0')
-    for i, v in enumerate(org_counts.values):
-        ax.text(v + max(org_counts.values)*0.02, i, str(v), va='center', fontsize=11)
-    ax.set_yticks(list(y_pos))
-    ax.set_yticklabels(org_counts.index, fontsize=10, linespacing=1.4)
-    ax.set_title('C. Top 10 Contributing Organizations', loc='left', fontsize=16, fontweight='bold')
+    if org_counts.empty:
+        _note_empty(ax, 'No organization metadata')
+    else:
+        n = len(org_counts)
+        y_pos = range(n)
+        ax.barh(y_pos, org_counts.values, height=0.65, color='#4C72B0')
+        for i, v in enumerate(org_counts.values):
+            ax.text(v + max(org_counts.values)*0.02, i, str(v), va='center', fontsize=11)
+        ax.set_yticks(list(y_pos))
+        ax.set_yticklabels(wrap_labels(org_counts.index, 28), fontsize=10, linespacing=1.3)
+        ax.invert_yaxis()
+    top_n = f'Top {len(org_counts)}' if 0 < len(org_counts) < 10 else 'Top 10'
+    ax.set_title(f'C. {top_n} Contributing Organizations', loc='left', fontsize=16, fontweight='bold')
     ax.set_xlabel('Number of Runs', fontsize=14)
-    ax.invert_yaxis()
 
 def _pnl_d_tissues(ax, df):
     """D. 研究部位偏好 Top10。"""
     if 'Tissue' in df.columns:
         tissue_counts = clean_series(df['Tissue']).value_counts().head(10).sort_values(ascending=True)
-        if not tissue_counts.empty:
-            n = len(tissue_counts)
-            y_pos = range(n)
-            ax.barh(y_pos, tissue_counts.values, height=0.65, color='#4C72B0', edgecolor='white')
-            for i, v in enumerate(tissue_counts.values):
-                ax.text(v + max(tissue_counts.values)*0.02, i, str(v), va='center', fontsize=11)
-            ax.set_yticks(list(y_pos))
-            ax.set_yticklabels(tissue_counts.index, fontsize=10)
-            ax.invert_yaxis()
+    else:
+        tissue_counts = pd.Series(dtype=int)
+    if tissue_counts.empty:
+        _note_empty(ax, 'No tissue metadata')
+    else:
+        n = len(tissue_counts)
+        y_pos = range(n)
+        ax.barh(y_pos, tissue_counts.values, height=0.65, color='#4C72B0', edgecolor='white')
+        for i, v in enumerate(tissue_counts.values):
+            ax.text(v + max(tissue_counts.values)*0.02, i, str(v), va='center', fontsize=11)
+        ax.set_yticks(list(y_pos))
+        ax.set_yticklabels(wrap_labels(tissue_counts.index, 30), fontsize=10)
+        ax.invert_yaxis()
     ax.set_title('D. Top Investigated Biological Tissues', loc='left', fontsize=16, fontweight='bold')
     ax.set_xlabel('Number of Runs', fontsize=14)
 
@@ -194,15 +226,19 @@ def _pnl_e_regions(ax, df):
     """E. 采样地理分布 Top10。"""
     if 'Location_Clean' in df.columns:
         loc_counts = clean_series(df['Location_Clean']).value_counts().head(10).sort_values(ascending=True)
-        if not loc_counts.empty:
-            n = len(loc_counts)
-            y_pos = range(n)
-            ax.barh(y_pos, loc_counts.values, height=0.65, color='#C44E52')
-            for i, v in enumerate(loc_counts.values):
-                ax.text(v + max(loc_counts.values)*0.02, i, str(v), va='center', fontsize=11)
-            ax.set_yticks(list(y_pos))
-            ax.set_yticklabels(loc_counts.index, fontsize=10)
-            ax.invert_yaxis()
+    else:
+        loc_counts = pd.Series(dtype=int)
+    if loc_counts.empty:
+        _note_empty(ax, 'No location metadata')
+    else:
+        n = len(loc_counts)
+        y_pos = range(n)
+        ax.barh(y_pos, loc_counts.values, height=0.65, color='#C44E52')
+        for i, v in enumerate(loc_counts.values):
+            ax.text(v + max(loc_counts.values)*0.02, i, str(v), va='center', fontsize=11)
+        ax.set_yticks(list(y_pos))
+        ax.set_yticklabels(wrap_labels(loc_counts.index, 24), fontsize=10)
+        ax.invert_yaxis()
     ax.set_title('E. Top Sample Collection Regions', loc='left', fontsize=16, fontweight='bold')
     ax.set_xlabel('Number of Runs', fontsize=14)
 
@@ -210,15 +246,19 @@ def _pnl_f_stages(ax, df):
     """F. 发育时期偏好 Top10。"""
     if 'Age_GrowthStage_Clean' in df.columns:
         stage_counts = clean_series(df['Age_GrowthStage_Clean']).value_counts().head(10).sort_values(ascending=True)
-        if not stage_counts.empty:
-            n = len(stage_counts)
-            y_pos = range(n)
-            ax.barh(y_pos, stage_counts.values, height=0.65, color='#55A868', edgecolor='white')
-            for i, v in enumerate(stage_counts.values):
-                ax.text(v + max(stage_counts.values)*0.02, i, str(v), va='center', fontsize=11)
-            ax.set_yticks(list(y_pos))
-            ax.set_yticklabels(stage_counts.index, fontsize=10, linespacing=1.2)
-            ax.invert_yaxis()
+    else:
+        stage_counts = pd.Series(dtype=int)
+    if stage_counts.empty:
+        _note_empty(ax, 'No developmental stage metadata')
+    else:
+        n = len(stage_counts)
+        y_pos = range(n)
+        ax.barh(y_pos, stage_counts.values, height=0.65, color='#55A868', edgecolor='white')
+        for i, v in enumerate(stage_counts.values):
+            ax.text(v + max(stage_counts.values)*0.02, i, str(v), va='center', fontsize=11)
+        ax.set_yticks(list(y_pos))
+        ax.set_yticklabels(wrap_labels(stage_counts.index, 30), fontsize=10, linespacing=1.2)
+        ax.invert_yaxis()
     ax.set_title('F. Top Developmental Stages / Ages', loc='left', fontsize=16, fontweight='bold')
     ax.set_xlabel('Number of Runs', fontsize=14)
 
@@ -237,7 +277,9 @@ def plot_sci_landscape(csv_path, output_dir="SCI_Figures_Output"):
     独立图文件名: Panel_<key>.png/.pdf（如 Panel_A_temporal.png）。"""
     os.makedirs(output_dir, exist_ok=True)
     print(f"📥 正在读取数据: {csv_path}")
-    df = _prep(pd.read_csv(csv_path))
+    # utf-8-sig：平台导出的 CSV 带 BOM（Excel 直开不乱码），不指定编码时首列
+    # 列名会带 '\ufeff' 前缀，导致列匹配静默失败
+    df = _prep(pd.read_csv(csv_path, encoding='utf-8-sig'))
 
     # ==========================================
     # 2. 合并总画布 (3x2 完美布局)

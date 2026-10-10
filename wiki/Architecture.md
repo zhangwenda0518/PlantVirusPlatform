@@ -10,10 +10,10 @@
 flowchart TB
     subgraph 入口层
         GUI["app.py<br/>Web GUI（Flask，仅监听 127.0.0.1）<br/>pywebview 桌面壳 / 浏览器"]
-        CLI["main.py<br/>CLI（argparse，30+ 子命令）"]
+        CLI["main.py<br/>CLI（argparse，41 子命令）"]
     end
     subgraph 核心层
-        CORE["Virus_Platform_Core/<br/>计算与流程引擎（GUI 与 CLI 共用）<br/>70+ 模块：pipeline / kunpeng / kvsuite / assembly /<br/>host_analysis / orf / orf_annot / phylo / primer /<br/>viz / phylodyn 系 / beast 系 / phylogeo / …"]
+        CORE["Virus_Platform_Core/<br/>计算与流程引擎（GUI 与 CLI 共用）<br/>128 模块：pipeline / kunpeng / kvsuite / assembly /<br/>host_analysis / orf / orf_annot / phylo / primer /<br/>viz / phylodyn 系 / beast 系 / phylogeo / crispr / ai_agent / …"]
         WEB["Virus_Platform_Core/web/<br/>Flask 蓝图：页面 / API / 任务状态"]
     end
     subgraph 资源层
@@ -29,6 +29,7 @@ flowchart TB
 
 - **GUI 与 CLI 共用同一引擎**：`app.py` 只做页面与任务调度，所有计算都在 `Virus_Platform_Core`；`main.py` 直接调引擎函数，因此两者结果、断点、参数语义完全一致。
 - **打包版引擎入口**：`engine_entry.py` 处理 `VirusPlatform.exe --run-engine <脚本名>`，冻结分发（PyInstaller）下任务以 `__main__` 语义在子进程内执行。
+- **规模数字口径**（2026-10-08 复核）：`Virus_Platform_Core/` 全包共 **135** 个 `.py`（含 7 个 `__init__.py`，其中 6 个为子包），即非 `__init__` 模块 **128** 个 / **89.9k** 行；`main.py` 里 `add_parser` 的子命令 **41** 个。改这两个数字时请按同一口径重算 —— 子命令用 AST 抽 `add_parser` 的首个常量实参，模块用 `os.walk` 计数并排除 `__pycache__`；**不要目测**（旧版写"70+ / 30+"就是这么来的，已明显脱离现实）。
 
 ## 目录结构（四层分离：代码 / 数据库 / 运行期 / 外部依赖）
 
@@ -36,7 +37,7 @@ flowchart TB
 VirusPlatform/
 ├─ app.py                    Web GUI 服务
 ├─ main.py                   CLI 入口
-├─ Virus_Platform_Core/      核心 pipeline 包（70+ 模块，见下）
+├─ Virus_Platform_Core/      核心 pipeline 包（128 模块，见下）
 ├─ webapp/                   页面模板与静态资源（app.css / app.js / i18n.js）
 │  └─ static/brand/          徽标与 favicon
 ├─ tests/                    自检、造数与集成测试（make_examples.py 生成内置示例）

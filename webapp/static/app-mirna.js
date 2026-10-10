@@ -27,10 +27,10 @@ async function runMirna(btn) {
     algorithms: mirSelectedAlgorithms().join(',')
   };
   if (!params.mirna_text && !params.mirna_fasta) {
-    alert('请先粘贴 miRNA 序列或选择 miRNA FASTA 文件'); return;
+    alert(t('ui.mi.needMirna')); return;
   }
   if (!params.virus_text && !params.virus_fasta) {
-    alert('请先粘贴病毒序列或选择病毒 FASTA 文件'); return;
+    alert(t('ui.mi.needVirus')); return;
   }
   _submitTool('mirna', params, null, btn, '预测中…', loadMirnaResult);
 }
@@ -49,7 +49,7 @@ async function loadMirnaResult(run) {
     $('mir-detail').style.display = 'none';
     mirResetFilters();
   } catch (e) {
-    alert('读取结果失败: ' + e);
+    alert(t('ui.mi.readResultFail') + ': ' + e);
   }
 }
 
@@ -283,18 +283,27 @@ function mirDuplexSVG(aln) {
 function mirAlnHTML(aln) {
   const lines = aln.split('\n');
   if (lines.length < 3) return esc(aln);
-  const mCore = lines[0].replace(/^miRNA\s+5'\s*/, '').replace(/\s*3'$/, '');
+  // 2026-10-03 适配新帧：比对串改为 miRanda 官方书写约定（上行 miRNA 3'→5'，
+  // 与官方 miranda.exe 输出一致）。兼容旧格式（上行 5'→3'）：按上行标签定帧，
+  // 种子位（miRNA 5' 第 2-8 位）在新帧里自右向左数。
+  const mLabel = lines[0].match(/^miRNA\s+([53])'/);
+  const mir3first = mLabel ? mLabel[1] === '3' : false;
+  const mTop = mir3first ? "3'" : "5'", mBot = mir3first ? "5'" : "3'";
+  const mCore = lines[0].replace(/^miRNA\s+[53]'\s*/, '').replace(/\s*[53]'$/, '');
   const pCore = lines[1].replace(/^\s+/, '');
-  const tCore = lines[2].replace(/^target\s+3'\s*/, '').replace(/\s*5'$/, '');
+  const tCore = lines[2].replace(/^target\s+[53]'\s*/, '').replace(/\s*[53]'$/, '');
+  const nMir = mCore.replace(/-/g, '').length;
   function colorLine(seq, pipes, isMirna) {
     let pos = 0, html = '';
     for (let i = 0; i < seq.length; i++) {
       const c = seq[i];
       if (c === '-') { html += '<span class="mir-a-gp">' + c + '</span>'; continue; }
       pos++;
+      // 5' 起算位次：新帧上行左端是 3' 端，需换算
+      const pos5 = (isMirna && mir3first) ? (nMir - pos + 1) : pos;
       const p = pipes[i] || ' ';
       const cls = p === '|' ? 'mir-a-wc' : p === ':' ? 'mir-a-wo' : p === '.' ? 'mir-a-mm' : '';
-      const seedCls = (isMirna && pos >= 2 && pos <= 8) ? ' mir-a-seed' : '';
+      const seedCls = (isMirna && pos5 >= 2 && pos5 <= 8) ? ' mir-a-seed' : '';
       html += '<span class="' + cls + seedCls + '">' + c + '</span>';
     }
     return html;
@@ -304,8 +313,8 @@ function mirAlnHTML(aln) {
     pHtml += pCore[k] === '|' ? '<span class="mir-a-wc">|</span>'
       : pCore[k] === ':' ? '<span class="mir-a-wo">:</span>' : pCore[k];
   }
-  return "miRNA  5' " + colorLine(mCore, pCore, true) + " 3'\n"
-    + "       " + pHtml + "\ntarget 3' " + colorLine(tCore, pCore, false) + " 5'";
+  return "miRNA  " + mTop + " " + colorLine(mCore, pCore, true) + " " + mBot + "\n"
+    + "       " + pHtml + "\ntarget " + mBot + " " + colorLine(tCore, pCore, false) + " " + mTop;
 }
 
 /* —— 各引擎状态表（移植 PAmiRDB renderAlgoTable）—— */
@@ -495,17 +504,27 @@ function mirExportJSON() {
 function mirIsQuery2(r) {
   const lines = (r.alignment || '').split('\n');
   if (lines.length < 3) return false;
-  const mirnaLine = lines[0].replace("miRNA  5' ", '').replace(" 3'", '').trim();
+  // 2026-10-03 适配新帧：上行改为 miRNA 3'→5'（5' 端在右），位次需自右向左数；
+  // 配对判定改用碱基互补（本模块比对串的 '|' 同时覆盖 WC 与 G:U wobble，
+  // 只看杠线会把 wobble 误判为 WC）。兼容旧格式（上行 5'→3'）。
+  const mLabel = lines[0].match(/^miRNA\s+([53])'/);
+  const mir3first = mLabel ? mLabel[1] === '3' : false;
+  const mirnaLine = lines[0].replace(/^miRNA\s+[53]'\s*/, '').replace(/\s*[53]'$/, '');
   const pipeLine = lines[1].trim();
+  const targetLine = lines[2].replace(/^target\s+[53]'\s*/, '').replace(/\s*[53]'$/, '');
+  const nMir = mirnaLine.replace(/-/g, '').length;
   const ok = { 10: false, 11: false };
   let pos = 0;
   for (let i = 0; i < mirnaLine.length && i < pipeLine.length; i++) {
     if (mirnaLine[i] === '-') continue;
     pos++;
-    if (pos > 11) break;
-    if (pos === 10 || pos === 11) {
+    const pos5 = mir3first ? (nMir - pos + 1) : pos;
+    if (pos5 > 11) continue;
+    if (pos5 === 10 || pos5 === 11) {
       const b = mirnaLine[i].toUpperCase();
-      ok[pos] = (b === 'A' || b === 'U') && pipeLine[i] === '|';
+      const t = (targetLine[i] || '').toUpperCase();
+      const partner = { 'A': 'U', 'U': 'A', 'G': 'C', 'C': 'G' }[b];
+      ok[pos5] = (b === 'A' || b === 'U') && !!partner && t === partner;
     }
   }
   return ok[10] && ok[11];
@@ -533,7 +552,7 @@ function mirOpenLib() {
     }).catch(e => {
       mirLibS.loaded = false;
       $('mirLibMask').style.display = 'none';
-      alert('候选库加载失败: ' + e);
+      alert(t('ui.mi.candLibFail') + ': ' + e);
     });
   }
 }
@@ -575,7 +594,7 @@ async function mirLibSearch() {
         + '<td style="padding:4px 6px;font-size:10px;color:#67748e">' + note + '</td></tr>';
     }).join('');
   } catch (e) {
-    alert('检索失败: ' + e);
+    alert(t('ui.mi.searchFail') + ': ' + e);
   }
 }
 
@@ -588,7 +607,7 @@ function mirLibToggle(idx, on) {
 }
 
 function mirLibAdd() {
-  if (!mirLibS.sel.size) { alert('请先勾选候选 miRNA'); return; }
+  if (!mirLibS.sel.size) { alert(t('ui.mi.needCand')); return; }
   const ta = $('mirna_text');
   const lines = [];
   mirLibS.sel.forEach(r => {

@@ -27,6 +27,7 @@
    },
    "dropped_unknown_levels": {},
    "n_country_only": 0,
+   "n_unknown_level_all": 0,
    "n_date_ambiguous_frac": 0,
    "n_date_ok": 15,
    "warnings": [
@@ -47,6 +48,7 @@
   },
   "dropped_unknown_levels": {},
   "n_country_only": 0,
+  "n_unknown_level_all": 0,
   "n_date_ambiguous_frac": 0,
   "n_date_ok": 15,
   "warnings": [
@@ -61,8 +63,8 @@
   "15 行的日期只精确到**年**，按 mid 口径折算（mid＝6 月 15 日 / start＝1 月 1 日）"
  ],
  "abs": {
-  "seq": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20260921_035615_f9c226\\pdprep\\sequences.fasta",
-  "meta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20260921_035615_f9c226\\pdprep\\metadata.csv",
+  "seq": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20261006_162833_aa4d46\\pdprep\\sequences.fasta",
+  "meta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20261006_162833_aa4d46\\pdprep\\metadata.csv",
   "sub_seq": null,
   "sub_meta": null,
   "coords": null
@@ -117,5 +119,5 @@
   "map_points": [],
   "has_coords": false
  },
- "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20260921_035615_f9c226\\pdprep"
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20261006_162833_aa4d46\\pdprep"
 }

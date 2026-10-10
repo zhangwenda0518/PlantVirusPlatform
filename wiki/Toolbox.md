@@ -13,7 +13,7 @@
 | 质控 | fastp 独立运行 |
 | 病毒鉴定提取 | kvsuite 识别 + 病毒 reads 提取 |
 | 组装 | SPAdes 单跑 |
-| contig 分类与深度分析四件套 | kunpeng 分类 / contig 深度注释（Taxonomy 8 级谱系统列）/ 离线检索（BLASTN·DIAMOND BLASTX·mmseqs2 CDD，`local_search.py`）/ contig 功能画像 |
+| contig 分类与深度分析 | kunpeng 分类 / contig 深度注释（Taxonomy 8 级谱系统列）/ 离线检索（BLASTN·DIAMOND BLASTX，`local_search.py`）/ contig 功能画像（含 BFVD 病毒域） |
 
 ## 参考数据与比较分析
 
@@ -56,6 +56,8 @@ RNAi 防控用的 dsRNA 臂设计，四段链路一次跑完：
 2. **效价评分**（`dsrna_scoring.py`）：dsRIP 论文公式的平台统一实现（Cedden et al., BMC Biology 2025, 23:114 忠实移植）——臂/siRNA 效价与安全评分，合并原管线两份复制实现为唯一口径；
 3. **宿主脱靶扫描**（`dsrna_offtarget.py`）：k-mer 排序 uint64 数组 + 二分，纯 numpy 实现的大规模扫描（对宿主转录组/基因组排查 siRNA 脱靶）；
 4. **引物**：Primer3 设计扩增臂的引物。
+
+> 脱靶面板（`databases/dsrna/panel/`，物种 RefSeq mRNA，GB 级）**不随软件/数据库包分发**（2026-10 瘦身裁定）：不放置面板时自动跳过脱靶扫描与安全评分（效价照常），自备面板放入该目录后即自动参与扫描。
 
 ## miRNA 靶标预测（mirna_target/）
 

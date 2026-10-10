@@ -1,10 +1,18 @@
 # -*- coding: utf-8 -*-
 """共识序列比较评测：
-  A. 模拟自洽：库内参考 → 模拟 150bp PE 无错误 reads(200×) → 平台共识(minibwa)
-     → 与源参考逐碱基比对 → 覆盖率/一致率（管线自身出错率口径）
-  B. Bari 小RNA 实测：S3 真实 sRNA reads → 平台共识（minibwa 拒绝 21-24nt，
-     预期失败=发现）
+  A. 模拟自洽（注意：**不是**准确度测验）：库内参考 → 模拟 150bp PE **无错误**
+     reads（200× 平铺、无测序错误、无污染）→ 平台共识(minibwa) → 与源参考
+     逐碱基比对 → 覆盖率/一致率。所得"零引入错误"是无错输入下的自洽性测试，
+     仅证明管线自身不引入变异，不表征真实数据（含测序错误/低质量碱基）的
+     处理能力。（2026-10-03 披露）
+  B. Bari 小RNA 实测：S3 真实 sRNA reads → 平台共识（0 映射 → 全 N 静默产物，
+     发现=记录）
   C. 组装替代路线：S3 srna 组装 contigs 对 PVB 两段的覆盖/一致率
+
+参数披露（2026-10-03）：A/B/C 均显式用 vc_depth=5、vc_qual=20、vc_freq=0.5。
+评测当时（2026-09）平台默认 vc_depth 实为 1（帮助文本误写 5，2026-10 已修正
+默认=5），故本结果不代表平台当时默认口径；**平台默认 vc_depth=1（旧默认）下的
+表现未测**。
 
 用法: python run_cons_bench.py <out_dir>
 结束打印 RESULT:{...}
@@ -23,9 +31,22 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 sys.path.insert(0, REPO)
 
-KV_REF = os.path.join(REPO, 'databases', 'virusref_db', 'kv_index', 'reference.fasta')
-BARI_S3 = r'E:\谷歌下载\测试数据验证\Raw-data-Bari.Workshop\Sample_3.fastq'
-OUT = sys.argv[1] if len(sys.argv) > 1 else r'C:\vp_srna_test\bench\cons'
+# 评测快照参考库（2026-09 的 kv_index；2026-09-29 起被 plant_ref 取代）。
+# 优先级：环境变量 VP_BENCH_DB > 旧默认路径；缺库时报清晰中文错误。
+_DB_DIR = os.environ.get('VP_BENCH_DB') or os.path.join(
+    REPO, 'databases', 'virusref_db', 'kv_index')
+KV_REF = os.path.join(_DB_DIR, 'reference.fasta')
+if not os.path.isfile(KV_REF):
+    raise SystemExit(
+        f'[基准库缺失] 找不到参考库 FASTA：{KV_REF}\n'
+        f'说明：本评测快照绑定 2026-09 的 kv_index 库（manifest 2026-09-19），'
+        f'2026-09-29 起平台默认库已改为 virusref_db/plant_ref/，旧目录已移除。\n'
+        f'复现请先重建等价库，或用环境变量 VP_BENCH_DB=<库目录> 显式指定。')
+BARI_S3 = (os.environ.get('VP_BENCH_BARI')
+           or r'E:\谷歌下载\测试数据验证\Raw-data-Bari.Workshop\Sample_3.fastq')
+OUT = (sys.argv[1] if len(sys.argv) > 1
+       else os.environ.get('VP_BENCH_CONS_OUT')
+       or r'C:\vp_srna_test\bench\cons')
 
 COMP = str.maketrans('ACGTNacgtn', 'TGCANtgcan')
 

@@ -1,18 +1,18 @@
 {
   "chain": "virchain",
-  "run": "virchain_20260909_232453",
+  "run": "virchain_20261006_162541_1b8f59",
   "label": "病毒识别和分类分析 一键流程",
   "run_identify": true,
-  "created": "2026-09-09 23:24:53",
+  "created": "2026-10-06 16:25:41",
   "steps": [
     {
       "key": "identify",
-      "run": "identify_20260909_232453",
+      "run": "identify_20261006_162541_9fbc",
       "title": "① 病毒识别分类与提取",
       "summary": {
         "n_classified": 3600,
         "n_extracted": 7200,
-        "kreport": "D:\\桌面\\植物病毒分析平台\\tool_runs\\identify_20260909_232453\\classify\\output_1.kreport2"
+        "kreport": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\identify_20261006_162541_9fbc\\classify\\output_1.kreport2"
       },
       "output": [
         "viral_sequences_1.fasta",
@@ -21,29 +21,29 @@
     },
     {
       "key": "assembly",
-      "run": "assembly_20260909_232454",
+      "run": "assembly_20261006_162541_5125",
       "title": "② 提取序列组装",
       "summary": {
         "n_contigs": 3,
         "total_bp": 17738,
-        "contigs": "D:\\桌面\\植物病毒分析平台\\tool_runs\\assembly_20260909_232454\\contigs.filtered.fasta"
+        "contigs": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\assembly_20261006_162541_5125\\contigs.filtered.fasta"
       }
     },
     {
       "key": "contigs",
-      "run": "contigs_20260909_232503",
+      "run": "contigs_20261006_162544_b6ad",
       "title": "③ 组装结果再鉴定",
       "summary": {
         "n_contigs": 3,
         "n_viral": 3,
-        "kreport": "D:\\桌面\\植物病毒分析平台\\tool_runs\\contigs_20260909_232503\\classify\\output_1.kreport2",
-        "classification": "D:\\桌面\\植物病毒分析平台\\tool_runs\\contigs_20260909_232503\\virus_classification.tsv",
-        "viral_fasta": "D:\\桌面\\植物病毒分析平台\\tool_runs\\contigs_20260909_232503\\viral_contigs.fasta"
+        "kreport": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162544_b6ad\\classify\\output_1.kreport2",
+        "classification": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162544_b6ad\\virus_classification.tsv",
+        "viral_fasta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162544_b6ad\\viral_contigs.fasta"
       }
     },
     {
       "key": "verify",
-      "run": "verify_20260909_232517",
+      "run": "verify_20261006_162544_102d",
       "title": "④ 候选序列验证",
       "summary": {
         "virus": 3,
@@ -52,7 +52,7 @@
         "combine": "union",
         "host_filter": "all",
         "n_calls": 3,
-        "out_dir": "D:\\桌面\\植物病毒分析平台\\tool_runs\\verify_20260909_232517\\verify"
+        "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\verify_20261006_162544_102d\\verify"
       }
     }
   ],

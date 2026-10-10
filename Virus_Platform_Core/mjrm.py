@@ -99,14 +99,28 @@ def _classify_columns(cols):
                 (int(m.group(3)), k))
     # 展平组如果凑不出"完整方阵"（组大小 = N²），多半是名字里本来就带数字
     # （如性状 `Line1`）→ 退回按普通路线解析，别把它当展平矩阵。
+    # ⚠️ **恰好凑成 1×1 方阵判定**的单列（如 `X-to-Line1`）另行处理
+    #    （2026-10-03 修复）：N=1 时方阵判定 `n²==len(items)` 恒成立 → 旧实现
+    #    把它当"完整 1×1 展平矩阵" `continue` 掉，等于**静默丢弃**这一列。
+    #    真正的展平矩阵至少 N²≥4 列，单列必然不是矩阵；但状态名可能真以数字
+    #    结尾，故不擅自当路线，而是原样留在 flat 并登记到 `flat_single`，由调用方
+    #    在结果里标注（不进矩阵）。**只动这一种**：单列且序号≠1 的组本来就走
+    #    下面的回退路由（旧行为正确），不在此列、不受影响。
+    flat_single = {}
     for (src, dst), items in list(flat.items()):
+        if len(items) == 1:
+            n = 1
+            if sorted(i for i, _ in items) == list(range(1, n * n + 1)):
+                flat_single[(src, dst)] = items[0][1]
+                continue
         n = int(round(len(items) ** 0.5))
         if n * n == len(items) and sorted(i for i, _ in items) == list(range(1, n * n + 1)):
             continue
         for _, k in items:
             route[(src, dst + str(_))] = k
         flat.pop((src, dst))
-    return {'route': route, 'reward': reward, 'total': total, 'flat': flat}
+    return {'route': route, 'reward': reward, 'total': total, 'flat': flat,
+            'flat_single': flat_single}
 
 
 # ---------------------------------------------------------------- 生成
@@ -118,7 +132,8 @@ def state_order_from_xml(xml_path):
     ``AS, EU, ME, NAm, OC, SAm``（字母序，Beauti 的写法），
     **不是** ``<attr name="Region">`` 在序列里首次出现的顺序。
     """
-    text = io.open(xml_path, encoding='utf-8', errors='replace').read()
+    with io.open(xml_path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
     states = re.findall(r'<state\s+code="([^"]+)"', text)
     return [s.strip() for s in states if s.strip()]
 
@@ -136,7 +151,8 @@ def traits_from_xml(xml_path):
     `AS,OC,EU,ME,NAm,SAm` 铺矩阵，而 BEAST 的状态序是
     `AS,EU,ME,NAm,OC,SAm` → `AS-to-OC` 那个矩阵的 1 落在 (0,1)＝AS→EU）。
     """
-    text = io.open(xml_path, encoding='utf-8', errors='replace').read()
+    with io.open(xml_path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
     attr_name, attr_vals = None, []
     for m in re.finditer(r'<attr\s+name="([^"]+)"\s*>([^<]*)</attr>', text):
         attr_name = m.group(1)
@@ -169,7 +185,13 @@ def build_matrices(traits):
                 continue
             row = zeros[:]
             row[j] = '1'
-            out.append('<parameter id="%2s-to-%2s" value="\n' % (traits[i], traits[j]))
+            # ⚠️ id **不加宽度填充**（2026-10-03 修复）：旧写 `%2s-to-%2s`，单字符
+            #    性状（如 'X'）会生成 `id=" X-to-AS"` 带前导空格的参数名 ——
+            #    `audit_mjrm_xml` 的 declared/形状正则 `<parameter id="[A-Za-z]…`
+            #    直接漏掉它，矩阵数、顺序、位置三项校验全部误判。除这一处外仍与
+            #    VirPhyKit `wrtcfg()` 的格式对齐（值从下一行开始、每行空格分隔、
+            #    结尾 `"/>`）。
+            out.append('<parameter id="%s-to-%s" value="\n' % (traits[i], traits[j]))
             for _ in range(i):
                 out.append(' '.join(zeros) + '\n')
             out.append(' '.join(row) + '\n')
@@ -301,8 +323,8 @@ def insert_into_template(template_path, traits=None, out_path=None,
     'likelihood_id', 'likelihood_tag', 'logged', 'order_source', 'reordered',
     'reused_existing', 'warnings'}``
     """
-    text = io.open(template_path, encoding='utf-8',
-                   errors='replace').read()
+    with io.open(template_path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
     info = traits_from_xml(template_path)
     state_order = info['state_order']
     attr_order = info['attr_order']
@@ -360,7 +382,7 @@ def insert_into_template(template_path, traits=None, out_path=None,
     # 幂等保护：模板里**已经有** MJRM 块时不要再插一遍（否则 30 个矩阵翻倍、
     # BEAST 会因重复 id 报错）。参照管道 `beast1_bridge.py` 生成的 XML 就自带
     # 矩阵与 rewards，只是没把它们接进 log —— 那种情况只需要补 log。
-    existing = re.findall(r'<parameter\s+id="[A-Za-z][\w.]*-to-[A-Za-z][\w.]*"',
+    existing = re.findall(r'<parameter\s+id="\s*[A-Za-z][\w.]*-to-[A-Za-z][\w.]*"',
                           text)
     reused = bool(existing) and '<rewards>' in text
     out_text = text[:idx] + ('' if reused else block) + text[idx:]
@@ -411,7 +433,8 @@ def insert_into_template(template_path, traits=None, out_path=None,
     if out_path is None:
         base, ext = os.path.splitext(template_path)
         out_path = f'{base}.mjrm{ext or ".xml"}'
-    io.open(out_path, 'w', encoding='utf-8', newline='').write(out_text)
+    with io.open(out_path, 'w', encoding='utf-8', newline='') as f:
+        f.write(out_text)
     msg = (f'已写入 {out_path}（{len(traits)} 个性状 → '
            f'{len(traits) * (len(traits) - 1)} 个指示矩阵'
            + ('，并补了 jumpLog' if logged else '，**未**补 jumpLog') + '）')
@@ -451,18 +474,21 @@ def audit_mjrm_xml(xml_path):
     返回 ``{'ok', 'traits', 'n_matrices', 'roots', 'logging': {...},
     'problems': [...], 'notes': [...]}``
     """
-    text = io.open(xml_path, encoding='utf-8', errors='replace').read()
+    with io.open(xml_path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
     info = traits_from_xml(xml_path)
     traits = info['values']
     n = len(traits)
-    declared = re.findall(r'<parameter\s+id="([A-Za-z][\w.]*-to-[A-Za-z][\w.]*)"',
+    # declared 正则带 `\s*`：旧版 VirPhyKit 风格产物用 `%2s` 填充，单字符性状会
+    # 产出 `id=" X-to-AS"`；这里容忍前导空白（捕获组仍不含空格），新旧产物都能查。
+    declared = re.findall(r'<parameter\s+id="\s*([A-Za-z][\w.]*-to-[A-Za-z][\w.]*)"',
                           text)
     has_rewards = '<rewards>' in text
     problems, notes = [], []
 
-    # 形状检查：挨个看矩阵行数
+    # 形状检查：挨个看矩阵行数（同样容忍 id 前导空白）
     bad_shape = []
-    for m in re.finditer(r'<parameter\s+id="([A-Za-z][\w.]*-to-[A-Za-z][\w.]*)"'
+    for m in re.finditer(r'<parameter\s+id="\s*([A-Za-z][\w.]*-to-[A-Za-z][\w.]*)"'
                          r'\s+value="\s*\n(.*?)"\s*/>', text, re.S):
         rows = [r for r in m.group(2).splitlines() if r.strip()]
         if len(rows) != n or any(len(r.split()) != n for r in rows):
@@ -552,7 +578,13 @@ def audit_mjrm_xml(xml_path):
     c_m = (re.search(r'</%s\s*>' % _ltag, text[o_m.end():]) if o_m else None)
     if o_m and c_m:
         lo, hi = o_m.end(), o_m.end() + c_m.start()
-        first_p = text.find('<parameter id="%s"' % declared[0]) if declared else -1
+        # 用正则而不是 str.find：旧版产物 id 可能带前导空白（`id=" X-to-AS"`）
+        if declared:
+            _pm = re.search(r'<parameter\s+id="\s*%s"' % re.escape(declared[0]),
+                            text)
+            first_p = _pm.start() if _pm else -1
+        else:
+            first_p = -1
         rw = text.find('<rewards>')
         if first_p >= 0 and not (lo < first_p < hi):
             problems.append(
@@ -628,7 +660,8 @@ def make_dating_config(src_xml, out_xml=None, strip_logs=True, prefix=None):
     ⚠️ 位置模型的 operators 仍然留着 → 那些参数会在先验下随机游走，
     对定年**无影响**（它们已不在 posterior 里），只是多花一点算力。
     """
-    text = io.open(src_xml, encoding='utf-8', errors='replace').read()
+    with io.open(src_xml, encoding='utf-8', errors='replace') as f:
+        text = f.read()
     # 性状前缀（Beauti 用 `<generalDataType id="Region.dataType">`）
     if prefix is None:
         m = re.search(r'<generalDataType\s+id="([^."]+)\.dataType"', text)
@@ -681,7 +714,8 @@ def make_dating_config(src_xml, out_xml=None, strip_logs=True, prefix=None):
     if out_xml is None:
         base, ext = os.path.splitext(src_xml)
         out_xml = f'{base}.dating{ext or ".xml"}'
-    io.open(out_xml, 'w', encoding='utf-8', newline='').write(new_text)
+    with io.open(out_xml, 'w', encoding='utf-8', newline='') as f:
+        f.write(new_text)
     warnings = []
     # 诚实交代"没被清掉的部分"：`<prior>` 里还引用了该性状的参数（Beauti 把它们写在
     # Discrete Traits 标记**之外**）。它们只是给位置模型自己的先验项 ——
@@ -743,7 +777,8 @@ def parse_beast_log(log_path, burnin=0.1):
     BEAST1 的日志：若干 `#` 注释行 + 一行以 `state` 开头的**列名**行 + 数据行。
     烧弃按行数比例裁掉末尾 ``burnin`` 之外的开头部分。
     """
-    lines = io.open(log_path, encoding='utf-8', errors='replace').read().splitlines()
+    with io.open(log_path, encoding='utf-8', errors='replace') as f:
+        lines = f.read().splitlines()
     hdr = None
     first_data = None
     for i, l in enumerate(lines):
@@ -793,17 +828,36 @@ def jump_matrix_from_log(log_path, burnin=0.1, traits=None):
     cls = _classify_columns(cols)
     route, reward, total, flat = (cls['route'], cls['reward'],
                                   cls['total'], cls['flat'])
-    if not route and not reward and flat:
-        stems = list(flat)[:2]
+    # 1×1 展平组单列（如 `X-to-Line1`）：不进矩阵也不静默丢 —— 在结果里标注
+    flat_single = cls.get('flat_single') or {}
+    if flat_single:
+        warnings.append(
+            f'有 {len(flat_single)} 个单列无法判定为 `A-to-B` 计数'
+            f'（登记为 1×1 展平组、未参与矩阵统计）：'
+            + ', '.join('%s-to-%s' % k for k in list(flat_single)[:5])
+            + ' —— 状态名可能以数字结尾（如 Line1）；'
+            '请核对 XML 的 <state code> 是否真是这个名字，再决定是否按路线统计')
+    # 只有"真正的多列展平组"才按"log 了静态指示矩阵"报错（1×1 单列不算）
+    flat_multi = {k: v for k, v in flat.items() if k not in flat_single}
+    if not route and not reward and flat_multi:
+        stems = list(flat_multi)[:2]
         raise RuntimeError(
             f'{os.path.basename(log_path)} 里只有 "A-to-B1..N²" 这种展平矩阵列'
             f'（如 {stems}）—— 这说明 XML 里 log 的是**静态指示矩阵本身**，'
             '不是跳转计数。请按 BEAST1 官方写法把 likelihood 对象放进 <log>'
             '（见 mjrm.insert_into_template(with_log=True)）；这个日志给不出迁移矩阵。')
     if not route and not reward:
+        # 1×1 展平组的提示要跟着报错走：否则标注只进了 warnings，而这条路径
+        # 直接 raise，用户看不到"列为什么没被统计"（2026-10-03）。
+        hint = ''
+        if flat_single:
+            hint = ('；另有 %d 个单列被登记为 1×1 展平组（如 %s）——'
+                    '状态名可能以数字结尾，请核对 XML 的 <state code>'
+                    % (len(flat_single),
+                       ', '.join('%s-to-%s' % k for k in list(flat_single)[:3])))
         raise RuntimeError(
             f'{os.path.basename(log_path)} 里既没有 `A-to-B` 计数列、也没有 '
-            f'`_reward` 列。可用列（前 20）：{cols[:20]}')
+            f'`_reward` 列。可用列（前 20）：{cols[:20]}' + hint)
 
     def _num(v):
         try:

@@ -1,5 +1,11 @@
 {
   "stage": "primer",
-  "n_primers": 0,
-  "reason": "未设计出引物（保守区不足或序列问题）"
+  "mode": "conserved",
+  "n_primers": 9,
+  "tsv": "primers.tsv",
+  "specificity_checked": false,
+  "specificity_amplicon": "skipped",
+  "groups": [
+    "G1"
+  ]
 }

@@ -89,9 +89,12 @@ async function refreshTasks() {
     setConnBanner(false);
     if (window.__rhOnTasks) { try { window.__rhOnTasks(tasks); } catch (e2) {} }
   } catch (e) {
-    // 连接异常时保持短间隔重试，避免失联横幅要等满 3 次空闲周期才出现
-    connDown = true;
-    if (++connFails >= 3) setConnBanner(true);
+    // 连接异常时保持短间隔重试，避免失联横幅要等满 3 次空闲周期才出现；
+    // 仅真网络失败（TypeError）计入门槛，服务端 500/解析失败不谎报断连
+    if (netFail(e)) {
+      connDown = true;
+      if (++connFails >= 3) setConnBanner(true);
+    }
     return;
   }
   try {
@@ -228,6 +231,10 @@ function injectStageLogs(tasks) {
   document.querySelectorAll('.stage-log').forEach(el => { el.innerHTML = ''; });
   document.querySelectorAll('.toolrun').forEach(el => { el.innerHTML = ''; });
   document.querySelectorAll('.buildrun').forEach(el => { el.innerHTML = ''; });
+  // 每个容器只吃**第一个**匹配任务：/api/tasks 是新→旧序（order.insert(0)），
+  // 若不去重，同卡的旧任务（数组靠后）会后写覆盖新任务——实测连跑两次
+  // 格式转换，第二次完成后输出区仍显示第一次的运行日志（2026-09-30 用户报告）。
+  const claimed = new Set();
   for (const task of tasks) {
     if (!['running', 'done', 'failed'].includes(task.status)) continue;
     // 样品管道任务：按后端上报的当前阶段（task.stage）精确归属——
@@ -248,8 +255,10 @@ function injectStageLogs(tasks) {
         if (hitKeys.length > 1) hitKeys = [];   // 多阶段链未上报 → 等首个进度
       }
       for (const key of hitKeys) {
-        const box = $('log-' + key);
-        if (box) box.innerHTML = stageLogHtml(task);
+        const boxId = 'log-' + key;
+        if (claimed.has(boxId)) continue;
+        const box = $(boxId);
+        if (box) { box.innerHTML = stageLogHtml(task); claimed.add(boxId); }
       }
     }
     // 专项分析工具任务（按工具标签匹配 → 卡内嵌 toolrun 容器）
@@ -260,16 +269,19 @@ function injectStageLogs(tasks) {
               || nm.includes('NCBI') || nm.includes('GenBank')
               || nm.includes('同属') || nm.includes('Synteny'))) {
         const boxId = 'toolrun-' + key;
+        if (claimed.has(boxId)) continue;
         const box = $(boxId);
-        if (box) box.innerHTML = toolRunHtml(task, boxId);
+        if (box) { box.innerHTML = toolRunHtml(task, boxId); claimed.add(boxId); }
       }
     }
     // 建库任务 → 数据库构建页对应卡片内嵌日志（.buildrun 容器，按任务名匹配）
     for (const [key, labels] of Object.entries(BUILD_TASK_LABELS)) {
       const nm = task.name || '';
       if (labels.some(label => nm.includes(label))) {
-        const box = $('buildrun-' + key);
-        if (box) box.innerHTML = stageLogHtml(task);
+        const boxId = 'buildrun-' + key;
+        if (claimed.has(boxId)) continue;
+        const box = $(boxId);
+        if (box) { box.innerHTML = stageLogHtml(task); claimed.add(boxId); }
       }
     }
   }
@@ -356,9 +368,9 @@ async function openOutDir(p) {
       body: JSON.stringify({ path: p }) });
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
-      alert((d.error || '打开失败') + ' (HTTP ' + r.status + ')');
+      alert((d.error || t('ui.common.openFail')) + ' (HTTP ' + r.status + ')');
     }
-  } catch (e) { alert('打开失败: ' + e); }
+  } catch (e) { alert(t('ui.common.openFail') + ': ' + e); }
 }
 
 function outFilesHtml(task) {

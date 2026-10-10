@@ -12,6 +12,7 @@
   - webapp_dir() 目录探测（源码运行 / PyInstaller 冻结分发两种布局）
   - tool_runs_root()  tool_runs 根（跟随自定义输出根）
 """
+import json
 import os
 import sys
 
@@ -49,6 +50,30 @@ cfg = get_config()
 def tool_runs_root():
     """tool_runs 根目录（设置自定义输出根后由 DIRS 决定）。"""
     return DIRS.get('tool_runs') or os.path.join(PLATFORM_ROOT, 'run', 'tool_runs')
+
+
+# 自定义输出位置的指针文件名：tool_runs/<run>/out_link.json 记录产物实际
+# 所在目录（run_dir 外移后列表/下载/打开仍可寻址）。
+RUN_OUT_LINK = 'out_link.json'
+
+
+def run_real_dir(run):
+    """运行的真实产物目录：tool_runs/<run>/out_link.json 存在且登记了
+    out_dir 时返回外移目录，否则 tool_runs/<run> 本身。
+
+    为什么需要指针：工具产物下载/历史列表/打开目录全都从 tool_runs 根拼
+    路径，run_dir 外移到用户目录后没有这份登记就全部 404/失联。
+    """
+    from Virus_Platform_Core.utils import check_path
+    base = os.path.join(tool_runs_root(), run)
+    try:
+        with open(os.path.join(base, RUN_OUT_LINK), encoding='utf-8') as f:
+            out = (json.load(f) or {}).get('out_dir')
+        if out:
+            return check_path(out, must_exist=True, in_platform=True)
+    except (OSError, ValueError):
+        pass
+    return base
 
 
 # ------------------------------------------------------------------

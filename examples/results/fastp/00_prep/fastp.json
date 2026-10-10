@@ -1,0 +1,14 @@
+{
+ "inputs": [
+  {
+   "path": "D:\\桌面\\植物病毒分析平台\\examples\\example_R1.fastq.gz",
+   "size": 414643,
+   "mtime": 1788965973399963300
+  },
+  {
+   "path": "D:\\桌面\\植物病毒分析平台\\examples\\example_R2.fastq.gz",
+   "size": 414431,
+   "mtime": 1788965973398966600
+  }
+ ]
+}

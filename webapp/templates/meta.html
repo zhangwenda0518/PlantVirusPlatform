@@ -44,9 +44,24 @@
   .rec-form input.miss { background: #ffffc8; }
   .rec-form input.aimark { background: #dcffdc; }
   .rec-nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-  .fig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
-  .fig-item { border: 1px solid var(--line-100); border-radius: 8px; padding: 8px; background: #fff; }
-  .fig-item img { width: 100%; border-radius: 4px; cursor: zoom-in; }
+  .fig-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .fig-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+             border: 1px solid var(--line-100); border-radius: 8px; padding: 7px 12px; background: #fff; }
+  .fig-row .fig-name { font-weight: 600; font-size: 12.5px; }
+  .fig-lightbox { position: fixed; inset: 0; background: rgba(10,16,28,.82); z-index: 999;
+                  display: flex; flex-direction: column; align-items: center; justify-content: center;
+                  padding: 34px 16px 14px; }
+  .fig-lightbox.full { display: block; overflow: auto; }
+  .fig-lightbox img { max-width: 96vw; max-height: 82vh; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,.5);
+                      background: #fff; cursor: zoom-in; }
+  .fig-lightbox.full img { max-width: none; max-height: none; cursor: zoom-out;
+                           display: block; margin: 0 auto 8px; }
+  .fig-lightbox .lb-bar { display: flex; gap: 10px; align-items: center; margin-top: 8px; color: #eef;
+                          font-size: 12.5px; flex-wrap: wrap; }
+  .fig-lightbox .lb-bar a { color: #9cd; }
+  .fig-lightbox .lb-bar .lb-dim { color: #bcd; }
+  .fig-lightbox .lb-close { position: absolute; top: 14px; right: 20px; font-size: 26px; color: #fff;
+                            cursor: pointer; line-height: 1; user-select: none; z-index: 1; }
   .chart-box { border: 1px solid var(--line-100); border-radius: 8px; padding: 6px; margin-top: 10px; background: #fff; }
   .chart-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
   .mt-status { position: sticky; bottom: 0; background: var(--bg, #fff); border-top: 1px solid var(--line-100);
@@ -213,8 +228,8 @@
         <button class="btn small primary" onclick="metaPlot(this)" data-i18n="mt.plot">📊 生成 SCI 全景图</button>
       </div>
       <div id="svSummary"></div>
-      <div id="svSci"></div>
       <div id="svCharts"><p class="hint" data-i18n="mt.needSearch">尚无检索结果——先在「① 检索」检索</p></div>
+      <div id="svSci"></div>
     </div>
   </div>
 
@@ -299,8 +314,8 @@
         <button class="btn small primary" onclick="metaPlot(this)" data-i18n="mt.plot">📊 生成 SCI 全景图</button>
       </div>
       <div id="ivSummary"></div>
-      <div id="ivSci"></div>
       <div id="ivCharts"><p class="hint" data-i18n="mt.needInfo">尚无元数据——在「Info 提取」运行深度提取</p></div>
+      <div id="ivSci"></div>
     </div>
   </div>
 
@@ -463,7 +478,7 @@ function mtShow(id) {
 async function loadColls() {
   try {
     MT.colls = await jfetch('/api/meta/collections');
-  } catch (e) { setConnBanner(true); return; }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error(e); return; }
   const sel = $('mtProjectSel');
   sel.innerHTML = MT.colls.length
     ? MT.colls.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('')
@@ -515,7 +530,13 @@ async function setProject(name) {
   history.replaceState(null, '', '/meta?p=' + encodeURIComponent(name));
   renderProjBadges();
   updateStatus();
-  await Promise.all([loadView('local'), loadView('sb'), loadView('ib')]);
+  loadSciGallery();
+  // 只跑过 search、未提取元数据的项目（n_core14=0）不再请求 core14 表：
+  // 404 响应会被浏览器记为 console.error，批量页面巡检因此误报
+  // （2026-10-04 审查遗留项）。表格区直接给「先提取元数据」提示。
+  const _n14 = (MT.colls.find(x => x.name === name) || {}).n_core14;
+  await Promise.all([loadView('local'), loadView('sb'),
+                     _n14 ? loadView('ib') : mtIbEmpty()]);
   await Promise.all([buildLocalFilters(), buildQColSelects()]);
   const full = $('ibFullDl');
   full.href = `/meta_files/${encodeURIComponent(name)}/info/Global_Unified_Metadata_Full.csv`;
@@ -533,6 +554,14 @@ function viewQuery(vkey) {
   for (const [k, val] of Object.entries(f.fields || {}))
     if (val && val !== '(any)') qs.set('f.' + k, val);
   return qs;
+}
+
+function mtIbEmpty() {
+  const v = VIEW.ib;
+  $(v.box).innerHTML = `<p class="hint">ⓘ ${esc(t('mt.noCore14',
+      '该项目还没有提取元数据（Info 表为空）——在检索结果页选 Run 后点「提取元数据」'))}</p>`;
+  $(v.pager).innerHTML = '';
+  $(v.stats).textContent = '';
 }
 
 async function loadView(vkey, page) {
@@ -832,6 +861,23 @@ function pollLog(tid, boxId, onEnd) {
 
 /* ── 页面任务列表（可停止；单轮询循环防叠加） ── */
 let _taskTimer = null;
+const _mtLogOpen = new Set();   // 展开日志的任务卡（周期重绘后保持展开）
+const _mtLogCache = {};         // tid → 日志文本（重绘时先回填，免闪烁）
+
+async function mtTaskLog(el, tid) {
+  if (el.open) _mtLogOpen.add(tid); else { _mtLogOpen.delete(tid); return; }
+  const box = el.querySelector('.tk-log');
+  if (!box) return;
+  if (el.dataset.loaded && el.dataset.status !== 'running') return; // 终态日志不再增长
+  try {
+    const r = await jfetch(`/api/task/${tid}/log?lines=200`);
+    const txt = (r.log && r.log.length) ? r.log.join('\n') : t('tk.noLog', '（无日志）');
+    _mtLogCache[tid] = txt;
+    box.textContent = txt;
+  } catch (e) { box.textContent = t('tk.logFail', '日志加载失败'); }
+  el.dataset.loaded = '1';
+}
+
 async function refreshTasks() {
   if (_taskTimer) { clearTimeout(_taskTimer); _taskTimer = null; }
   try {
@@ -844,6 +890,7 @@ async function refreshTasks() {
       const stText = task.status === 'running' ? t('c.st.running', '运行中')
         : task.status === 'done' ? t('c.st.done', '已完成')
         : task.status === 'cancelled' ? t('mt.stopped', '已停止') : t('c.st.failed', '失败');
+      const open = _mtLogOpen.has(task.id);
       return `<div class="card">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
           <b>${esc(task.name)}</b>
@@ -854,8 +901,15 @@ async function refreshTasks() {
         </div>
         ${task.msg ? `<p class="hint" style="margin:4px 0 0">${esc(task.msg)}${task.pct != null ? ' · ' + Math.round(task.pct) + '%' : ''}</p>` : ''}
         ${task.error ? `<div class="err">${esc(task.error)}</div>` : ''}
+        <details class="tk-log-wrap" data-tid="${task.id}" data-status="${esc(task.status || '')}" ${open ? 'open' : ''} ontoggle="mtTaskLog(this,'${task.id}')">
+          <summary>${t('tk.log', '日志')}</summary>
+          <div class="tk-log" style="max-height:260px;overflow:auto;white-space:pre-wrap;background:#f7f7f7;border:1px solid #e3e3e3;border-radius:4px;padding:8px;margin-top:6px">${open && _mtLogCache[task.id] ? esc(_mtLogCache[task.id]) : t('tk.logLoading', '加载中…')}</div>
+        </details>
       </div>`;
-    }).join('');
+    }).join('') +
+      `<p class="hint" style="margin:10px 0 0"><a href="/tasks">${t('nav.tasks', '任务中心')} →</a> · ${t('tk.arch', '历史归档')}</p>`;
+    // 重绘不会触发 ontoggle：已展开的卡手动补载（运行中任务顺带刷新尾部）
+    box.querySelectorAll('details.tk-log-wrap[open]').forEach(d => mtTaskLog(d, d.dataset.tid));
     const running = mine.some(t2 => t2.status === 'running');
     _taskTimer = setTimeout(refreshTasks, running ? 2500 : 10000);
   } catch (e) { /* ignore */ }
@@ -1222,23 +1276,19 @@ async function loadViz(which, force) {
     const d = await jfetch(`/api/meta/overview?name=${encodeURIComponent(MT.project)}&which=${which}`
       + (force ? '&force=1' : ''));   // 刷新按钮绕过服务端响应缓存
     const cols = d.columns;
-    const cur = MT.vizField[which] && cols.includes(MT.vizField[which])
-      ? MT.vizField[which] : (cols.includes('Tissue') ? 'Tissue' : cols[0]);
+    // 主字段以下拉框当前值为准（用户主动选择 > 上次选择 > 默认 Tissue）
+    const picked = fieldSel.value;
+    const cur = picked && cols.includes(picked) ? picked
+      : (MT.vizField[which] && cols.includes(MT.vizField[which]) ? MT.vizField[which]
+         : (cols.includes('Tissue') ? 'Tissue' : cols[0]));
     fieldSel.innerHTML = cols.map(c => `<option value="${esc(c)}" ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('');
     MT.vizField[which] = cur;
 
     const frag = [];
-    // 1) 选中字段 + 标准字段条形图（两列布局）
-    const std = ['ScientificName', 'Tissue', 'Source', 'LibrarySource', 'Location', 'Database']
-      .filter(c => cols.includes(c) && c !== cur).slice(0, 4);
-    const barCols = [cur, ...std];
-    frag.push(`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:4px">`);
-    barCols.forEach((c, i) => {
-      frag.push(`<div class="chart-box"><div class="chart-head"><b>${esc(c)} ${t('mt.dist', '分布')}</b>
-        <span style="flex:1"></span><button class="btn small" onclick="saveChart('bar_${which}_${i}','${esc(c)}')">⬇ PNG</button></div>
-        <div id="bar_${which}_${i}" style="height:${Math.max(240, Math.min(d.fields[c].counts.length, 20) * 24 + 70)}px"></div></div>`);
-    });
-    frag.push(`</div>`);
+    // 1) 仅主字段条形图（其余字段用下拉切换查看，不再默认全部展开）
+    frag.push(`<div class="chart-box"><div class="chart-head"><b>${esc(cur)} ${t('mt.dist', '分布')}</b>
+      <span style="flex:1"></span><button class="btn small" onclick="saveChart('bar_${which}_0','${esc(cur)}')">⬇ PNG</button></div>
+      <div id="bar_${which}_0" style="height:${Math.max(240, Math.min(d.fields[cur].counts.length, 20) * 24 + 70)}px"></div></div>`);
     // 2) 缺失热图
     frag.push(`<div class="chart-box"><div class="chart-head"><b>${t('mt.missingH', '缺失数据概览（%）')}</b>
       <span style="flex:1"></span><button class="btn small" onclick="saveChart('heat_${which}','Missing')">⬇ PNG</button></div>
@@ -1268,7 +1318,7 @@ async function loadViz(which, force) {
 
     box.innerHTML = frag.join('');
     // 画图
-    barCols.forEach((c, i) => drawBar(`bar_${which}_${i}`, c, d.fields[c].counts));
+    drawBar(`bar_${which}_0`, cur, d.fields[cur].counts);
     drawHeat(`heat_${which}`, cols, d.fields, d.summary.total);
     if (d.years.length) drawTimeline(`time_${which}`, d.years, d.date_col);
   } catch (e) {
@@ -1349,7 +1399,7 @@ async function metaPlot(btn) {
       _plotWatch = null;
       if (t2.status === 'done') { loadSciGallery(); loadColls(); }
     }, {cancelable: true});
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 function whichSciLog() {
   // 日志盒子放在对应图表面板下（不存在则临时挂到当前可见面板）
@@ -1365,6 +1415,34 @@ function whichSciLog() {
   return el.id;
 }
 
+function openFigLightbox(url, title) {
+  let lb = document.getElementById('figLightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'figLightbox';
+    lb.className = 'fig-lightbox';
+    lb.addEventListener('click', e => { if (e.target === lb || e.target.classList.contains('lb-close')) lb.remove(); });
+    document.body.appendChild(lb);
+  }
+  lb.classList.remove('full');
+  lb.innerHTML = `<div class="lb-close" title="关闭 (Esc)">✕</div>
+    <img src="${url}" alt="" title="${esc(t('mt.lbToggle', '点击图片：100% 原图 ⇄ 适配窗口'))}">
+    <div class="lb-bar"><span>${title || ''}</span><span class="lb-dim"></span>
+      <span style="flex:1"></span>
+      <a href="${url}" target="_blank">${t('mt.lbOrig', '原始尺寸（新窗口）')}</a>
+      <a href="${url}" download>${t('mt.lbDl', '下载')}</a></div>`;
+  const img = lb.querySelector('img');
+  img.addEventListener('click', () => lb.classList.toggle('full'));
+  img.addEventListener('load', () => {
+    const dim = lb.querySelector('.lb-dim');
+    if (dim) dim.textContent = `${img.naturalWidth}×${img.naturalHeight}px`;
+  });
+  document.body.appendChild(lb);
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { const lb = document.getElementById('figLightbox'); if (lb) lb.remove(); }
+});
+
 async function loadSciGallery() {
   for (const [which, boxId] of [['search', 'svSci'], ['core14', 'ivSci']]) {
     const panel = $(boxId);
@@ -1378,15 +1456,19 @@ async function loadSciGallery() {
       panel.innerHTML = `<div class="chart-box" style="margin-bottom:10px">
         <div class="chart-head"><b>📊 ${t('mt.plotPanel', '数据全景图')}</b>
         <span style="flex:1"></span>
-        <span class="hint" style="margin:0">${t('mt.plotSub', '已生成的 SCI 成图')}</span></div>
-        <div class="fig-grid">` +
-        pngs.map(f => `<div class="fig-item">
-          <a href="${f.url}" target="_blank" title="${esc(t('mt.viewImg'))}"><img src="${f.url}" loading="lazy" alt="${esc(f.name)}"></a>
-          <p class="hint">${esc(figTitle(f))} · ${esc(f.size)} · <a href="${f.url}" download>${t('mt.dlImg')}</a></p>
-        </div>`).join('') + `</div>` +
-        (pdfs.length ? `<p class="hint" style="margin:8px 0 0">PDF：` +
-          pdfs.map(f => `<a class="btn small" style="margin:2px" href="${f.url}" download>📄 ${esc(figTitle(f))}</a>`).join('') + `</p>` : '') +
-        `</div>`;
+        <span class="hint" style="margin:0">${t('mt.plotSub', '成图较大，点击「预览」放大查看')}</span></div>
+        <div class="fig-list">` +
+        pngs.map(f => `<div class="fig-row">
+          <span class="fig-name">🖼 ${esc(figTitle(f))}</span>
+          <span class="hint" style="margin:0">${esc(f.size)}</span>
+          <span style="flex:1"></span>
+          <button class="btn small primary" data-url="${f.url}" data-title="${esc(figTitle(f))}"
+                  onclick="openFigLightbox(this.dataset.url,this.dataset.title)">${t('mt.preview', '预览')}</button>
+          <a class="btn small" href="${f.url}" download>⬇ PNG</a>
+        </div>`).join('') +
+        (pdfs.length ? `<div class="fig-row"><span class="fig-name">📄 PDF</span><span style="flex:1"></span>` +
+          pdfs.map(f => `<a class="btn small" href="${f.url}" download>${esc(figTitle(f))}</a>`).join('') + `</div>` : '') +
+        `</div></div>`;
     } catch (e) { panel.innerHTML = ''; }
   }
 }
@@ -1400,7 +1482,6 @@ async function loadSciGallery() {
     await loadColls();
     const pick = MT.colls.find(c => c.name === wantP) || MT.colls[0];
     if (pick) await setProject(pick.name);
-    loadSciGallery();
     mtShow(MT_SECS.includes(hash) ? hash : 'search');
   })();
 })();

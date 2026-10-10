@@ -180,9 +180,20 @@ def main():
                 check(assigned == str(man.get('taxid')),
                       f'探针（>{head} 前 {n}bp）判为 {assigned} '
                       f'= 声明的 taxid {man.get("taxid")}')
-                check(not any('Solanum' in x[2] or 'Lycopersicon' in x[2]
-                              for x in leaves),
-                      'kreport 中出现番茄/Solanum 节点（应为否）')
+                # 原断言写死「不得出现 Solanum」——那是 2026-09-11 枸杞库被
+                # 番茄污染的事故口径；番茄库（taxid=4081）的本名出现是正确
+                # 行为。普适化：任何命名节点的 taxid 都必须等于声明 taxid
+                # （宿主库单物种，异种节点 = 污染）。
+                _want = str(man.get('taxid'))
+                # 污染判据 = 出现「另一个物种级节点」：kreport 的
+                # R/K/P/C/O/F/G 等层级是声明物种的祖先链（单物种库必然
+                # 带，合法）；只有 S/S1… 物种级出现声明之外 taxid 才是
+                # 他种污染（2026-09 枸杞库混入番茄即此形态）
+                bad = [x for x in leaves
+                       if (x[0] or '').upper().startswith('S')
+                       and x[1] not in ('0', '-', _want)]
+                check(not bad,
+                      f'kreport 出现声明物种之外的节点（污染）: {bad[:3]}')
             finally:
                 shutil.rmtree(os.path.join('run', '_check_hostdb'),
                               ignore_errors=True)

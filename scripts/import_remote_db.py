@@ -22,6 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from Virus_Platform_Core.config import DIRS  # noqa: E402
+from Virus_Platform_Core.utils import check_path  # noqa: E402
 
 COL_MAP = {
     'accession': 'accession', 'acc': 'accession', 'accn': 'accession',
@@ -38,16 +39,34 @@ def main() -> int:
     ap.add_argument('--name', required=True, help='本地库目录名（如 full_db）')
     args = ap.parse_args()
 
+    # 先校验输入（must_exist），再建输出目录：输入写错时不应留下一个空库目录，
+    # 否则下次运行会撞上"库已存在"而看不出真正原因（2026-10-03）。
+    try:
+        csv_path = check_path(args.csv, must_exist=True)
+        fasta_path = check_path(args.fasta, must_exist=True)
+    except (FileNotFoundError, ValueError) as e:
+        print(f'输入校验失败: {e}')
+        return 2
+
     name = re.sub(r'[^\w\-.]+', '_', args.name).strip('_-')
     if not name:
         print('无效库名'); return 2
     lib_dir = os.path.join(DIRS['virus_src'], name)
     if os.path.isdir(lib_dir):
         print(f'库已存在: {lib_dir}（请换 --name 或先删除）'); return 2
-    os.makedirs(lib_dir, exist_ok=True)
+    os.makedirs(lib_dir, exist_ok=False)
+    try:
+        return _build_lib(csv_path, fasta_path, lib_dir, name)
+    except Exception:
+        # 建库中途失败：回滚本次新建的目录，避免留下半成品让下次误报"库已存在"
+        shutil.rmtree(lib_dir, ignore_errors=True)
+        raise
 
+
+def _build_lib(csv_path, fasta_path, lib_dir, name) -> int:
+    """读 CSV/FASTA → 落盘 reference.fasta / reference.ref_info.tsv / 原始元数据。"""
     # ---- 读 CSV：自动识别列 ----
-    with open(args.csv, encoding='utf-8-sig', errors='replace', newline='') as f:
+    with open(csv_path, encoding='utf-8-sig', errors='replace', newline='') as f:
         sample = f.read(65536)
         f.seek(0)
         delim = '\t' if sample.count('\t') > sample.count(',') else ','
@@ -95,7 +114,7 @@ def main() -> int:
 
     # ---- 过滤 FASTA ----
     kept, total = 0, 0
-    with open(args.fasta, encoding='utf-8', errors='replace') as fin, \
+    with open(fasta_path, encoding='utf-8', errors='replace') as fin, \
          open(os.path.join(lib_dir, 'reference.fasta'), 'w',
               encoding='utf-8', newline='\n') as fout:
         keep = False
@@ -111,8 +130,8 @@ def main() -> int:
     print(f'FASTA 共 {total} 条，命中库记录 {kept} 条')
 
     # 原始元数据整份随库保存（宿主/地理/年份等列是系统地理、RDP 选株的原料）
-    shutil.copyfile(args.csv, os.path.join(lib_dir, 'reference.meta.original'
-                    + os.path.splitext(args.csv)[1]))
+    shutil.copyfile(csv_path, os.path.join(lib_dir, 'reference.meta.original'
+                    + os.path.splitext(csv_path)[1]))
     # ---- ref_info.tsv（平台口径列）----
     with open(os.path.join(lib_dir, 'reference.ref_info.tsv'), 'w',
               encoding='utf-8', newline='') as f:

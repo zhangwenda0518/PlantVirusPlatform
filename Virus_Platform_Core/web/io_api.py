@@ -67,6 +67,14 @@ def api_upload():
     cl = request.content_length
     if cl and cl > _UPLOAD_MAX_BYTES:
         abort(413, f'上传文件过大（上限 {_UPLOAD_MAX_BYTES >> 30}GB）')
+    # 无 Content-Length 且 Transfer-Encoding: chunked 的请求没法预检大小：
+    # 直接读会一路落盘到写满磁盘。这里选择「直接拒绝」（411 Length Required）
+    # 而不是"边读边数、超限即断"——本平台的上传方（页面 fetch/XHR +
+    # FormData、拖拽代理）都会带 Content-Length，chunked 只可能是异常/恶意
+    # 客户端；拒绝比读完 64GB 再断更省资源，错误信息也更清楚。
+    if not cl and 'chunked' in (request.headers.get('Transfer-Encoding')
+                                or '').lower():
+        abort(411, '上传请求需带 Content-Length（不支持 chunked 无长度上传）')
     f = request.files.get('file')
     if not f:
         abort(400, '缺少上传文件')

@@ -1,0 +1,15 @@
+{
+  "salmon_version": "2.7.0",
+  "index": "D:\\桌面\\植物病毒分析平台\\databases\\virusref_db\\plant_ref\\salmon_k31",
+  "libType": "A",
+  "output": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_164441_6ad429\\kvsuite\\quant\\EXAMPLE",
+  "mates1": [
+    "D:\\桌面\\植物病毒分析平台\\examples\\example_R1.fastq.gz"
+  ],
+  "mates2": [
+    "D:\\桌面\\植物病毒分析平台\\examples\\example_R2.fastq.gz"
+  ],
+  "unmatedReads": [],
+  "threads": 8,
+  "sketch": false
+}

@@ -6,7 +6,9 @@
 
 用法：python tests/_genome_default_check.py
 """
+import os
 import sys
+import tempfile
 import time
 
 from playwright.sync_api import sync_playwright
@@ -21,7 +23,8 @@ for _stream in (sys.stdout, sys.stderr):
 
 
 URL = 'http://127.0.0.1:8765/genome'
-SHOT = r'C:\Users\17711\AppData\Local\Temp\vp_genome_default.png'
+# 截图落盘到系统临时目录（此前硬编码了本机用户名路径，换机即失效）
+SHOT = os.path.join(tempfile.gettempdir(), 'vp_genome_default.png')
 
 
 def main() -> int:

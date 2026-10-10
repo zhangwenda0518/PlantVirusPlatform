@@ -8,29 +8,35 @@
 2. **不预测 ORF**——DIAMOND blastx 与 mmseqs 均直接吃核酸 contig，
    由工具自带翻译（与 02b 同构，全程不落 ORF 中间文件）。
 3. **宿主分类筛选 → 长度分流 → 双路过滤（并集 / 交集）**。
+   B 路证据源用 **BFVD**（Steinegger lab 病毒蛋白域库，NCBI 官方提交
+   工具链 suvtk 的注释证据源，库随包在 databases/misc_db/suvtk/）：
+   原本用 NCBI Cdd，因本地库 prefilter 索引 ~5GB 反复 OOM，
+   2026-09-29 换为 BFVD——病毒专属库，命中即病毒证据，无需白名单。
 
 对外接口
 --------
     split_by_length(fasta)            按长度分流
     run_blastx(...)                   A 路：DIAMOND blastx vs viral_prot
-    run_cdd(...)                      B 路：mmseqs translated search vs CDD
+    run_bfvd(...)                     B 路：mmseqs translated search vs BFVD
     run_viroid_blastn(...)            类病毒支：blastn vs viroids_v4
     verify(ctx_like)                  主编排，产出 filtered.fasta / calls.tsv / summary.json
 """
 import os
 import csv
 import json
+import glob
 
 from .config import get_config, db_path
 from .utils import run_cmd, safe_open
 
 # ---------------------------------------------------------------- 常量
 LEN_VIRUS_MIN = 1000      # ≥ 此长度走病毒分支
-LEN_VIROID_MIN = 250      # [250, 1000) 走类病毒分支；< 250 不处理
-                          # 依据：类病毒全长 246–401 nt，<250bp 凑不出完整一条
+LEN_VIROID_MIN = 200      # [200, 1000) 走类病毒分支；< 200 不处理
+                          # 2026-10-03 起下限与组装输出默认 min_contig_len=200 对齐：
+                          # 类病毒全长 246–401 nt，>200bp 即可进入类病毒支体检
 
 BLASTX_EVALUE = 1e-3      # 对齐 02b filter_virus.py
-CDD_EVALUE_MAX = 1e-3
+BFVD_EVALUE_MAX = 1e-3
 
 # 类病毒判定阈值（2026-09-08 用户确认）
 VIROID_MIN_IDENT = 80.0
@@ -58,8 +64,6 @@ def refresh_paths():
     VIROID_DIR = db_path('misc', 'viroids')
     return VIRAL_PROT_DIR
 
-_CDD_TIER_CACHE = None
-
 # 分类谱系列（与 virus_classification.tsv 对齐），随每条 call 透出
 LINEAGE = ['taxid', 'taxon', 'realm', 'kingdom', 'phylum', 'class',
            'order', 'family', 'genus', 'species', 'near_complete', 'score']
@@ -70,7 +74,8 @@ CALL_FIELDS = (['contig', 'branch', 'call', 'len'] + LINEAGE
                + ['blastx_target', 'blastx_pident', 'blastx_alen',
                   'blastx_scov', 'blastx_evalue', 'blastx_bitscore',
                   'blastx_stitle', 'blastx_nhits']
-               + ['cdd_domains', 'cdd_descriptions', 'cdd_tier', 'cdd_best_evalue', 'cdd_nhits']
+               + ['bfvd_domains', 'bfvd_descriptions',
+                  'bfvd_best_evalue', 'bfvd_nhits']
                + ['viroid_target', 'viroid_pident', 'viroid_cov',
                   'viroid_evalue', 'viroid_nhits'])
 
@@ -106,56 +111,28 @@ def load_viroid_taxonomy():
     return out
 
 
-def _load_cdd_tier():
-    """CDD accession → tier（1=viral / 2=其他 / 3=Root）。
-
-    优先用 cdd_classified_taxid.tsv（Cenote-Taker3，若已复制到平台）；
-    缺失时回退白名单模式——命中白名单一律 tier1。
-    """
-    global _CDD_TIER_CACHE
-    if _CDD_TIER_CACHE is not None:
-        return _CDD_TIER_CACHE
-    tier = {}
-    classified = os.path.join(db_path('annot', 'cdd'), 'cdd_classified_taxid.tsv')
-    if os.path.isfile(classified):
-        with safe_open(classified) as f:
-            for r in csv.DictReader(f, delimiter='\t'):
-                acc = (r.get('accession') or '').strip()
-                cat = (r.get('category') or '').strip()
-                if not acc:
-                    continue
-                if cat == 'Virus':
-                    tier[acc] = 1
-                elif cat == 'Root':
-                    tier[acc] = 3
-                else:
-                    tier[acc] = 2
-    else:
-        wl = os.path.join(db_path('annot', 'cdd'),
-                          'viral_cdds_and_pfams_191028.txt')
-        if os.path.isfile(wl):
-            with safe_open(wl) as f:
-                for line in f:
-                    a = line.strip()
-                    if a:
-                        tier[a] = 1          # 回退：白名单命中即视为病毒域
-    _CDD_TIER_CACHE = tier
-    return tier
-
-
 # ---------------------------------------------------------------- 分流
-def split_by_length(fasta):
+def split_by_length(fasta, taxid=None, logger=None):
     """按长度分流。返回 (virus, viroid, skipped)，元素为 {id: seq}。
+
+    taxid: {contig: taxid}（kunpeng 分类结果，可空）。凡 taxid>0 的 contig
+    即已被 kunpeng 判为病毒，**无论长度都走病毒支**——否则 500–1000bp 的
+    病毒 contig 会被长度规则路由到类病毒支，丢掉 kunpeng 的分类身份
+    （病毒支才有谱系/宿主归属与 blastx+BFVD 双路证据），甚至被当成类病毒
+    误判。只有 kunpeng 未分类（taxid 缺省/为 0）的短序列才走类病毒支。
 
     重复 header 会追加 "_2"、"_3" 后缀去重，避免静默覆盖。
     """
+    taxid = taxid or {}
     virus, viroid, skipped = {}, {}, []
+    rescued = 0
     cur, buf, seen = None, [], {}
     with safe_open(fasta) as f:
         for line in f:
             if line.startswith('>'):
                 if cur is not None:
-                    _route(cur, ''.join(buf), virus, viroid, skipped)
+                    rescued += _route(cur, ''.join(buf), virus, viroid,
+                                      skipped, taxid)
                 raw = line[1:].split()[0]
                 n = seen.get(raw, 0) + 1
                 seen[raw] = n
@@ -164,22 +141,41 @@ def split_by_length(fasta):
             else:
                 buf.append(line.strip())
     if cur is not None:
-        _route(cur, ''.join(buf), virus, viroid, skipped)
+        rescued += _route(cur, ''.join(buf), virus, viroid, skipped, taxid)
+    if rescued and logger:
+        logger.log(f'长度分流：{rescued} 条短于 {LEN_VIRUS_MIN}bp 但已被 '
+                   f'kunpeng 判定为病毒（taxid>0）的 contig 改走病毒支')
     return virus, viroid, skipped
 
 
-def _route(cid, seq, virus, viroid, skipped):
+def _contig_taxid(cid, taxid):
+    """取 contig 的 kunpeng taxid；缺省/非法一律 0（未分类）。"""
+    try:
+        return int(taxid.get(cid) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _route(cid, seq, virus, viroid, skipped, taxid=None):
     n = len(seq)
+    if _contig_taxid(cid, taxid or {}) > 0:
+        # kunpeng 已判病毒：长度门槛不适用，短 contig 也走病毒支（返回 1
+        # 表示这是一条被"救回"的短 contig，供调用方汇总日志）
+        virus[cid] = seq
+        return 1 if n < LEN_VIRUS_MIN else 0
     if n >= LEN_VIRUS_MIN:
         virus[cid] = seq
     elif n >= LEN_VIROID_MIN:
         viroid[cid] = seq
     else:
         skipped.append(cid)
+    return 0
 
 
 def _write_fasta(path, records):
-    with open(path, 'w', encoding='utf-8') as f:
+    # newline='\n'：显式 LF，避免 Windows 下裸 open 的文本模式把 '\n'
+    # 翻译成 CRLF（下游比对/建库工具与跨平台校验都按 LF 口径）
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
         for cid, seq in records.items():
             f.write('>%s\n' % cid)
             for i in range(0, len(seq), 60):
@@ -187,11 +183,11 @@ def _write_fasta(path, records):
     return path
 
 
-# ---------------------------------------------------------------- A 路
+# ---------------------------------------------------------------- 引擎
 def verify_engine():
     """探测验证所需引擎。返回 {'diamond': path|None, 'mmseqs': path|None}。
 
-    两路都缺时阶段不可用（blastx 需 DIAMOND，CDD 需 mmseqs2）；
+    两路都缺时阶段不可用（blastx 需 DIAMOND，BFVD 需 mmseqs2）；
     单缺一路仍可降级跑（methods 里缺的那路会被 verify() 自行跳过）。
     """
     cfg = get_config()
@@ -219,7 +215,11 @@ def run_blastx(fa, out_tsv, threads=None, logger=None):
         if logger:
             logger.log('未找到 viral_prot.dmnd，跳过 blastx 分支', 'WARN')
         return None
-    run_cmd([diamond, 'blastx', '-q', fa, '--db', dmnd, '--long-reads',
+    # 不加 --long-reads：DIAMOND 帮助原文 "short for --range-culling --top 10
+    # -F 15"，即强制只报 top score 10% 范围内的命中（--top 10；-F 15 为
+    # frameshift penalty）——正好把"新病毒候选"赖以判定的远源/弱相似命中
+    # 压掉（本模块的过滤器语义是不确定时倾向保留）。去掉后走默认口径。
+    run_cmd([diamond, 'blastx', '-q', fa, '--db', dmnd,
              '-o', out_tsv, '-e', str(BLASTX_EVALUE),
              '--threads', str(threads or cfg.threads),
              '--max-target-seqs', '10',
@@ -252,9 +252,38 @@ def run_blastx(fa, out_tsv, threads=None, logger=None):
                 'evalue': ev, 'bitscore': float(p[5]) if p[5] else 0.0,
                 'stitle': stitle, 'scov': scov,
             })
+    # 按 (-bitscore, evalue) 排序：DIAMOND 输出顺序不保证，直接取 bh[0]
+    # 当"最佳命中"会让 virus_call/calls.tsv 的最优命中随输出顺序漂移
+    for q in by_q:
+        by_q[q].sort(key=lambda h: (-h['bitscore'], h['evalue']))
     if logger:
         logger.log('  [blastx] %d 条获得命中' % len(by_q))
     return by_q
+
+
+# ---------------------------------------------------------------- B 路
+def run_bfvd(fa, out_tsv, threads=None, logger=None):
+    """mmseqs easy-search：核酸 contig vs BFVD（自动 translated search）。
+
+    BFVD 病毒专属库（NCBI 提交链 suvtk 的注释证据源，随包在
+    databases/misc_db/suvtk/bfvd），命中即病毒域证据——无白名单/tier。
+    返回 {query: [hit, ...]}；库缺失返回 None（降级单路 blastx）。
+    """
+    cfg = get_config()
+    try:
+        cfg.tool('mmseqs')
+    except FileNotFoundError:
+        if logger:
+            logger.log('mmseqs2 未配置，跳过 BFVD 分支', 'WARN')
+        return None
+    from .bfvd_search import bfvd_db, search_contigs
+    if not bfvd_db():
+        if logger:
+            logger.log('未找到 BFVD 库（databases/misc_db/suvtk/bfvd），'
+                       '跳过 BFVD 分支', 'WARN')
+        return None
+    hits = search_contigs(fa, out_tsv, threads=threads, logger=logger)
+    return hits
 
 
 def _load_cls(run_dir, assembly_dir=None):
@@ -292,80 +321,15 @@ def _load_cls(run_dir, assembly_dir=None):
     return cls
 
 
-# ---------------------------------------------------------------- B 路
-def run_cdd(fa, out_tsv, threads=None, logger=None):
-    """mmseqs easy-search：核酸 contig vs CDD（自动 translated search）。
-
-    返回 {query: [hit, ...]}，hit 含 tier（1 病毒域 / 2 其他 / 3 Root）。
-    """
-    cfg = get_config()
-    try:
-        mmseqs = cfg.tool('mmseqs')
-    except FileNotFoundError:
-        if logger:
-            logger.log('mmseqs2 未配置，跳过 CDD 分支', 'WARN')
-        return None
-    cdd_dir = db_path('annot', 'cdd')
-    db = None
-    for cand in ('cdd_db', os.path.join('cdd_db', 'cdd_db')):
-        p = os.path.join(cdd_dir, cand) if not os.path.isabs(cand) else cand
-        if os.path.isfile(p):
-            db = p
-            break
-    if not db:
-        if logger:
-            logger.log('未找到 mmseqs 格式 CDD 库，跳过 CDD 分支', 'WARN')
-        return None
-    env = os.environ.copy()
-    env['PATH'] = os.path.dirname(mmseqs) + os.pathsep + env.get('PATH', '')
-    tmp = out_tsv + '.mmseqs_tmp'
-    # CDD prefilter 索引要一次性 ~5GB；小内存机器整库必死 → 统一走
-    # cdd_search.easy_search_cdd（整库失败自动 8 分片重试，结果等价）。
-    from .cdd_search import easy_search_cdd
-    easy_search_cdd(mmseqs, fa, db, out_tsv, tmp,
-                    format_output='query,target,evalue,pident,qlen,qstart,'
-                                  'qend,theader',
-                    evalue=CDD_EVALUE_MAX, max_seqs=5,
-                    threads=threads or cfg.threads, env=env, logger=logger)
-    tier = _load_cdd_tier()
-    by_q = {}
-    if not os.path.isfile(out_tsv):
-        return by_q
-    with open(out_tsv, encoding='utf-8', errors='replace') as f:
-        for line in f:
-            p = line.rstrip('\n').split('\t')
-            if len(p) < 7:
-                continue
-            q, acc = p[0].split()[0], p[1].split()[0]
-            try:
-                ev, qlen, qs, qe = float(p[2]), int(p[4]), int(p[5]), int(p[6])
-            except ValueError:
-                continue
-            if ev > CDD_EVALUE_MAX:
-                continue
-            t = tier.get(acc)
-            if t is None:
-                continue                       # 不在白名单 → 不计入病毒证据
-            theader = p[7] if len(p) > 7 else ''
-            # theader 形如 "cd00009 |RNA polymerase..." 或 "pfam00001 ..."
-            desc = theader.split('|', 1)[-1].strip() if theader else ''
-            by_q.setdefault(q, []).append({
-                'target': acc, 'evalue': ev, 'tier': t,
-                'cov': round((qe - qs + 1) / max(qlen, 1), 3),
-                'description': desc,
-            })
-    if logger:
-        logger.log('  [cdd] %d 条命中病毒相关结构域' % len(by_q))
-    return by_q
-
-
 # ---------------------------------------------------------------- 类病毒支
 def run_viroid_blastn(fa, out_tsv, threads=None, logger=None):
-    """blastn：250–1000bp contig vs viroids_v4。返回 {query: [hit, ...]}。"""
+    """blastn：200–1000bp contig vs viroids_v4。返回 {query: [hit, ...]}。"""
     cfg = get_config()
     blastn = cfg.tool('blastn')
     db = os.path.join(VIROID_DIR, 'viroids_v4')
-    if not os.path.isfile(db + '.nsq'):
+    # 版本无关判定：v4 库出 .nsq/.nhr…，v5 库出 .ndb/.njs…——只认 .nsq 会让
+    # v5 库被静默跳过。按 `.n??` 后缀 glob（与 assembly._db_present 同口径）。
+    if not glob.glob(db + '.n??'):
         if logger:
             logger.log('未找到 viroids_v4 库，跳过类病毒分支', 'WARN')
         return None
@@ -421,21 +385,21 @@ def viroid_call(hits, qlen):
 
 
 # ---------------------------------------------------------------- 病毒支判定
-def virus_call(blastx_hits, cdd_hits):
-    """病毒支细分判定（对齐参考项目「CDD 判是不是病毒 + blast 判已知/新」）。
+def virus_call(blastx_hits, bfvd_hits):
+    """病毒支细分判定（对齐参考项目「域证据判是不是病毒 + blast 判已知/新」）。
 
     返回四档：
       known         已知病毒（blastx identity≥85% 且 subject 覆盖≥85%）
       novel         新病毒候选（blastx identity≥40% 且 subject 覆盖≥50%）
-      domain_only   仅 CDD 病毒域证据（无达标 blastx，或仅有弱/远源命中）
+      domain_only   仅 BFVD 病毒域证据（无达标 blastx，或仅有弱/远源命中）
       unclassified  no-hit（新病毒候选池，保留）
 
-    viral_prot 是纯病毒蛋白库，不存在「命中非病毒需排除」；CDD 命中白名单
-    tier1 视为病毒域证据。过滤器语义不变：no-hit 保留。
+    viral_prot 是纯病毒蛋白库，不存在「命中非病毒需排除」；BFVD 亦为
+    病毒专属库，命中直接视为病毒域证据。过滤器语义不变：no-hit 保留。
     """
     bh = blastx_hits or []
-    ch = cdd_hits or []
-    has_viral_dom = any((h.get('tier') == 1) for h in ch)
+    ch = bfvd_hits or []
+    has_viral_dom = bool(ch)
     if bh:
         best = bh[0]
         pid = best.get('pident', 0.0) or 0.0
@@ -452,7 +416,10 @@ def virus_call(blastx_hits, cdd_hits):
 
 
 def combine_pass(a_pass, b_pass, mode):
-    """组合 A/B 两路结果。mode: union | intersection | a | b。"""
+    """组合 A/B 两路结果。mode: union | intersection（别名 intersect）| a | b。"""
+    if mode == 'intersect':
+        # 历史前端值（旧版管道页发 'intersect'，界面语义=两路均通过）
+        mode = 'intersection'
     if mode == 'union':
         return a_pass | b_pass
     if mode == 'intersection':
@@ -465,7 +432,7 @@ def combine_pass(a_pass, b_pass, mode):
 
 
 # ---------------------------------------------------------------- 主编排
-def verify(run_dir, fasta, host='all', methods=('blastx', 'cdd'),
+def verify(run_dir, fasta, host='all', methods=('blastx', 'bfvd'),
            combine='union', threads=None, logger=None, progress=None,
            out_subdir='verify', assembly_dir=None):
     """候选序列验证。产物落在 run_dir/<out_subdir>/。
@@ -473,6 +440,7 @@ def verify(run_dir, fasta, host='all', methods=('blastx', 'cdd'),
     out_subdir：工具调用用默认 'verify'；管道 03b_verify 阶段传 '03b_verify'。
     assembly_dir：分类谱系表（virus_classification.tsv）所在目录。管道传
     <sample_dir>/03_assembly；工具不传（分类表已被复制到 run_dir 根）。
+    methods：'blastx' / 'bfvd' 组合；combine：union / intersection。
     返回摘要 dict（供任务引擎展示）。
     """
     def _prog(stage, frac, msg):
@@ -488,21 +456,38 @@ def verify(run_dir, fasta, host='all', methods=('blastx', 'cdd'),
     # （缺则 FileNotFoundError），若不预筛会让整个 03b 阶段失败，
     # 而 verify_engine 的契约是"单缺一路仍可降级跑"。
     _eng = verify_engine()
-    _methods = list(methods)
+    _methods = [m for m in (methods or ('blastx', 'bfvd'))
+                if m in ('blastx', 'bfvd')]
+    dropped = [m for m in (methods or ()) if m not in ('blastx', 'bfvd')]
+    if dropped and logger:
+        logger.log('未知证据方法 %s 忽略（仅支持 blastx/bfvd）'
+                   % ','.join(dropped), 'WARN')
     if 'blastx' in _methods and not _eng.get('diamond'):
         _methods = [m for m in _methods if m != 'blastx']
         if logger:
-            logger.log('未找到 DIAMOND，跳过 blastx 分支（降级为 CDD）', 'WARN')
-    if 'cdd' in _methods and not _eng.get('mmseqs'):
-        _methods = [m for m in _methods if m != 'cdd']
+            logger.log('未找到 DIAMOND，跳过 blastx 分支（降级为 BFVD）', 'WARN')
+    if 'bfvd' in _methods and not _eng.get('mmseqs'):
+        _methods = [m for m in _methods if m != 'bfvd']
         if logger:
-            logger.log('未找到 mmseqs2，跳过 CDD 分支', 'WARN')
+            logger.log('未找到 mmseqs2，跳过 BFVD 分支', 'WARN')
     if not _methods:
         raise RuntimeError('候选序列验证无可用引擎（DIAMOND/mmseqs2 全缺）')
     methods = tuple(_methods)
 
-    _prog('split', 0.05, '按长度分流')
-    virus, viroid, skipped = split_by_length(fasta)
+    # 分类表先于分流加载：分流需要 kunpeng 的 taxid 判定（taxid>0 的短 contig
+    # 必须走病毒支，见 split_by_length），不能等宿主筛选时才读。
+    cls = _load_cls(run_dir, assembly_dir=assembly_dir)
+    taxids = {}
+    for cid, row in cls.items():
+        try:
+            t = int(row.get('taxid') or 0)
+        except (TypeError, ValueError):
+            t = 0
+        if t > 0:
+            taxids[cid] = t
+
+    _prog('split', 0.05, '按长度分流（kunpeng taxid>0 的 contig 恒走病毒支）')
+    virus, viroid, skipped = split_by_length(fasta, taxid=taxids, logger=logger)
     _prog('split', 0.10,
           '分流完成：病毒 %d / 类病毒 %d / 过短跳过 %d'
           % (len(virus), len(viroid), len(skipped)))
@@ -513,7 +498,6 @@ def verify(run_dir, fasta, host='all', methods=('blastx', 'cdd'),
                'host_filter': host}
 
     # ---- 宿主筛选（作用于病毒支）----
-    cls = _load_cls(run_dir, assembly_dir=assembly_dir)
     ictv_host = load_ictv_host()
     if host and host != 'all':
         virus, dropped = _filter_by_host(virus, host, cls, ictv_host)
@@ -529,10 +513,10 @@ def verify(run_dir, fasta, host='all', methods=('blastx', 'cdd'),
             _prog('blastx', 0.25, 'DIAMOND blastx vs 病毒蛋白库')
             a_hits = run_blastx(vfa, os.path.join(out_dir, 'blastx.tsv'),
                                 threads=threads, logger=logger) or {}
-        if 'cdd' in methods:
-            _prog('cdd', 0.5, 'mmseqs2 结构域搜索 vs CDD')
-            b_hits = run_cdd(vfa, os.path.join(out_dir, 'cdd_hits.tsv'),
-                             threads=threads, logger=logger) or {}
+        if 'bfvd' in methods:
+            _prog('bfvd', 0.5, 'mmseqs2 病毒域搜索 vs BFVD')
+            b_hits = run_bfvd(vfa, os.path.join(out_dir, 'bfvd_hits.tsv'),
+                              threads=threads, logger=logger) or {}
         a_pass = set(a_hits) if a_hits is not None else set()
         b_pass = set(b_hits) if b_hits is not None else set()
 
@@ -569,18 +553,16 @@ def verify(run_dir, fasta, host='all', methods=('blastx', 'cdd'),
                     'blastx_stitle': b0.get('stitle', ''),
                     'blastx_nhits': len(bh),
                 })
-            # CDD 命中详情（白名单病毒域）
+            # BFVD 命中详情（病毒专属域库，命中即病毒证据）
             if ch:
-                descs = [h.get('description', '') for h in ch if h.get('description')]
+                descs = [h.get('product', '') for h in ch if h.get('product')]
                 rec.update({
-                    'cdd_domains': ';'.join(h.get('target', '') for h in ch),
-                    'cdd_descriptions': '; '.join(descs) if descs else '',
-                    'cdd_tier': min((h.get('tier') for h in ch
-                                     if h.get('tier') is not None),
-                                    default=''),
-                    'cdd_best_evalue': min((h.get('evalue') for h in ch),
-                                           default=''),
-                    'cdd_nhits': len(ch),
+                    'bfvd_domains': ';'.join(
+                        h.get('acc') or h.get('target', '') for h in ch),
+                    'bfvd_descriptions': '; '.join(descs) if descs else '',
+                    'bfvd_best_evalue': min((h.get('evalue') for h in ch),
+                                            default=''),
+                    'bfvd_nhits': len(ch),
                 })
             calls.append(rec)
         _prog('virus', 0.75, '病毒支：%d 条，其中 %d 条有证据'
@@ -650,6 +632,9 @@ def _filter_by_host(records, host, cls, ictv_host):
     host.source 是复合值（如 "algae+fungi+plants"），故用子串包含匹配；
     值为空（未标注）或匹配到所选宿主即保留，避免因缺信息误删。
     """
+    if host == 'protozoa':
+        # 历史前端值；ICTV host.source 的用词是 protists（复合值子串匹配）
+        host = 'protists'
     keep, drop = {}, []
     for cid, seq in records.items():
         cr = cls.get(cid, {})

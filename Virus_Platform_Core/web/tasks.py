@@ -37,7 +37,7 @@ def _slot_limits():
 
     heavy = 吃满多核/GB 级内存的任务（kunpeng 分类、SPAdes 组装、
     DIAMOND 注释、建库、建树、SDT）；light = 网络 IO 或轻量计算
-    （下载、格式转换、绘图、检索、Selenium 提交）。
+    （下载、格式转换、绘图、检索）。
     """
     d = getattr(cfg, 'defaults', None) or {}
     try:
@@ -73,7 +73,16 @@ class TaskManager:
         self.heavy_slots = threading.Semaphore(heavy)
         self.light_slots = threading.Semaphore(light)
         self.limits = {'heavy': heavy, 'light': light}
+        # heavy 名额实时占用数（闸门-线程联动：pipeline 开跑时按
+        # 物理核 ÷ 占用数 钳制本任务线程，防 2 任务 × 各自 19 线程
+        # 超订 20 核——2026-10-04 审查遗留项）
+        self._heavy_used = 0
         self._recover_interrupted()
+
+    def heavy_active(self):
+        """当前占用的 heavy 名额数（≥1，保底供除法）。"""
+        with self.lock:
+            return max(1, self._heavy_used)
 
     def _recover_interrupted(self):
         """服务启动时把上次进程遗留的 running 任务标记为中断（防幽灵），
@@ -120,7 +129,7 @@ class TaskManager:
             print(f'[tasks] 启动时中断任务恢复失败: {e}', file=sys.stderr)
 
     def start(self, name, fn, log_file=None, weight='heavy', link=None,
-              out_dir=None):
+              out_dir=None, on_finish=None):
         """创建任务。log_file: 任务日志持久化文件（缺省落 logs/tasks/）。
 
         weight: 'heavy'（吃多核/大内存，受 heavy 闸门限流）或 'light'
@@ -131,6 +140,13 @@ class TaskManager:
 
         out_dir: 本任务的输出目录（绝对路径）。任务卡与结果面板据此把
         「结果输出在哪」直接显示给用户（含打开/复制入口）；不传则无此行。
+
+        on_finish: **任务进入终态时必调一次**的回调（成功/失败/取消，含
+        「排队途中被取消」）。⚠️ 排队中取消时 `fn` **根本不会被调用**，所以
+        清理逻辑**不能**只写在 `fn` 的 finally 里 —— 那会永久泄漏（2026-10-07
+        审查 P1-1：样品占位表 `_RUNNING_SAMPLES` 因此永不摘除）。需要
+        「无论任务是否真正开跑都要执行的收尾」请用本参数，而非 fn 的 finally。
+        回调异常只打 stderr，不影响任务终态。
 
         重启上下文自动捕获：任务在 POST API handler 里发起时，记录
         request.path + JSON body，任务卡可一键重新提交同一请求。
@@ -191,16 +207,44 @@ class TaskManager:
                         rec['eta'] = max(float(eta[0]), 0)
                     except (TypeError, ValueError):
                         rec['eta'] = None
-            self._persist(rec)
+                # chunk 级进度回调可达每秒数十次：每次全量重写 tasks/<id>.json
+                # （含 log_tail）是写盘风暴——进度帧 ≥1.2s 才落一次盘，
+                # 状态/终态的直接 _persist 调用不受影响
+                _now = time.time()
+                _flush = (_now - rec.get('_last_prog_flush', 0)) >= 1.2
+                if _flush:
+                    rec['_last_prog_flush'] = _now
+            if _flush:
+                self._persist(rec)
 
         def _run():
             from Virus_Platform_Core.utils import task_bind
             slot = (self.light_slots if rec['weight'] == 'light'
                     else self.heavy_slots)
+            # on_finish 必须「恰一次」：排队取消分支与 finally 两条终态路径
+            # 都会调它（2026-10-07 审查 P1-1）
+            _fin = {'called': False}
+
+            def _call_on_finish():
+                if _fin['called']:
+                    return
+                _fin['called'] = True
+                if on_finish is None:
+                    return
+                try:
+                    on_finish()
+                except Exception as e:                    # noqa: BLE001
+                    print(f'[tasks] on_finish 回调失败（任务 {tid}）: '
+                          f'{type(e).__name__}: {e}', file=sys.stderr)
             # 排队等名额：每 0.5s 探一次，期间可被取消（不会被闸门永久卡住）
             got = False
             while not rec['cancel'].is_set():
                 if slot.acquire(timeout=0.5):
+                    if rec['cancel'].is_set():
+                        # 竞态窗口：拿到名额的瞬间被取消——归还名额走
+                        # 取消分支，不能带着名额开跑（2026-10-04 审查 P3）
+                        slot.release()
+                        break
                     got = True
                     break
                 rec['msg'] = self._queue_msg(rec)
@@ -211,20 +255,28 @@ class TaskManager:
                 _emit('[CANCEL] ' + cfg.tr('排队中已取消',
                                           'Cancelled while queued'))
                 self._persist(rec)
+                # fn 从未被调用 → 其 finally 不会执行；终态收尾必须在这里做
+                _call_on_finish()
                 return
+            if rec['weight'] != 'light':
+                with self.lock:
+                    self._heavy_used += 1
             rec['status'] = 'running'
             rec['started'] = time.time()      # 已运行时长从真正开跑算起
             self._persist(rec)
             task_bind(rec['cancel'], rec['procs'])
             try:
                 result = fn(_emit, _progress, rec['cancel'])
+                # preview 组装可能整树 os.walk（大运行目录数千文件）：必须在
+                # 锁外先算好再进锁。原来在锁内做，一次收尾会把 snapshot()、
+                # _progress() 等所有轮询请求全部卡住。
+                preview = build_result_preview(result, rec['name'])
                 # 终态与结果必须一次性原子写入（snapshot 在锁内读）
                 with self.lock:
                     rec['status'] = ('cancelled' if rec['cancel'].is_set()
                                      else 'done')
                     rec['result'] = result
-                    rec['result_preview'] = build_result_preview(result,
-                                                                 rec['name'])
+                    rec['result_preview'] = preview
                 if rec['status'] == 'done':
                     _emit('[OK] ' + cfg.tr('任务完成', 'Task finished'))
             except Exception as e:
@@ -246,9 +298,13 @@ class TaskManager:
                     rec['procs'].clear()
                     rec['finished'] = time.time()
                     rec['msg'] = ''
+                if rec['weight'] != 'light':
+                    with self.lock:
+                        self._heavy_used = max(0, self._heavy_used - 1)
                 slot.release()          # 归还名额
                 self._trim_memory()     # 回收旧任务内存
                 self._persist(rec)
+                _call_on_finish()       # 终态收尾（与排队取消分支恰一次互斥）
 
         th = threading.Thread(target=_run, daemon=True, name=f'task-{tid}')
         rec['thread'] = th

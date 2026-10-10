@@ -22,7 +22,7 @@ plt.rcParams['axes.unicode_minus'] = False
 
 import plotly.graph_objects as go
 
-from .utils import check_path, safe_open, iter_fasta
+from .utils import check_path, safe_open, iter_fasta, verify_svg
 
 # 中文字体 & 离线 plotly.min.js 复制
 _JS_COPIED = False
@@ -44,6 +44,17 @@ def _plotly_js_path(report_dir):
                             check_path(dst, must_exist=False, in_platform=True))
             _JS_COPIED = True
     return 'plotly.min.js' if os.path.isfile(dst) else None
+
+
+def _json_for_script(obj, indent=None):
+    """json.dumps → 可安全内嵌 <script> 的文本。
+
+    转义 '</' → '<\\/'（防数据里出现 '</script>' 提前闭合脚本块）与
+    '<!--' → '\\u003c!--'（防进入 HTML 转义态吞掉终止标签）。两者都是
+    合法 JSON 转义，解析后仍是原值；中文不转义（2026-10-03 审计 P3）。
+    """
+    s = json.dumps(obj, ensure_ascii=False, indent=indent)
+    return s.replace('</', '<\\/').replace('<!--', '\\u003c!--')
 
 
 def _save_fig_png(fig, path):
@@ -456,35 +467,62 @@ def plot_tree(nwk_path, out_png, title=''):
     fig, ax = plt.subplots(figsize=(9, max(4, 0.35 * tree.count_terminals())))
     Phylo.draw(tree, axes=ax, do_show=False,
                show_confidence=True, label_func=lambda c: None)
-    # 叶子标签
-    for tip in tree.get_terminals():
-        pass
     ax.set_title(title or '系统进化树')
     ax.axis('off')
     _save_fig_png(fig, out_png)
 
 
 def plot_tree_labeled(nwk_path, out_png, title=''):
-    """带叶标签的进化树。"""
+    """带叶标签的进化树。
+
+    2026-10-04 审查 D4 修复：axes 边框会从长叶标签上穿过（此前未
+    axis off）；支持率文字直接压在枝线上不可读（加白色 halo 描边）；
+    横轴补 substitutions/site 单位。"""
     from Bio import Phylo
+    import matplotlib.patheffects as pe
     tree = Phylo.read(check_path(nwk_path, must_exist=True), 'newick')
     n_tips = tree.count_terminals()
-    fig, ax = plt.subplots(figsize=(10, max(3.5, 0.32 * n_tips)))
+    lab_len = max((len(c.name or '') for c in tree.get_terminals()), default=0)
+    fig_w = 10 + min(max(lab_len - 30, 0) * 0.14, 8)   # 长标签适当加宽
+    fig, ax = plt.subplots(figsize=(fig_w, max(3.5, 0.32 * n_tips)))
     Phylo.draw(tree, axes=ax, do_show=False,
-               label_func=lambda c: (c.name or '')[:40] if c.is_terminal() else '')
+               label_func=lambda c: (c.name or '')[:64] if c.is_terminal()
+               else '')
+    # 支持率/叶标签白色 halo：压线也可读
+    for t in ax.texts:
+        t.set_path_effects([pe.withStroke(linewidth=2.5, foreground='white')])
+    ax.set_xlabel('Substitutions per site')
     ax.set_title(title or '系统进化树（FastTree/RAxML-NG）')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
     _save_fig_png(fig, out_png)
 
 
-def plot_genome_circos(contig_id, seq, bed_records, out_png, blast_cov=None):
+def _pretty_contig_name(cid):
+    """SPAdes 节点名 → 可读标题：NODE_1_length_6240_cov_29.664667 →
+    NODE_1（6,240 bp）。非该命名式则原样返回。"""
+    m = re.match(r'^(NODE_\d+)_length_(\d+)_cov_[\d.]+$', str(cid or '').strip())
+    if m:
+        return f'{m.group(1)}（{int(m.group(2)):,} bp）'
+    return cid
+
+
+def plot_genome_circos(contig_id, seq, bed_records, out_png, blast_cov=None,
+                       logger=None):
     """病毒 contig 基因组圈图（pycirclize）：ORF 弧 + GC 含量曲线。"""
     try:
         from pycirclize import Circos
-        sectors = {contig_id[:20]: len(seq)}
+        title = _pretty_contig_name(contig_id)
+        # _pretty_contig_name 已含长度信息，避免二次拼接（曾出现
+        # "NODE_1（6,240 bp） (6,240 bp)" 双后缀——2026-10-04 目检）
+        label = title if 'bp' in title else f'{title} ({len(seq):,} bp)'
+        sectors = {label[:20]: len(seq)}
         circos = Circos(sectors, space=8)
         sector = circos.sectors[0]
-        sector.text(f"{contig_id[:20]} ({len(seq):,} bp)",
-                    r=105, deg=90, size=11)
+        # 标题放几何圆心（r>0 时文字沿半径向内圈漂移，r=55 时实测被
+        # 内层圆环线穿过、与 GC 轨道 yticks 刻度重叠——2026-10-04 目检）
+        circos.text(label, r=0, size=11)
 
         # ORF 轨道
         track = sector.add_track((72, 100))
@@ -511,8 +549,66 @@ def plot_genome_circos(contig_id, seq, bed_records, out_png, blast_cov=None):
         fig = circos.plotfig()
         _save_fig_png(fig, out_png)
         return True
-    except Exception:
+    except Exception as e:
+        # 圈图失败回退线性图；异常不能静默（此前裸 except 无任何痕迹，
+        # 失败时只看到一张降级图，2026-10-03 审计 P3）
+        if logger:
+            logger.log(f"圈图失败 {contig_id}（回退线性图）: "
+                       f"{type(e).__name__}: {e}", "WARN")
         return plot_genome_linear(contig_id, seq, bed_records, out_png)
+
+
+def _circos_orf_records(orf_dir, logger=None):
+    """圈图 ORF 记录（BED 口径：chrom/start/end/strand，0 起始半开区间）。
+
+    优先 04_orf/orfipy.bed（⑥ 显式跑 orfipy 时才有）；⑥ 默认已跑
+    pyrodigal/pyrodigal_rv，无 BED 时回退 pyrodigal_rv.gff / pyrodigal.gff，
+    并把 GFF 的 1-based 闭区间换算成 BED 的 0 基半开（start-1, end）——
+    此前只认 orfipy.bed，默认流程下圈图小节永远跳过（2026-10-03 审计 P3）。
+    都缺则返回 []（调用方跳过并把原因写日志）。
+    """
+    bed = os.path.join(orf_dir, 'orfipy.bed')
+    if os.path.isfile(bed):
+        # orfipy BED 无表头：标准 6+ 列（chrom start end name score strand ...）
+        recs = []
+        with safe_open(bed) as f:
+            for line in f:
+                if (line.startswith('#') or line.startswith('track')
+                        or not line.strip()):
+                    continue
+                parts = line.rstrip('\n').split('\t')
+                if len(parts) >= 6:
+                    recs.append({'chrom': parts[0], 'start': parts[1],
+                                 'end': parts[2], 'strand': parts[5]})
+        if recs:
+            return recs
+    for name in ('pyrodigal_rv.gff', 'pyrodigal.gff'):
+        gff = os.path.join(orf_dir, name)
+        if not os.path.isfile(gff):
+            continue
+        recs = []
+        with safe_open(gff) as f:
+            for line in f:
+                if line.startswith('#'):
+                    continue
+                p = line.rstrip('\n').split('\t')
+                if len(p) < 7 or p[2] != 'CDS':
+                    continue
+                try:
+                    s, e = int(p[3]), int(p[4])
+                except ValueError:
+                    continue
+                recs.append({'chrom': p[0], 'start': s - 1, 'end': e,
+                             'strand': p[6]})
+        if recs:
+            if logger:
+                logger.log(f"未找到 orfipy.bed，圈图 ORF 来源回退 {name}"
+                           f"（{len(recs)} 条 CDS）")
+            return recs
+    if logger:
+        logger.log("未找到 04_orf/orfipy.bed 与 pyrodigal*.gff"
+                   "（⑥ 未跑或为旧运行），跳过 contig 圈图小节", "WARN")
+    return []
 
 
 def plot_genome_linear(contig_id, seq, bed_records, out_png):
@@ -729,7 +825,7 @@ def build_report(sample_dir, logger=None):
     if os.path.isfile(p_gb):
         try:
             gb = _read_json(p_gb)
-            n_svg = n_missing = 0
+            n_svg = n_missing = n_broken = 0
             for rel in gb.get('plots', []):
                 # 老版本 summary 记的是绝对路径，这里兼容；新版本记相对路径，
                 # 样品目录搬迁后仍能解析
@@ -738,12 +834,30 @@ def build_report(sample_dir, logger=None):
                 if not os.path.isfile(svg_p):
                     n_missing += 1
                     continue
+                # 内嵌前良构自检（2026-10-07 审查 P1-4）：verify_svg 幂等自修，
+                # 修完再读，避免把残缺 SVG 静默嵌进 report.html（浏览器会容错
+                # 渲染成残图，看不出错）。出口侧已有守卫，这里补消费侧兜底。
+                # 修不动（返回 False）时**跳过嵌入** —— 否则等于明知损坏还往
+                # 交付报告里塞一张残图。
+                if not verify_svg(svg_p, logger=logger):
+                    n_broken += 1
+                    continue
                 with safe_open(svg_p) as f:
                     svg = f.read()
-                # 去掉 XML 声明并让 SVG 自适应容器宽度
+                # 去掉 XML 声明并让 SVG 自适应容器宽度。注意 gbdraw 产物的
+                # 根 <svg> 属性按字母序排列（height 在 width 之前），
+                # "width=.. height=.." 顺序绑定的正则在真实文件上永不命中
+                # （2026-10-03 审计 P2）；改为按属性名分别处理：width→100%、
+                # 删 height（保留 viewBox，浏览器按比例自适应高度）。
                 svg = re.sub(r'<\?xml[^>]*\?>', '', svg, count=1)
-                svg = re.sub(r'(<svg[^>]*?)\swidth="[^"]*"\sheight="[^"]*"',
+                svg = re.sub(r'(<svg\b[^>]*?)\swidth="[^"]*"',
                              r'\1 width="100%"', svg, count=1)
+                svg = re.sub(r'(<svg\b[^>]*?)\sheight="[^"]*"',
+                             r'\1', svg, count=1)
+                if 'width="100%"' not in svg[:svg.find('>') + 1]:
+                    # 根标签没有 width 属性（非 gbdraw 产物）时补一个，
+                    # 保证嵌入容器后仍能自适应
+                    svg = re.sub(r'<svg\b', '<svg width="100%"', svg, count=1)
                 base = os.path.basename(rel)
                 figures.append((f"病毒基因组图 — {base.replace('.svg', '')}",
                                 f'<div style="overflow:auto">{svg}</div>'))
@@ -751,6 +865,10 @@ def build_report(sample_dir, logger=None):
             if n_missing and logger:
                 logger.log(f"09_genome_plots 有 {n_missing} 张图文件无法解析"
                            f"（summary 记录路径与文件不一致），未嵌入报告",
+                           "WARN")
+            if n_broken and logger:
+                logger.log(f"09_genome_plots 有 {n_broken} 张 SVG 非良构且"
+                           f"无法自动修复，已跳过嵌入（避免报告里出现残图）",
                            "WARN")
             if not n_svg and logger:
                 logger.log("09_genome_plots 无可用 SVG，跳过基因组图小节", "WARN")
@@ -761,22 +879,8 @@ def build_report(sample_dir, logger=None):
     # 病毒 contig 圈图（每组最长 contig）
     if asm:
         contigs_fa = os.path.join(sample_dir, '03_assembly', 'contigs.filtered.fasta')
-        bed_file = os.path.join(sample_dir, '04_orf', 'orfipy.bed')
-        bed_records = []
-        if not os.path.isfile(bed_file) and logger:
-            logger.log("未找到 04_orf/orfipy.bed（⑥ 未用 orfipy 或为旧运行），"
-                       "跳过 contig 圈图小节", "WARN")
-        if os.path.isfile(bed_file):
-            # orfipy BED 无表头：标准 6+ 列（chrom start end name score strand ...）
-            with safe_open(bed_file) as f:
-                for line in f:
-                    if line.startswith('#') or line.startswith('track') or not line.strip():
-                        continue
-                    parts = line.rstrip('\n').split('\t')
-                    if len(parts) >= 6:
-                        bed_records.append({'chrom': parts[0],
-                                            'start': parts[1], 'end': parts[2],
-                                            'strand': parts[5]})
+        bed_records = _circos_orf_records(os.path.join(sample_dir, '04_orf'),
+                                         logger)
         if os.path.isfile(contigs_fa) and bed_records:
             contigs = sorted(iter_fasta(contigs_fa), key=lambda x: -len(x[1]))[:5]
             for cid, s in contigs:
@@ -785,8 +889,10 @@ def build_report(sample_dir, logger=None):
                     continue
                 png = os.path.join(out_dir, f'genome_{cid[:30]}.png')
                 try:
-                    if plot_genome_circos(cid, s, recs, png):
-                        figures.append((f"病毒 contig {cid} 基因组圈图 (ORF + GC)",
+                    if plot_genome_circos(cid, s, recs, png, logger=logger):
+                        figures.append(
+                            (f"病毒 contig {_pretty_contig_name(cid)} "
+                             f"基因组圈图 (ORF + GC)",
                                         f'<img style="max-width:100%" src="data:image/png;'
                                         f'base64,{png_b64(png)}">'))
                 except Exception as e:
@@ -1017,13 +1123,12 @@ def build_contig_report(run_dir, logger=None, force=False):
                     'title="交互式旭日图（Krona 等价物）">⬇ Download Krona</a>')
 
     stamp = _time.strftime('%Y-%m-%d %H:%M')
-    report_json = json.dumps(report_rows, ensure_ascii=False)
-    vc_json = json.dumps(vc_rows, ensure_ascii=False)
-    host_json = json.dumps(
+    report_json = _json_for_script(report_rows)
+    vc_json = _json_for_script(vc_rows)
+    host_json = _json_for_script(
         [{'cat': k, 'n': v} for k, v in
-         sorted(host_cats.items(), key=lambda x: -x[1])],
-        ensure_ascii=False)
-    ids_json = json.dumps(ids_rows, ensure_ascii=False)
+         sorted(host_cats.items(), key=lambda x: -x[1])])
+    ids_json = _json_for_script(ids_rows)
 
     if host_map:
         host_section = (f'<h4>Host Prediction (宿主预测统计 · '
@@ -1112,7 +1217,7 @@ th.sortable:hover{{background:#e8e8e8}}
 <div class="dl-row">{dl_html or '<span class="hint">（无产物文件）</span>'}</div>
 <script src="plotly.min.js"></script>
 <script>
-var MODE = {json.dumps(mode)};
+var MODE = {_json_for_script(mode)};
 var REPORT = {report_json};
 var VC = {vc_json};
 var IDS = {ids_json};
@@ -1264,7 +1369,6 @@ function vcTbody(rows) {
     var gal = r.genus_avg_len;
     tbody += '<td class="num">' + (gal != null && gal !== '' ? Number(gal).toFixed(0) : '<span style="color:#ccc">-</span>') + '</td>';
     tbody += '<td style="white-space:nowrap">'
-      + '<button class="btn small" style="font-size:10px;margin:1px" onclick="runAnalysisFor(\'cdd\', \'' + escapeHtml(r.contig) + '\')">CDD</button>'
       + '<button class="btn small" style="font-size:10px;margin:1px" onclick="runAnalysisFor(\'blastn\', \'' + escapeHtml(r.contig) + '\')">BLASTN</button>'
       + '<button class="btn small" style="font-size:10px;margin:1px" onclick="runAnalysisFor(\'blastx\', \'' + escapeHtml(r.contig) + '\')">BLASTX</button>'
       + '<button class="btn small" style="font-size:10px;margin:1px" onclick="runAnalysisFor(\'primer\', \'' + escapeHtml(r.contig) + '\')">Primer</button>'

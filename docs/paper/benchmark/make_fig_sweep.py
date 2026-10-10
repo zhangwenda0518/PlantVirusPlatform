@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
-"""fig_b9：min contig 门槛扫描——覆盖率/一致率 vs 最短 contig 阈值"""
+r"""fig_b9：min contig 门槛扫描——覆盖率/一致率 vs 最短 contig 阈值
+
+输入：run_contig_sweep.py 的扫描日志（外部产物）。
+路径解析：argv[1] > 环境变量 VP_BENCH_SWEEP_LOG > 仓库内
+results/sweep.log（已归档的本次运行日志）。输入缺失时打印说明并跳过该图，
+不报堆栈（2026-10-03 参数化，此前硬编码 C:\vp_srna_test\bench\sweep.log）。
+"""
 import json
 import os
 import re
+import sys
 
 import matplotlib
 matplotlib.use('Agg')
@@ -12,8 +19,16 @@ plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
 plt.rcParams['axes.unicode_minus'] = False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-txt = open(r'C:\vp_srna_test\bench\sweep.log', encoding='utf-8',
-           errors='replace').read()
+LOG = (sys.argv[1] if len(sys.argv) > 1
+       else os.environ.get('VP_BENCH_SWEEP_LOG')
+       or os.path.join(HERE, 'results', 'sweep.log'))
+if not os.path.isfile(LOG):
+    print(f'[跳过] 未找到门槛扫描日志：{LOG}\n'
+          f'       该图为外部运行产物（run_contig_sweep.py 的输出日志）。\n'
+          f'       请用 argv[1] 或环境变量 VP_BENCH_SWEEP_LOG 指定日志路径，'
+          f'或先跑 run_contig_sweep.py 生成。')
+    sys.exit(0)
+txt = open(LOG, encoding='utf-8', errors='replace').read()
 m = re.search(r'RESULT:(\{.*)', txt)
 data = json.loads(m.group(1).split('\n')[0])
 json.dump(data, open(os.path.join(HERE, 'results', 'contig_sweep.json'), 'w',

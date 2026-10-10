@@ -50,7 +50,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 SHOT = os.path.join(ROOT, 'run', '_check_phylodyn_ui.png')
 FIX = os.path.join(ROOT, 'run', '_check_phylodyn_ui_fix')
-EXAMPLE = r'D:\桌面\延伸基因组\MMPV-RNA\biosoft\VirPhyKit\Example'
+# 外部参照仓（延伸基因组/MMPV-RNA 工作区）：默认仍是维护者本机路径，
+# 可用环境变量 VP_EXT_ROOT 覆盖（指向 MMPV-RNA 工作区根）；
+# 目录不存在时相关小节自动跳过。
+EXT_ROOT = os.environ.get('VP_EXT_ROOT', r'D:\桌面\延伸基因组\MMPV-RNA')
+EXAMPLE = os.path.join(EXT_ROOT, 'biosoft', 'VirPhyKit', 'Example')
 
 N_CARDS = 5
 # 2026-09-18：进化动力学组从 16 项收敛到 8 项 ——

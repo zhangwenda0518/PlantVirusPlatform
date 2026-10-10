@@ -547,7 +547,9 @@ def _readme_text(job, kept, extra_cols):
     c = job['counts']
     d = job['dates']
     loc = job['locations']
-    b = job['beast']
+    # ⚠️ 这里**不读** job['beast']（2026-10-03 修复）：旧代码有 `b = job['beast']`
+    #    但 b 从未被使用（F841），且 job 缺 'beast' 键时直接 KeyError —— 本函数
+    #    的文案只用 counts/dates/locations/server/commands，索性删掉这个赋值。
     s = job['server']
     loc_lines = '\n'.join('    %-24s %d 条' % (k, v)
                           for k, v in sorted(loc['counts'].items(),

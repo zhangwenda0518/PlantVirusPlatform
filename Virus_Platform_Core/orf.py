@@ -167,7 +167,11 @@ def run_pyrodigal(in_fasta, out_prefix, tag='pyrodigal', logger=None,
                       or getattr(pdlib, 'OrfFinder', None))
     _kw = {'meta': True}
     if min_aa:
-        _kw['min_gene'] = int(min_aa) * 3
+        # pyrodigal 的 min_gene 按**含终止密码子**的跨度比较（实测 31aa 基因
+        # span=96nt：min_gene=96 时报出、97 时不报）。界面口径 min_aa 是
+        # 氨基酸数（与 orfipy --min 一致——orfipy --min 不含终止密码子），
+        # 故 +1 换算：span_nt = (aa+1)*3（2026-10-03 审计 P3）。
+        _kw['min_gene'] = (int(min_aa) + 1) * 3
     try:
         orf_finder = finder_cls(**_kw)
     except TypeError:
@@ -196,7 +200,11 @@ def run_pyrodigal(in_fasta, out_prefix, tag='pyrodigal', logger=None,
                 # pyrodigal v2/v3 坐标均为 1-based closed（Prodigal 口径）：
                 # Python 切片须换算 [begin-1:end]，否则正链基因整体移码
                 begin0 = begin - 1
-                if min_aa and (end - begin + 1) < int(min_aa) * 3:
+                # min_aa 结果侧二次过滤，口径与 orfipy --min 对齐：span 含终止
+                # 密码子（_translate 需剥尾部 '*' 可证），span//3 比氨基酸数多 1，
+                # 故 -1 后再比；旧式 `span < min_aa*3` 等效门槛 min_aa-1 aa
+                # （2026-10-03 审计 P3）。
+                if min_aa and ((end - begin + 1) // 3 - 1) < int(min_aa):
                     n_dropped += 1
                     continue
                 gid = f"{cid}_{n_genes + 1}"

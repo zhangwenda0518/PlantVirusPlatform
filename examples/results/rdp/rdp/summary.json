@@ -25,7 +25,7 @@
    "support": null
   }
  ],
- "csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20260921_042147_478491\\rdp\\rdp5.csv",
+ "csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20261006_162637_bd6aea\\rdp\\rdp5.csv",
  "qc": {
   "n_in": 5,
   "n_keep": 5,
@@ -44,5 +44,5 @@
  },
  "input": "D:\\桌面\\植物病毒分析平台\\examples\\example_rdp.fasta",
  "source_input": "D:\\桌面\\植物病毒分析平台\\examples\\example_rdp.fasta",
- "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20260921_042147_478491\\rdp"
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20261006_162637_bd6aea\\rdp"
 }

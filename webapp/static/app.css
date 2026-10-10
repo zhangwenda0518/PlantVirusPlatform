@@ -393,6 +393,10 @@ table.tbl th {
   text-transform: uppercase; letter-spacing: .09em; font-weight: 700;
 }
 table.tbl tr:hover td { background: #fafcfa; }
+/* 结果表可排序列（kvTable）：点击表头排序，▲/▼ 指示当前方向 */
+table.tbl th.sortable { cursor: pointer; user-select: none; }
+table.tbl th.sortable:hover { background: var(--green-100, #e8f2ea); }
+table.tbl th.sortable .sort-ind { font-size: 10px; color: #14603b; }
 /* .tbl 的数字列同样右对齐 + 不换行（原规则只覆盖 .tb/.table） */
 table.tbl td.num {
   text-align: right; font-family: Consolas, Monaco, monospace;
@@ -1322,3 +1326,176 @@ html[data-theme="dark"] .mir-fsel, html[data-theme="dark"] .mir-finp { backgroun
 html[data-theme="dark"] .mir-algo-tbl th { background: #1b2630; color: #aeb9c6; }
 html[data-theme="dark"] .mir-algo-tbl td { border-bottom-color: #1f2a36; }
 
+
+/* ==================================================================
+   AI 助手 · 对话驱动坞（总览页常驻）
+   设计口径：与全站一致的细线卡片 + 克制绿；浮层不侵入页面布局。
+   ================================================================== */
+.ai-fab {
+  position: fixed; right: 26px; bottom: 26px; z-index: 90;
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 1px solid var(--green-700); cursor: pointer;
+  background: linear-gradient(145deg, var(--green-600), var(--green-800));
+  color: #fff; font-size: 22px; line-height: 1;
+  box-shadow: var(--shadow-3); transition: transform .15s ease;
+}
+.ai-fab:hover { transform: translateY(-2px) scale(1.04); }
+.ai-dock[hidden] { display: none; }   /* display:flex 会压过 hidden 的 UA 样式，须显式还原 */
+.ai-dock {
+  position: fixed; right: 26px; bottom: 26px; z-index: 95;
+  width: min(430px, calc(100vw - 40px));
+  height: min(600px, calc(100vh - 60px));
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line-200);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+.ai-dock-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px; border-bottom: 1px solid var(--line-100);
+  background: var(--surface-2); gap: 8px;
+}
+.ai-dock-title { font-weight: 700; font-size: 14px; color: var(--ink-900);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ai-dock-ops { display: inline-flex; align-items: center; gap: 6px; }
+.ai-dock-ops select {
+  max-width: 150px; font-size: 12px; padding: 3px 6px;
+  border: 1px solid var(--line-200); border-radius: 6px;
+  background: var(--input-bg); color: var(--ink-700);
+}
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ai-dot.ok { background: var(--green-500); }
+.ai-dot.no { background: var(--ink-300); }
+.ai-ico {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 15px; color: var(--ink-500); padding: 2px 5px;
+  border-radius: 6px; text-decoration: none; line-height: 1.2;
+}
+.ai-ico:hover { background: var(--gray-100); color: var(--ink-900); }
+.ai-msgs { flex: 1; overflow-y: auto; padding: 12px; display: flex;
+  flex-direction: column; gap: 10px; background: var(--canvas); }
+.ai-msg { max-width: 92%; padding: 8px 11px; border-radius: 12px;
+  font-size: 13px; line-height: 1.65; word-break: break-word; }
+.ai-msg ul { margin: 4px 0 4px 18px; padding: 0; }
+.ai-msg li { margin: 2px 0; }
+.ai-msg code { font-family: var(--mono); font-size: 12px;
+  background: rgba(20, 96, 59, .08); padding: 1px 4px; border-radius: 4px; }
+.ai-user { align-self: flex-end; background: var(--green-700); color: #fff;
+  border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.ai-bot { align-self: flex-start; background: var(--surface);
+  border: 1px solid var(--line-200); border-bottom-left-radius: 4px; }
+.ai-br { height: 6px; }
+.ai-hint { color: var(--ink-400); font-size: 12px; }
+.ai-err { margin-top: 6px; padding: 6px 8px; border-radius: 6px;
+  background: var(--red-100); color: var(--red-700); font-size: 12.5px; }
+.ai-err a, .ai-notice a { color: inherit; font-weight: 700; }
+.ai-notice { max-width: 92%; align-self: center; font-size: 12.5px;
+  background: var(--amber-100); color: var(--amber-700);
+  border: 1px solid rgba(163, 101, 29, .25); border-radius: 8px; padding: 7px 10px; }
+.ai-sysnote { align-self: center; font-size: 12px; color: var(--ink-400);
+  background: var(--gray-100); border-radius: 10px; padding: 3px 10px; }
+.ai-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.ai-toolchip { font-family: var(--mono); font-size: 11px;
+  background: var(--blue-100); color: var(--blue-700);
+  border-radius: 5px; padding: 2px 6px; word-break: break-all; }
+.ai-chips { display: flex; gap: 6px; padding: 8px 12px 0; flex-wrap: wrap; }
+.ai-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line-200); background: var(--surface);
+  color: var(--ink-700); cursor: pointer; }
+.ai-chip:hover { border-color: var(--green-600); color: var(--green-700); }
+.ai-inputrow { display: flex; gap: 8px; padding: 10px 12px 12px;
+  align-items: flex-end; }
+.ai-inputrow textarea {
+  flex: 1; resize: none; max-height: 120px; padding: 8px 10px;
+  border: 1px solid var(--line-200); border-radius: 10px;
+  font-family: var(--sans); font-size: 13px; line-height: 1.5;
+  background: var(--input-bg); color: var(--ink-900);
+}
+.ai-inputrow textarea:focus { outline: none; border-color: var(--green-600); }
+.ai-send { width: 38px; height: 38px; border-radius: 10px; border: none;
+  background: var(--green-700); color: #fff; font-size: 16px; cursor: pointer; }
+.ai-send:disabled { background: var(--ink-300); cursor: not-allowed; }
+html[data-theme="dark"] .ai-dock { background: #141c24; border-color: #263241; }
+html[data-theme="dark"] .ai-dock-head { background: #1b2630;
+  border-bottom-color: #263241; }
+html[data-theme="dark"] .ai-dock-title { color: #d7dee6; }
+html[data-theme="dark"] .ai-ico { color: #8fa1b3; }
+html[data-theme="dark"] .ai-ico:hover { background: #263241; color: #d7dee6; }
+html[data-theme="dark"] .ai-msgs { background: #10161d; }
+html[data-theme="dark"] .ai-bot { background: #1b2630; border-color: #263241; color: #d7dee6; }
+html[data-theme="dark"] .ai-bot code { background: #263241; }
+html[data-theme="dark"] .ai-notice { background: #33270f; color: #e2b76a; }
+html[data-theme="dark"] .ai-sysnote { background: #1b2630; color: #8fa1b3; }
+html[data-theme="dark"] .ai-inputrow textarea { background: #141c24;
+  color: #d7dee6; border-color: #263241; }
+html[data-theme="dark"] .ai-chip { background: #141c24; color: #aeb9c6; border-color: #263241; }
+html[data-theme="dark"] .ai-toolchip { background: #16283a; color: #58a6ff; }
+html[data-theme="dark"] .ai-err { background: #3a1d1a; color: #f85149; }
+
+/* ==================================================================
+   AI 主动播报事件流（讲解/解读/闸门三层）+ FAB 未读红点
+   ================================================================== */
+.ai-fab-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px;
+  padding: 0 5px; border-radius: 9px; background: #d64541; color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.ai-event {
+  align-self: flex-start; max-width: 92%; font-size: 12.5px; line-height: 1.6;
+  border-radius: 10px; padding: 6px 10px; word-break: break-word;
+}
+.ai-ev-start { background: var(--blue-100); color: var(--blue-700); }
+.ai-ev-note { margin-top: 4px; font-size: 12px; opacity: .92; }
+.ai-ev-done { align-self: center; background: var(--green-50);
+  color: var(--green-700); border: 1px solid var(--green-100); }
+.ai-ev-run { font-weight: 700; }
+.ai-ev-fail { background: var(--red-100); color: var(--red-700); }
+.ai-read { border-left: 3px solid var(--green-600); }
+.ai-read-head { font-weight: 700; font-size: 12px; color: var(--green-700);
+  margin-bottom: 4px; }
+.ai-read-fail { font-size: 12px; color: var(--red-700); font-weight: 700;
+  margin-bottom: 4px; }
+.ai-gate { border-left: 3px solid var(--amber-700); }
+.ai-gate-st { float: right; font-size: 11.5px; padding: 1px 8px;
+  border-radius: 999px; }
+.ai-gate-st.pending { background: var(--amber-100); color: var(--amber-700); }
+.ai-gate-st.done { background: var(--gray-100); color: var(--ink-500); }
+.ai-gate-btns { display: flex; gap: 8px; margin-top: 8px; }
+.btn.danger { background: var(--red-700); border-color: var(--red-700);
+  color: #fff; }
+.btn.danger:hover { filter: brightness(1.1); }
+html[data-theme="dark"] .ai-fab-badge { background: #e5534b; }
+html[data-theme="dark"] .ai-ev-start { background: #16283a; color: #58a6ff; }
+html[data-theme="dark"] .ai-ev-done { background: #16301f; color: #56d364;
+  border-color: #2a5238; }
+html[data-theme="dark"] .ai-ev-fail { background: #3a1d1a; color: #f85149; }
+html[data-theme="dark"] .ai-read { border-left-color: #2ea768; }
+html[data-theme="dark"] .ai-read-head { color: #56d364; }
+html[data-theme="dark"] .ai-gate { border-left-color: #e2b76a; }
+html[data-theme="dark"] .ai-gate-st.pending { background: #33270f;
+  color: #e2b76a; }
+html[data-theme="dark"] .ai-gate-st.done { background: #263241; color: #8fa1b3; }
+html[data-theme="dark"] .btn.danger { background: #b03a2e; }
+
+/* 播报/闸门阶段勾选组（设置页 AI 卡片） */
+.ai-stagegrid { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.ai-stagechk { display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; color: var(--ink-700); white-space: nowrap;
+  cursor: pointer; }
+.ai-stagechk input { accent-color: var(--green-700); margin: 0; }
+html[data-theme="dark"] .ai-stagechk { color: #aeb9c6; }
+
+/* AI 执行单卡片（第一/二/三级执行权） */
+.ai-action { border-left: 3px solid var(--blue-700); }
+.ai-act-stages { font-size: 12px; color: var(--ink-500); margin-top: 4px;
+  font-family: var(--mono); }
+.ai-act-params { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 5px; }
+.ai-param { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px;
+  border-radius: 5px; background: var(--gray-100); color: var(--ink-700); }
+.ai-param.changed { background: var(--amber-100); color: var(--amber-700);
+  font-weight: 700; }
+.ai-act-reason { margin-top: 6px; font-size: 12.5px; color: var(--ink-500); }
+html[data-theme="dark"] .ai-action { border-left-color: #58a6ff; }
+html[data-theme="dark"] .ai-param { background: #263241; color: #aeb9c6; }
+html[data-theme="dark"] .ai-param.changed { background: #33270f; color: #e2b76a; }

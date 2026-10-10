@@ -2,19 +2,115 @@
   "stage": "orfa",
   "model": "pyrodigal_rv",
   "engine": "diamond",
+  "libs": [
+    "prot",
+    "pfam",
+    "bfvd"
+  ],
+  "libs_labels": [
+    "层1 序列同源（RefSeq 病毒蛋白）",
+    "层2 Pfam HMM（Pfam-A-Viruses）",
+    "层2 BFVD 病毒域（mmseqs2，与 NCBI 提交同源）"
+  ],
+  "pfam_libs": [
+    "pfam"
+  ],
+  "filters": {
+    "min_pident": null,
+    "min_qcov": null,
+    "n_hits_filtered": 0
+  },
+  "db_files": {
+    "viral_prot.dmnd": [
+      239004895,
+      "2026-09-10 16:43:41"
+    ],
+    "viral_prot.faa": [
+      229248036,
+      "2026-09-30 01:12:22"
+    ],
+    "organism_tax.tsv": [
+      873034,
+      "2026-09-04 21:28:05"
+    ],
+    "Pfam-A-Viruses.hmm.h3m": [
+      46671799,
+      "2026-09-10 15:47:05"
+    ],
+    "Pfam-A-Viruses.hmm.h3i": [
+      74219,
+      "2026-09-10 15:47:05"
+    ],
+    "Pfam-A-Viruses.hmm.h3f": [
+      23014637,
+      "2026-09-10 15:47:05"
+    ],
+    "Pfam-A-Viruses.hmm.h3p": [
+      54828069,
+      "2026-09-10 15:47:05"
+    ],
+    "bfvd": [
+      68002728,
+      "2026-09-08 02:44:35"
+    ],
+    "bfvd.dbtype": [
+      4,
+      "2026-09-08 02:44:35"
+    ],
+    "bfvd.index": [
+      6715338,
+      "2026-09-08 02:44:35"
+    ],
+    "bfvd.lookup": [
+      26266069,
+      "2026-09-08 02:44:35"
+    ],
+    "bfvd.source": [
+      23918485,
+      "2026-09-08 02:44:35"
+    ],
+    "bfvd.version": [
+      8,
+      "2026-09-08 02:44:35"
+    ],
+    "bfvd_h": [
+      21922143,
+      "2026-09-08 02:44:36"
+    ],
+    "bfvd_h.dbtype": [
+      4,
+      "2026-09-08 02:44:36"
+    ],
+    "bfvd_h.index": [
+      6386241,
+      "2026-09-08 02:44:36"
+    ],
+    "bfvd_metadata.tsv": [
+      32755596,
+      "2026-09-08 02:44:36"
+    ],
+    "bfvd_uniprot_names.tsv": [
+      35682732,
+      "2026-09-08 02:44:36"
+    ]
+  },
+  "db_versions": {
+    "bfvd.version": "2023_02"
+  },
   "n_orfs": 7,
   "n_annotated": 7,
   "n_families": 2,
   "gff_annotated": 7,
-  "n_hmm_only": 2,
-  "n_cdd_only": 0,
+  "n_hmm_only": 1,
+  "n_bfvd_only": 1,
   "evidence": {
-    "hmm": 2,
+    "bfvd": 1,
+    "hmm": 1,
     "seq": 5
   },
   "categories": {
-    "其他功能蛋白": 6,
-    "假想蛋白（功能未定）": 1
+    "其他功能蛋白": 5,
+    "假想蛋白（功能未定）": 2
   },
   "families": {
     "Solemoviridae": 4,
@@ -27,14 +123,15 @@
   ],
   "rows_preview": [
     {
-      "orf_id": "example_contig_2_9",
+      "orf_id": "example_contig_2_7",
       "product": "polyprotein",
       "organism": "Grapevine Roditis leaf discoloration-associated virus",
       "family": "Caulimoviridae",
       "category": "其他功能蛋白",
       "pident": 100.0,
       "qcov": 100.0,
-      "bitscore": 3585.0
+      "bitscore": 3585.0,
+      "evidence": "seq"
     },
     {
       "orf_id": "example_contig_1_1",
@@ -44,17 +141,19 @@
       "category": "其他功能蛋白",
       "pident": 100.0,
       "qcov": 100.0,
-      "bitscore": 1261.0
+      "bitscore": 1261.0,
+      "evidence": "seq"
     },
     {
-      "orf_id": "example_contig_1_5",
+      "orf_id": "example_contig_1_4",
       "product": "putative read through protein P5",
       "organism": "Pepper vein yellows virus 5",
       "family": "Solemoviridae",
       "category": "其他功能蛋白",
       "pident": 79.7,
       "qcov": 99.8,
-      "bitscore": 739.0
+      "bitscore": 739.0,
+      "evidence": "seq"
     },
     {
       "orf_id": "example_contig_1_2",
@@ -64,37 +163,41 @@
       "category": "其他功能蛋白",
       "pident": 98.7,
       "qcov": 100.0,
-      "bitscore": 630.0
+      "bitscore": 630.0,
+      "evidence": "seq"
     },
     {
-      "orf_id": "example_contig_1_4",
+      "orf_id": "example_contig_1_3",
       "product": "P3-CP",
       "organism": "Pepper yellows virus",
       "family": "Solemoviridae",
       "category": "其他功能蛋白",
       "pident": 100.0,
       "qcov": 100.0,
-      "bitscore": 309.0
+      "bitscore": 309.0,
+      "evidence": "seq"
     },
     {
-      "orf_id": "example_contig_2_7",
-      "product": "sp|P19200|YOR1_COYMV Uncharacterized 23 kDa protein",
+      "orf_id": "example_contig_2_5",
+      "product": "Protein of unknown function (DUF1319)",
       "organism": "Grapevine Roditis leaf discoloration-associated virus",
       "family": "Caulimoviridae",
       "category": "假想蛋白（功能未定）",
       "pident": 100.0,
       "qcov": 100.0,
-      "bitscore": 265.0
+      "bitscore": 265.0,
+      "evidence": "hmm"
     },
     {
-      "orf_id": "example_contig_2_8",
-      "product": "ORF2 protein",
+      "orf_id": "example_contig_2_6",
+      "product": "Uncharacterized protein",
       "organism": "Grapevine Roditis leaf discoloration-associated virus",
       "family": "Caulimoviridae",
-      "category": "其他功能蛋白",
+      "category": "假想蛋白（功能未定）",
       "pident": 100.0,
       "qcov": 100.0,
-      "bitscore": 246.0
+      "bitscore": 246.0,
+      "evidence": "bfvd"
     }
   ]
 }

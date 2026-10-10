@@ -12,38 +12,43 @@
   注意入口名必须仍是 `.hmm`（Easel 拿它挂同名 `.h3m`，直接传 `.h3m` 会报错）。
 - 命中过滤采用 rosekantor/viral_fams 口径双门槛：
     域级 i-Evalue ≤ 1e-3  且  HMM 模型覆盖率 ≥ 0.5
+  hmmscan 调用侧的序列级 E 只作**漏斗**（SCAN_PREFILTER_E=10），不参与
+  判定——序列级 E 设成 1e-3 会先滤掉整条序列，远严于域级口径。
+  一个命中内的全部合规域都保留（多域蛋白不再只留 best_domain），
+  product/category 归属仍取最优域。
 - 功能/分类归属：Pfam-A-Viruses 为**自描述 HMM**（NAME/ACC/DESC 内嵌），
   描述直接取命中自带 DESC，无需外部元数据文件。
-- 结构域层：mmseqs2 搜索 NCBI Cdd（替代 RPS-BLAST，思路同 Cenote-Taker3 的
-  `mmseqs databases CDD`），命中按 viral_cdds_and_pfams_191028.txt（1,580 条
-  精选病毒域列表，源自 Cenote-Taker2/3）标记病毒相关性。
 
 > 历史：曾支持 VOGDB(vog_all.hmm) / RVDB(rvdb_v32_prot.hmm) 两路，三者都
 > 不随平台分发。2026-09-10 起**只保留 Pfam 病毒库**这一路（不再有缺库提示），
 > 相关库位、元数据加载与合并分支已一并移除。
+> 曾并行支持 CDD 结构域层（mmseqs2 搜索 NCBI Cdd）：因 CDD prefilter 索引
+> 一次性分配 ~5GB、小内存机器反复 OOM，2026-09-29 移除；同日改接 **BFVD**
+> 病毒域层（bfvd_search.search_orfs，与 SUVTK 提交链同库同命名），
+> 层2 合并入口为 merge_layer2(hmm + bfvd)。
 
 对外接口：
   hmm_available()            pyhmmer 是否可用
   available_libs()           实际存在的 HMM 库 [(名, 路径)]
   annotate_orfs_hmm(...)     逐库扫描 → {orf_id: {'hits': [...], 'best': hit}}
-  cdd_search_orfs(...)       CDD 结构域搜索 → {orf_id: [hit, ...]}
-  merge_hmm_cdd(...)         与层1结果合并 → 每_ORF 的 product/category/family 补全
+  merge_layer2(...)          层2（HMM + BFVD）与层1结果合并 → product/category/family 补全
 """
 import os
-import shutil
 
 from .config import get_config, db_path
 
 # i-Evalue / 覆盖率门槛（viral_fams 口径）
 DOM_IEVAL_MAX = 1e-3
 HMM_COV_MIN = 0.5
-# CDD 命中过滤
-CDD_EVALUE_MAX = 1e-3
-CDD_MAX_HITS = 3
+#: hmmscan 的**序列级**预过滤 E 值（漏斗作用，不是判定门槛）。
+#: 判定门槛始终是上面的域级 DOM_IEVAL_MAX：hmmscan 的 E 是整条序列的
+#: E-value，若也设 1e-3，长序列/多域蛋白的合规域会被序列级门槛先滤掉
+#: （序列级 E 通常比域级 i-E 大得多），远严于文档口径。
+#: 故预过滤放宽到 10，合规判定仍走 :_scan_library 内双门槛（2026-10-03 审计 P3）。
+SCAN_PREFILTER_E = 10.0
 
 # ── 库路径（全部走 db_path 注册表；DB_LAYOUT 见 Virus_Platform_Core/config.py）─────────
 HMM_DIR = db_path('annot', 'hmm')
-CDD_DIR = db_path('annot', 'cdd')
 
 
 # HMM 库「可用」判定：主文件存在，或 press 产物齐全（.h3m+.h3i）即视为可用。
@@ -68,7 +73,7 @@ def _hmm_lib_usable(entry_path):
 
 # 唯一的 HMM 库：annot/hmm/pfam/Pfam-A-Viruses.hmm（Pfam 病毒谱）
 #   —— virsorter2 的病毒 Pfam 子集，1,074 profiles，纯文本 HMMER3/f，
-#      **自带 NAME/ACC/DESC**（不需要外部元数据，见 merge_hmm_cdd）；
+#      **自带 NAME/ACC/DESC**（不需要外部元数据，见 merge_layer2）；
 #      实测 2.2s 扫 1,074 profiles、零噪音。
 # 目录 2026-09-10 由 hmm/vfam/ 更名为 hmm/pfam/（名字与内容一致）。
 # VOGDB(vog_all.hmm) / RVDB(rvdb_v32_prot.hmm) / vFam(vFam-B_2014.hmm) 三路
@@ -84,8 +89,6 @@ HMM_LIBS = [
     ('pfam', PFAM_PATH),
 ]
 PFAM_ANNOT_DIR = os.path.join(HMM_DIR, 'pfam', 'annot')
-VIRAL_CDD_LIST = os.path.join(CDD_DIR, 'viral_cdds_and_pfams_191028.txt')
-CDD_ID_TBL = os.path.join(CDD_DIR, 'cddid_all.tbl')
 
 _PFAM_META_CACHE = None
 
@@ -93,27 +96,24 @@ _PFAM_META_CACHE = None
 def refresh_paths():
     """重算模块级库路径常量（切换「设置 → 数据库目录」后由 config 回调）。
 
-    本模块在 import 时快照了 HMM_DIR / CDD_DIR 及其派生常量。
+    本模块在 import 时快照了 HMM_DIR 及其派生常量。
     若不重算，`db-migrate` 之后长驻的 Web 进程仍指向旧库位置：
-    旧路径已不存在 -> available_libs() 返回空 -> HMM/CDD 功能注释
+    旧路径已不存在 -> available_libs() 返回空 -> HMM 功能注释
     **静默失效**（不报错，只是结果变空）。故注册进
     Virus_Platform_Core/config.py::_refresh_module_paths()。
     """
-    global HMM_DIR, CDD_DIR, HMM_LIBS
-    global PFAM_ANNOT_DIR, VIRAL_CDD_LIST, CDD_ID_TBL
+    global HMM_DIR, HMM_LIBS
+    global PFAM_ANNOT_DIR
     global PFAM_PATH, PFAM_SELF_DESC
     global _PFAM_META_CACHE
 
     HMM_DIR = db_path('annot', 'hmm')
-    CDD_DIR = db_path('annot', 'cdd')
     PFAM_PATH = os.path.join(HMM_DIR, 'pfam', 'Pfam-A-Viruses.hmm')
     PFAM_SELF_DESC = os.path.basename(PFAM_PATH).startswith('Pfam-A-')
     HMM_LIBS = [
         ('pfam', PFAM_PATH),
     ]
     PFAM_ANNOT_DIR = os.path.join(HMM_DIR, 'pfam', 'annot')
-    VIRAL_CDD_LIST = os.path.join(CDD_DIR, 'viral_cdds_and_pfams_191028.txt')
-    CDD_ID_TBL = os.path.join(CDD_DIR, 'cddid_all.tbl')
     # 缓存按旧库内容构建，一并失效
     _PFAM_META_CACHE = None
 
@@ -134,6 +134,21 @@ def available_libs():
     后者支持「删掉纯文本 .hmm、只留 press 产物」以省空间（见 _hmm_lib_usable）。
     """
     return [(n, p) for n, p in HMM_LIBS if _hmm_lib_usable(p)]
+
+
+def lib_trace():
+    """HMM 库可追溯信息 → (db_files, db_versions)。
+
+    清单含 press 派生件（.h3m/.h3i/.h3f/.h3p，可能只有它们存在于磁盘）
+    与主文件，文件名+size+mtime；供 ⑥b summary.json 记录本次扫描所用库
+    （2026-10-03 审计 P2）。
+    """
+    from .utils import db_trace
+    paths = []
+    for _name, p in HMM_LIBS:
+        paths.append(p)
+        paths += [p + e for e in _PRESS_EXTS + ('.h3f', '.h3p')]
+    return db_trace(paths, n_max=40)
 
 
 # ------------------------------------------------------------------
@@ -263,31 +278,44 @@ def _scan_library(faa, lib_name, lib_path, threads, logger=None):
     with pyhmmer.plan7.HMMFile(lib_path) as hf:
         targets = hf.optimized_profiles() if pressed else hf
         for hits in pyhmmer.hmmer.hmmscan(seqs, targets, cpus=threads,
-                                          E=DOM_IEVAL_MAX):
+                                          E=SCAN_PREFILTER_E):
             qname = hits.query.name
             qname = qname.decode() if isinstance(qname, bytes) else qname
             found = []
             for hit in hits:
-                dom = hit.best_domain
-                if dom is None:
-                    continue
-                ie = dom.i_evalue
-                aln = dom.alignment
-                hmm_len = aln.hmm_length or 0
-                cov = ((aln.hmm_to - aln.hmm_from + 1) / hmm_len
-                       if hmm_len else 0.0)
-                # viral_fams 双门槛：域级 i-Evalue + 模型覆盖率
-                if ie > DOM_IEVAL_MAX or cov < HMM_COV_MIN:
-                    continue
                 tname = hit.name
                 tname = tname.decode() if isinstance(tname, bytes) else tname
-                found.append({
-                    'lib': lib_name, 'target': tname,
-                    'acc': (getattr(hit, 'accession', '') or ''),
-                    'desc': (getattr(hit, 'description', '') or ''),
-                    'evalue': ie, 'score': dom.score, 'cov': round(cov, 2),
-                    'hmm_from': aln.hmm_from, 'hmm_to': aln.hmm_to,
-                })
+                # 遍历该命中的全部 domain（不再只取 best_domain——多域蛋白
+                # 的其余合规域此前被整体丢弃，2026-10-03 审计 P3）；同坐标
+                # 重复域去重（保留 i-Evalue 更小者）。
+                doms = list(hit.domains or [])
+                if hit.best_domain is not None:
+                    doms.append(hit.best_domain)
+                seen_dom = {}
+                for dom in doms:
+                    if dom is None:
+                        continue
+                    ie = dom.i_evalue
+                    aln = dom.alignment
+                    hmm_len = aln.hmm_length or 0
+                    cov = ((aln.hmm_to - aln.hmm_from + 1) / hmm_len
+                           if hmm_len else 0.0)
+                    # viral_fams 双门槛：域级 i-Evalue + 模型覆盖率
+                    if ie > DOM_IEVAL_MAX or cov < HMM_COV_MIN:
+                        continue
+                    key = (aln.hmm_from, aln.hmm_to)
+                    prev = seen_dom.get(key)
+                    if prev is not None and prev['evalue'] <= ie:
+                        continue
+                    seen_dom[key] = {
+                        'lib': lib_name, 'target': tname,
+                        'acc': (getattr(hit, 'accession', '') or ''),
+                        'desc': (getattr(hit, 'description', '') or ''),
+                        'evalue': ie, 'score': dom.score,
+                        'cov': round(cov, 2),
+                        'hmm_from': aln.hmm_from, 'hmm_to': aln.hmm_to,
+                    }
+                found.extend(seen_dom.values())
             if found:
                 found.sort(key=lambda h: h['evalue'])
                 by_q[qname] = found[:5]
@@ -331,151 +359,44 @@ def annotate_orfs_hmm(faa, threads=None, logger=None, progress=None,
 
 
 # ------------------------------------------------------------------
-# CDD 结构域层（mmseqs2 替代 RPS-BLAST）
-# ------------------------------------------------------------------
-def cdd_db_prefix():
-    """mmseqs 格式 CDD 库前缀。优先级：platform.json databases.cdd 覆盖 >
-    病毒子集 cdd_virus_db（自服务器拷入，搜索更快）> 全量 cdd_db。"""
-    cfg = get_config()
-    p = cfg.databases.get('cdd')
-    if p and os.path.isfile(p):
-        return p
-    for name in ('cdd_virus_db', 'cdd_db'):
-        prefix = os.path.join(CDD_DIR, name)
-        if os.path.isfile(prefix):
-            return prefix
-    return None
-
-
-def _load_viral_cdd_list():
-    ids = set()
-    if os.path.isfile(VIRAL_CDD_LIST):
-        with open(VIRAL_CDD_LIST, encoding='utf-8', errors='replace') as f:
-            for line in f:
-                v = line.strip()
-                if v:
-                    ids.add(v)
-    return ids
-
-
-_CDD_NAMES_CACHE = None
-
-
-def _load_cdd_names():
-    """cddid_all.tbl（可选）→ {CDD-ID: ShortName}。全量载入并缓存。"""
-    global _CDD_NAMES_CACHE
-    if _CDD_NAMES_CACHE is not None:
-        return _CDD_NAMES_CACHE
-    names = {}
-    if os.path.isfile(CDD_ID_TBL):
-        with open(CDD_ID_TBL, encoding='utf-8', errors='replace') as f:
-            for line in f:
-                p = line.rstrip('\n').split('\t')
-                if len(p) >= 3:
-                    # 列序: PSSM-Id  CDD-ID  ShortName  Description  Length
-                    names[p[1].strip()] = p[2].strip()
-    _CDD_NAMES_CACHE = names
-    return names
-
-
-def cdd_search_orfs(faa, out_dir, threads=None, logger=None):
-    """mmseqs easy-search ORF 蛋白 vs CDD 库。返回 {orf_id: [hit, ...]} 或
-    None（库/工具不可用）。"""
-    cfg = get_config()
-    try:
-        mmseqs = cfg.tool('mmseqs')
-    except FileNotFoundError:
-        if logger:
-            logger.log("mmseqs2 未安装，跳过 CDD 结构域层", "WARN")
-        return None
-    db = cdd_db_prefix()
-    if not db:
-        if logger:
-            logger.log("未找到 mmseqs 格式 CDD 库（databases/cdd/cdd_db*），"
-                       "跳过结构域层", "WARN")
-        return None
-    if logger:
-        logger.log(f"  [cdd] 使用库: {os.path.basename(db)} "
-                   f"({os.path.getsize(db) / 1e6:.0f}MB)")
-    env = os.environ.copy()
-    env['PATH'] = os.path.dirname(mmseqs) + os.pathsep + env.get('PATH', '')
-    out_tsv = os.path.join(out_dir, 'cdd_hits.raw.tsv')
-    tmp = out_tsv + '.mmseqs_tmp'
-    try:
-        # CDD prefilter 索引要一次性 ~5GB；小内存机器整库必死 → 统一走
-        # cdd_search.easy_search_cdd（整库失败自动 8 分片重试，结果等价）。
-        from .cdd_search import easy_search_cdd
-        easy_search_cdd(mmseqs, faa, db, out_tsv, tmp,
-                        format_output='query,target,evalue,pident,qlen,qstart,'
-                                      'qend,tstart,tend,bits',
-                        evalue=CDD_EVALUE_MAX, max_seqs=5,
-                        threads=threads or cfg.threads, env=env, logger=logger)
-    finally:
-        # mmseqs 的临时目录必须清掉：兄弟模块 orf_annot._run_search 有清理，
-        # 这里原先没有，实测 results/ERR7586041/04b_orf_annot/ 下留有
-        # cdd_hits.raw.tsv.mmseqs_tmp（还会被 /api/tool/runs 目录遍历扫到）。
-        if os.path.isdir(tmp):
-            shutil.rmtree(tmp, ignore_errors=True)
-    viral_ids = _load_viral_cdd_list()
-    names = _load_cdd_names()
-    by_q = {}
-    with open(out_tsv, encoding='utf-8', errors='replace') as f:
-        for line in f:
-            p = line.rstrip('\n').split('\t')
-            if len(p) < 10:
-                continue
-            q, acc = p[0].split()[0], p[1].split()[0]
-            try:
-                ev = float(p[2])
-                qlen, qs, qe = int(p[4]), int(p[5]), int(p[6])
-            except ValueError:
-                continue
-            if ev > CDD_EVALUE_MAX:
-                continue
-            qcov = round((qe - qs + 1) / max(qlen, 1), 2)
-            by_q.setdefault(q, []).append({
-                'lib': 'cdd', 'target': acc,
-                'desc': names.get(acc, ''),
-                'evalue': ev, 'cov': qcov,
-                'viral_list': acc in viral_ids,
-            })
-    for q in by_q:
-        by_q[q] = sorted(by_q[q], key=lambda h: h['evalue'])[:CDD_MAX_HITS]
-    if logger:
-        logger.log(f"  [cdd] {len(by_q)} 个 ORF 获得结构域命中")
-    return by_q
-
-
-# ------------------------------------------------------------------
 # 与层1合并
 # ------------------------------------------------------------------
-def format_hit_cell(hits):
-    """命中列表 → 紧凑单元格文本：PF00680(2e-40,cov0.93)|PF00946(...)。
-    CDD 命中代号后附 ShortName 便于识读（如 *pfam00946 Mononeg_RNA_pol(...)）。
-    带 ``*`` 者 = 病毒白名单域（CDD 的 viral_list）。"""
-    parts = []
-    for h in hits:
-        mark = '*' if h.get('viral_list') else ''
-        name = ''
-        if h.get('lib') == 'cdd' and h.get('desc'):
-            name = f" {h['desc']}"
-        parts.append(f"{mark}{h['target']}{name}({h['evalue']:.0e},cov{h['cov']})")
-    return '|'.join(parts[:5])
+def format_hit_cell(hits, max_targets=5, max_doms_per_target=3):
+    """命中列表 → 紧凑单元格文本。
+    HMM：PF00680(2e-40,cov0.93)|PF00946(...)；同一模型的多个合规域
+    （多域蛋白/重复域）在同一 target 内以 ';' 连接（2026-10-03 审计 P3，
+    此前只保留 best_domain）；
+    BFVD：target 是 AlphaFold 模型代号（可读性差），用 product 名替代
+    （与 suvtk featuretable 的 product 同源）。"""
+    order, per_target = [], {}
+    for h in (hits or []):
+        name = h['target']
+        if h.get('lib') == 'bfvd' and h.get('desc'):
+            name = h['desc']
+        if name not in per_target:
+            if len(order) >= max_targets:
+                continue
+            per_target[name] = []
+            order.append(name)
+        if len(per_target[name]) < max_doms_per_target:
+            per_target[name].append(
+                f"{name}({h['evalue']:.0e},cov{h['cov']})")
+    return '|'.join(';'.join(per_target[n]) for n in order)
 
 
-def merge_hmm_cdd(rows, hmm_by_q, cdd_by_q, classify_product):
-    """把层2结果并回层1行。返回 (n_hmm_only, n_cdd_only)。
+def merge_layer2(rows, hmm_by_q, bfvd_by_q, classify_product):
+    """把层2结果并回层1行。返回 (n_hmm_only, n_bfvd_only)。
 
-    优先级：层1 序列命中（informative）> HMM（Pfam 自描述 DESC）> CDD 名称。
+    优先级：层1 序列命中（informative）> HMM（Pfam 自描述 DESC）> BFVD 域名。
     rows 为 orf_annotation 行 dict（就地更新 product/organism/family/category/
-    informative/evidence，并新增 hmm_hits/cdd_hits 列数据）。"""
-    n_hmm_only = n_cdd_only = 0
+    informative/evidence，并新增 hmm_hits/bfvd_hits 列数据）。"""
+    n_hmm_only = n_bfvd_only = 0
     for r in rows:
         q = r['orf_id']
         hh = (hmm_by_q or {}).get(q)
-        cc = (cdd_by_q or {}).get(q)
+        bb = (bfvd_by_q or {}).get(q)
         r['hmm_hits'] = format_hit_cell(hh['hits']) if hh else ''
-        r['cdd_hits'] = format_hit_cell(cc) if cc else ''
+        r['bfvd_hits'] = format_hit_cell(bb) if bb else ''
         if r.get('informative') == 'Y':
             r['evidence'] = 'seq'
             continue
@@ -504,15 +425,15 @@ def merge_hmm_cdd(rows, hmm_by_q, cdd_by_q, classify_product):
             r['evidence'] = 'hmm'
             n_hmm_only += 1
             continue
-        if cc:
-            best = cc[0]
+        if bb:
+            best = bb[0]
             name = best.get('desc') or best['target']
-            r['product'] = f"CDD {best['target']}: {name}" if best.get('desc') \
-                else f"CDD {best['target']}"
+            r['product'] = name
+            r['organism'] = r['organism'] or best.get('organism', '')
             r['category'] = classify_product(name)
             r['informative'] = 'Y'
-            r['evidence'] = 'cdd'
-            n_cdd_only += 1
+            r['evidence'] = 'bfvd'
+            n_bfvd_only += 1
             continue
         r['evidence'] = 'none'
-    return n_hmm_only, n_cdd_only
+    return n_hmm_only, n_bfvd_only

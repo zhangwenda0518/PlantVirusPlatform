@@ -56,7 +56,7 @@ function pickDirWith(cb) {
 }
 
 function pickDir() {
-  if (browseCwd === '此电脑') { alert('请先进入某个目录'); return; }
+  if (browseCwd === '此电脑') { alert(t('ui.br.needDir')); return; }
   if (browseDirCb) {
     const cb = browseDirCb;
     browseDirCb = null;
@@ -94,7 +94,7 @@ async function loadBrowse(path, _isRetry) {
         loadBrowse('.', true);
         return;
       }
-      alert('无法打开目录');
+      alert(t('ui.br.openDirFail'));
       return;
     }
     const d = await r.json();
@@ -131,7 +131,7 @@ async function loadBrowse(path, _isRetry) {
     }
     $('dlgList').innerHTML = items.join('') || `<p class="hint">${t('c.noMatchFile')}</p>`;
   } catch (e) {
-    setConnBanner(true);
+    if (netFail(e)) setConnBanner(true);
   }
 }
 
@@ -178,7 +178,7 @@ async function jumpBrowse() {
     if (!d.is_dir && browseMode === 'file') { pickFile(d.path); return; }
     loadBrowse(d.is_dir ? d.path : (d.parent || d.path));
   } catch (e) {
-    setConnBanner(true);
+    if (netFail(e)) setConnBanner(true);
   }
 }
 

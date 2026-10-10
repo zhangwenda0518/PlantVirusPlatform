@@ -21,6 +21,18 @@ DISK_WARN_BYTES = 10e9     # 磁盘剩余低于此值提示（与 CLI 自检同�
 _CACHE = {'ts': 0.0, 'data': None}
 
 
+def invalidate():
+    """清掉进程内自检缓存，下次 collect() 立即重算。
+
+    数据库状态在进程内发生变化（建库完成 / 加载宿主库 / 切换当前库 /
+    登记病毒库）后应由改动方调一下：否则总览页环境状态条会把加载前的
+    "数据库 未就绪"一直展示到缓存过期，看起来像"加载了但没同步"
+    （2026-09-30 手动加载宿主库后即此现象）。模块探测较贵（子进程逐个
+    import），所以不做短 TTL 轮询，只在状态变化点精确失效。"""
+    _CACHE['ts'] = 0.0
+    _CACHE['data'] = None
+
+
 def iter_platform_modules():
     """枚举 Virus_Platform_Core 下的全部子模块（递归含子包）。
 
@@ -127,12 +139,14 @@ def _check_modules():
     fails = []
     crashed_at = None
     seen_p = 0
-    last_p = None
     _env = os.environ.copy()
     _env['VP_IMPORT_TRACE'] = '1'      # 子进程 stderr 留下逐包导入痕迹，崩溃可溯源
     try:
+        # 显式 encoding='utf-8'：text=True 缺省走系统 ANSI 代码页（中文
+        # Windows = GBK），探测子进程输出含非 GBK 字节时会解码报错/乱码
         proc = _sub.run(argv + [mods_csv], capture_output=True,
-                        text=True, errors='replace', timeout=900, env=_env)
+                        text=True, encoding='utf-8', errors='replace',
+                        timeout=900, env=_env)
     except Exception as e:
         fails.append(('<importprobe>', f'探测子进程启动失败: {e!r}'))
         proc = None

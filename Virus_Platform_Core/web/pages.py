@@ -9,7 +9,7 @@ import time
 
 from werkzeug.exceptions import HTTPException
 
-from flask import (Blueprint, current_app, jsonify, render_template,
+from flask import (Blueprint, abort, current_app, jsonify, render_template,
                    request, send_file)
 
 from Virus_Platform_Core.config import DIRS, PLATFORM_ROOT
@@ -64,18 +64,40 @@ def _inject_asset_v():
 NAV_GROUPS = [
     {'id': 'resource', 'label': '数据资源', 'path': '数据资源', 'items': [
         {'href': '/meta', 'title': '公共数据检索', 'desc': '检索公共样本 / 元数据'},
+        # 2026-10-01：病毒样本预筛 —— 衔接「公共数据检索」与「公共数据下载」。
+        # 用 NCBI STAT / CNCB GSA 的**预计算**分类结果，不下载测序数据即可
+        # 判断哪些 run 含病毒；只产出通过/未决清单，不改变下载范围（门控方向
+        # 由使用者定）。引擎移植自 MMPV-RNA public_metadata_pipeline/stat_prescreen.py。
+        {'href': '/prescreen', 'title': '病毒样本预筛',
+         'desc': '不下载测序数据：按预计算分类判断哪些 run 含病毒，'
+                 '产出通过清单与未决清单，供下载环节取舍'},
+        # 2026-09-30：Open-Virome 前移到检索之后（应用户要求）——检索/浏览
+        # 都是对公共库的"只读取数"，下载/建基因组库是"取数落盘"。
+        {'href': '/virome', 'title': 'Open-Virome', 'desc': '公共病毒组浏览 / 导出'},
+        # 2026-09-30：公共数据下载回归本组（2026-09-06 曾应要求移入样本处理组
+        # 首位）。本组三卡同为"公共数据资源"语义（检索 / 下载 / 浏览），检索页
+        # 「转入数据下载」直跳 /download，同组顺位衔接；而样本处理组其余各卡
+        # 都是"对本地已有文件做处理"，下载是"从公共库获取"，语义异质。
+        # 工作流交接（建样品/去宿主/质控/鉴定）由下载页文件行的跨模块按钮
+        # 承担，不依赖导航分组。
+        {'href': '/download', 'title': '公共数据下载', 'desc': 'Run / URL / SRA → FASTQ，衔接样品与模块'},
+        # 2026-09-30：基因组查询下载独立成卡（宿主下载面板 / datasets 表单
+        # 原先内嵌在 /build 建库页，入口深且与"建库"动作混在一起）。独立后
+        # 本组形成 检索 → 浏览 → 下载 → 基因组查询下载 → 数据库构建 的链位。
+        {'href': '/refdata', 'title': '基因组查询下载',
+         'desc': '宿主基因组（gget·Ensembl / NCBI taxon·accession）'
+                 '+ NCBI datasets 全模式（genome/gene/taxonomy/virus+宿主过滤）'},
         # 病毒浏览器（/explorer）已于 2026-09-27 彻底归档
         # （archive/_retire_20260927/explorer/），路由与页面均已下线。
-        {'href': '/virome', 'title': 'Open-Virome', 'desc': '公共病毒组浏览 / 导出'},
         {'href': '/build', 'title': '数据库构建', 'desc': 'Taxonomy / 宿主库 / 病毒库'},
     ]},
     {'id': 'sample', 'label': '样本处理', 'path': '样本处理', 'items': [
         # 2026-09-20：一键前处理（prepchain）置顶 —— 与定量/识别两组的 ⚡ 卡
         # 同构的文件级子链：转换 → 质控 → 转换(FASTA) → 宿主去除。
+        # 2026-09-30：公共数据下载移回「数据资源」组（见上）。
         {'id': 't-prepchain', 'title': '⚡ 一键前处理',
          'desc': 'SRA / FASTQ 自适应：转换 → 质控 → 转换(FASTA) → 宿主去除；'
                  '宿主库未就绪自动跳过宿主去除，kept reads 可直喂 ②→③→④ 一键'},
-        {'href': '/download', 'title': '公共数据下载', 'desc': 'Run / URL / SRA → FASTQ，衔接样品与模块'},
         {'href': '/samples', 'title': '样品创建 / 批量导入', 'desc': '样品名 + R1/R2 / TSV 批量'},
         {'id': 't-convert', 'title': '格式转换', 'desc': 'sra2fastq / sra2fasta / fastq2fasta'},
         {'id': 't-fastp', 'title': '序列质控', 'desc': 'fastp 去接头 / 过滤 / 去重'},
@@ -97,7 +119,7 @@ NAV_GROUPS = [
         {'id': 't-identify', 'title': '病毒识别分类与提取', 'desc': 'FASTQ / FASTA / 去宿主 → 分类 + 病毒序列提取'},
         {'id': 't-assemble', 'title': '提取序列组装', 'desc': 'SPAdes rnaviral / contigs 过滤'},
         {'id': 't-contigs', 'title': '组装结果再鉴定', 'desc': 'contig 二次分类 + 谱系注释'},
-        {'id': 't-verify', 'title': '候选序列验证', 'desc': '宿主筛选 → 长度分流 → blastx/CDD 过滤 + 类病毒 blastn'},
+        {'id': 't-verify', 'title': '候选序列验证', 'desc': '宿主筛选 → 长度分流 → blastx/BFVD 双路过滤 + 类病毒 blastn'},
     ]},
     {'id': 'annotate', 'label': '病毒注释分析', 'path': '病毒注释分析', 'items': [
         # 2026-09-21：注释三连（annochain）置顶 —— 与定量/识别/样本三组的 ⚡ 卡
@@ -110,8 +132,6 @@ NAV_GROUPS = [
          'desc': 'pyrodigal / pyrodigal-rv 基因预测（独立模块）'},
         {'href': '/annotation', 'title': '功能注释',
          'desc': 'DIAMOND / MMseqs2 / blastp 对照 RefSeq 病毒蛋白库 + 类别投票 + ICTV 映射（独立模块）'},
-        {'id': 't-cdd', 'title': '保守域与功能元件注释（CDD）',
-         'desc': 'NCBI CDD 保守域搜索（6-frame 翻译取最长 ORF ≥50aa）：结构域位置 / 边界，服务于基因组图谱与功能注释'},
         {'id': 't-hom', 'title': '同源比对（BLASTN · BLASTX）',
          'desc': 'NCBI nt / nr 同源比对（限病毒）：为 GenBank 提交注释提供依据'},
         {'href': '/genome', 'title': '基因组图谱',
@@ -124,9 +144,19 @@ NAV_GROUPS = [
     # dsRNA 设计回答「怎么把它防住」（产物是 RNAi 分子，服务防治），
     # 两者产物都是**可下单的实验材料**，且必须真做湿实验才能闭环，
     # 与注释不是同一条业务线 —— 故并列成组，不再挂在注释组下。
+    # 2026-09-29：dsRNA 设计曾整体迁出；2026-10-03 已恢复（引擎三模块
+    # Virus_Platform_Core/dsrna_{pipeline,scoring,offtarget}.py + 工具卡 t-dsrna）。
+    # 本组 = 引物设计 + CRISPR 检测试剂设计 + dsRNA 设计 + miRNA 靶标预测。
     {'id': 'detect', 'label': '检测与防治', 'path': '检测与防治', 'items': [
         {'href': '/primer', 'title': '引物设计',
          'desc': 'primer3 全长分窗 / 保守区设计（独立模块）；面向 PCR / qPCR 检测'},
+        # 2026-10-06：CRISPR/Cas12a 现场检测试剂设计（crRNA + RPA/PCR 引物
+        # 协同）。引擎 Virus_Platform_Core/crispr_design.py（净室实现，规则来源
+        # 与许可口径见 docs/CRISPR检测设计模块规划_20261006.md），工具卡 t-crispr。
+        {'id': 't-crispr', 'title': 'CRISPR 检测试剂设计',
+         'desc': 'Cas12a crRNA × RPA/PCR 引物协同设计：多分离物 MSA 保守性 → '
+                 'TTTV PAM 扫描 + 漏斗过滤 → 双库特异性筛查（宿主 + 近缘病毒）'
+                 '→ 复合评分 × 群体覆盖率 → 订购表 + L1–L5 验证清单'},
         {'id': 't-dsrna', 'title': 'dsRNA 设计',
          'desc': '全链路：dsRNAmax 确定性选窗（maximin 多候选）→ dsRIP 效价 → '
                  '面板脱靶扫描（致死基因加权 + 0 错配一票否决）→ T7 引物（限定最优窗）'
@@ -197,8 +227,11 @@ NAV_GROUPS = [
 # 2026-09-18：/primer 随「检测与防治」组从 annotate 迁到 detect —— 这行不改，
 # 引物页侧栏仍显示注释组的 7 项、dsRNA 卡入口也会指错组（_group_nav.html 用
 # current_group 拼 `/tools?g=<组id>#<卡id>`）。
+# 2026-09-30：/download 随卡从 sample 迁回 resource，_PATH_TO_GROUP 同步 ——
+# /download 页侧栏改列数据资源组（检索/下载/Open-Virome/数据库构建）。
 _PATH_TO_GROUP = {'/meta': 'resource', '/virome': 'resource',
-                  '/download': 'sample', '/build': 'resource',
+                  '/download': 'resource', '/build': 'resource',
+                  '/refdata': 'resource',
                   '/hostremoval': 'sample', '/samples': 'sample',
                   '/orf': 'annotate', '/annotation': 'annotate',
                   '/genome': 'annotate', '/primer': 'detect',
@@ -310,6 +343,12 @@ def page_build():
     return render_template('build.html')
 
 
+@bp.route('/refdata')
+def page_refdata():
+    """基因组查询下载（宿主基因组三源 + NCBI datasets 全模式）。"""
+    return render_template('refdata.html')
+
+
 @bp.route('/tasks')
 def page_tasks():
     """全局任务中心：运行中监测 / 日志折叠 / 停止 / 重启 / 删除 / 历史归档。"""
@@ -368,21 +407,47 @@ def _sample_project(sample_dir):
         return ''
 
 
+# 报告类响应的 CSP（与 logan.py 的溯源报告同一口径）：报告 HTML 里嵌着
+# 样本衍生的字符串（contig 名/物种名/机构名）与内联 plotly 脚本，属半可信
+# 输入——CSP 兜底后，即使未来某处转义遗漏，注入脚本也读不到平台 API 响应。
+_REPORT_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline' "
+               "'unsafe-eval'; style-src 'self' 'unsafe-inline'; "
+               "img-src 'self' data:; connect-src 'self'; "
+               "frame-ancestors 'self'")
+
+
+def _send_report(path):
+    """send_file 报告文件 + CSP 头。"""
+    resp = send_file(path)
+    resp.headers['Content-Security-Policy'] = _REPORT_CSP
+    return resp
+
+
 @bp.route('/report/<sample>/')
 def page_report(sample):
     safe = _safe_sample(sample)
-    rpt = check_path(os.path.join(DIRS['results'], safe, '07_report', 'report.html'),
+    # base 归一后加前缀包含校验：filename 类路径段若为绝对路径，os.path.join
+    # 会整段替换 base，仅靠 check_path(in_platform=True) 可读平台内任意文件。
+    base = os.path.abspath(check_path(os.path.join(DIRS['results'], safe),
+                                      must_exist=True, in_platform=True))
+    rpt = check_path(os.path.join(base, '07_report', 'report.html'),
                      must_exist=True, in_platform=True)
-    return send_file(check_path(rpt, must_exist=True, in_platform=True))
+    if not rpt.startswith(base + os.sep):
+        abort(400, '非法路径')
+    return _send_report(rpt)
 
 
 @bp.route('/report/<sample>/<path:filename>')
 def page_report_file(sample, filename):
     """报告目录内静态文件（plotly.min.js 等；尾斜杠路由使相对引用可解析）。"""
     safe = _safe_sample(sample)
-    p = check_path(os.path.join(DIRS['results'], safe, '07_report', filename),
+    base = os.path.abspath(check_path(os.path.join(DIRS['results'], safe),
+                                      must_exist=True, in_platform=True))
+    p = check_path(os.path.join(base, '07_report', filename),
                    must_exist=True, in_platform=True)
-    return send_file(check_path(p, must_exist=True, in_platform=True))
+    if not p.startswith(base + os.sep):
+        abort(400, '非法路径')
+    return _send_report(p)
 
 
 @bp.route('/archive_report/<sample>/')
@@ -390,10 +455,12 @@ def page_archive_report(sample):
     """归档样品报告（results/_archive/<sample>/）。"""
     # 归档目录名不在 results/ 下，解析基准要指到 _archive
     safe = _safe_sample(sample, base=os.path.join(DIRS['results'], '_archive'))
-    rpt = check_path(os.path.join(DIRS['results'], '_archive', safe,
-                                  '07_report', 'report.html'),
+    base = os.path.abspath(os.path.join(DIRS['results'], '_archive', safe))
+    rpt = check_path(os.path.join(base, '07_report', 'report.html'),
                      must_exist=True, in_platform=True)
-    return send_file(check_path(rpt, must_exist=True, in_platform=True))
+    if not rpt.startswith(base + os.sep):
+        abort(400, '非法路径')
+    return _send_report(rpt)
 
 
 @bp.route('/help')

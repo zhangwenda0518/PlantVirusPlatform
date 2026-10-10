@@ -39,7 +39,8 @@ def main() -> int:
                 # 与 home.html 内联脚本同一条键：先置位再进页面
                 pg.add_init_script(
                     "try{localStorage.setItem('vp_theme','dark')}catch(e){}")
-            pg.goto(BASE, wait_until='networkidle')
+            pg.goto(BASE, # 对话坞常驻 EventSource 使 networkidle 永不触发（与其它巡检一致改 load）
+                wait_until='load')
             pg.wait_for_timeout(700)
 
             if not pg.locator('.hero.cover').count():

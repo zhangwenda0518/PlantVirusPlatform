@@ -54,7 +54,8 @@ def find_virus_ref_fasta():
     """定位病毒参考 FASTA。
 
     解析顺序：病毒源参考根 databases/virusref_db 下第一个 .fasta/.fa/.fna
-    → 默认鉴定库 kv_index/reference.fasta（库自包含布局后的常驻位置）。
+    → 默认鉴定库 plant_ref/reference.fasta（库自包含布局后的常驻位置；
+    2026-09-29 前默认库目录名为 kv_index）。
     """
     src = check_path(DIRS['virus_src'], must_exist=True)
     for pat in ('*.fasta', '*.fa', '*.fna', '*.fas'):
@@ -138,7 +139,7 @@ def _rebuild_if_stale(prefix, ref, title, logger=None, v4=True, tag=''):
     if _db_present(prefix):
         old = ''
         try:
-            with open(stamp) as sf:
+            with open(stamp, encoding='utf-8') as sf:
                 old = sf.read().strip()
         except OSError:
             pass
@@ -152,7 +153,7 @@ def _rebuild_if_stale(prefix, ref, title, logger=None, v4=True, tag=''):
                    f'（{"v4" if v4 else "v5"}）: {ref} -> {prefix}')
     makeblastdb_nucl(prefix, ref, title, logger=logger, v4=v4)
     try:
-        with open(stamp, 'w') as sf:
+        with open(stamp, 'w', encoding='utf-8') as sf:
             sf.write(sig)
     except OSError:
         pass
@@ -465,6 +466,16 @@ def _run_spades_once(r1, r2, out_dir, mode, threads, memory_gb, logger,
     cfg = get_config()
     spades = cfg.tool('spades')
     threads = threads or cfg.threads
+    # 内存钳制（2026-10-04 审查 E3）：-m 64 硬编码在 16GB 机器上换页抖动；
+    # POST 侧已钳（web/samples.py），这里覆盖 CLI 直调路径
+    from .utils import total_ram as _total_ram
+    _ram_cap = max(2, int((_total_ram() or 16 * 1024 ** 3)
+                          * 0.6 / 1024 ** 3))
+    if int(memory_gb) > _ram_cap:
+        if logger:
+            logger.log(f"组装内存 {memory_gb}GB 超物理内存 60% 上限"
+                       f"（{_ram_cap}GB），已自动钳制", "WARN")
+        memory_gb = _ram_cap
     if mode == 'srna' and r2:
         if logger:
             logger.log("srna 模式按单端 -s 组装（VirusDetect 同款策略），忽略 R2",
@@ -617,6 +628,13 @@ def _run_spades_once(r1, r2, out_dir, mode, threads, memory_gb, logger,
                 logger.log(f"SPAdes 产物拷回 {moved} 个文件 -> {spades_dir}")
             result_dir = spades_dir
 
+        # 成功后清理体积大的 K* 中间目录（此前仅 shim 分支丢弃，非 shim
+        # 全留在 03_assembly/spades/ 下可达数十 GB——2026-10-04 审查 E3）
+        if not use_shim:
+            import glob as _glob
+            for _kd in _glob.glob(os.path.join(spades_dir, 'K*')):
+                shutil.rmtree(_kd, ignore_errors=True)
+
         # 产物名随 SPAdes 版本/模式而异：常规/rnaviral/metaviral/meta 出
         # contigs.fasta，旧版 rnaSPAdes 出 transcripts.fasta，新版只出
         # hard_filtered_transcripts.fasta（主结果）/ soft_filtered_transcripts.fasta。
@@ -646,27 +664,83 @@ def filter_contigs(contigs_fasta, out_fasta, min_len=200, logger=None):
         logger.log(f"contig 过滤(≥{min_len}bp): 保留 {n} 条, 总长 {total_bp:,}bp")
     return out_fasta, n, total_bp
 
+def _assembly_reuse_ok(fp_file, fp, logger=None):
+    """断点复用判据：已有 SPAdes 产物对应的输入指纹 + 关键参数是否一致。
+
+    指纹 = 输入文件（path+size+mtime_ns，对齐 preprocess.input_fingerprint）
+    + 关键参数（assembly_mode / min_contig_len / assembly_input）。旧产物
+    没有指纹记录、或记录与本次不一致 → 不可复用（重跑组装）并留日志：
+    换输入/换模式/换长度阈值后沿用旧 contigs 会让"续跑"与"全量重跑"
+    得到两套不同结果，且从产物上看不出来。
+    """
+    import json
+    try:
+        with safe_open(fp_file) as f:
+            old = json.load(f)
+    except (OSError, ValueError):
+        if logger:
+            logger.log("已有 SPAdes 产物但无输入指纹记录（旧版本产物），"
+                       "为安全起见重新组装", "WARN")
+        return False
+    if old == fp:
+        return True
+    if logger:
+        logger.log("已有 SPAdes 产物的输入指纹/关键参数与本次不一致，"
+                   "重新组装（不复用旧 contigs）", "WARN")
+    return False
+
+
 def assemble_and_classify(sample_dir, r1, r2, db_virus, mode='rnaviral',
                           threads=None, memory_gb=64, min_contig_len=200,
                           logger=None, force=False, chunk_dir=None,
-                          progress=None):
+                          progress=None, assembly_input=None):
     step = 'assembly'
     out_dir = check_path(os.path.join(sample_dir, '03_assembly'),
                          must_exist=False, in_platform=True)
     os.makedirs(out_dir, exist_ok=True)
     summary_file = os.path.join(out_dir, 'summary.json')
     if is_step_done(out_dir, step) and not force:
-        if logger:
-            logger.log("阶段③组装已完成，跳过")
-        with safe_open(summary_file) as f:
-            import json
-            return json.load(f)
+        # .done 复用必须校验指纹（审查 P1-1）：下方 713-734 行已为 SPAdes
+        # 产物实现了输入/参数指纹校验，但旧版 .done 快速返回根本走不到那
+        # 里——换输入或改 min_contig_len/assembly_mode 后仍整段沿用旧结果。
+        # 与 _fp 同口径：inputs + {assembly_mode, min_contig_len,
+        # assembly_input}；旧版 summary 无 inputs_fp 键 → 不匹配 → 重跑
+        # （安全方向：宁可重跑也不沿用来路不明的产物）。
+        import json
+        try:
+            from .preprocess import input_fingerprint as _ifp_asm
+            _cur_fp = {
+                'inputs': [_ifp_asm(p) for p in (r1, r2) if p],
+                'params': {'assembly_mode': mode,
+                           'min_contig_len': min_contig_len,
+                           'assembly_input': assembly_input},
+            }
+            with safe_open(summary_file) as f:
+                _prev = json.load(f)
+            if _prev.get('inputs_fp') == _cur_fp:
+                if logger:
+                    logger.log("阶段③组装已完成（输入与参数未变化），跳过")
+                return _prev
+            if logger:
+                logger.log('阶段③存在断点，但输入 reads 或组装参数已变化'
+                           '——重跑本阶段（不复用旧结果）', 'WARN')
+        except (OSError, ValueError) as _e:
+            if logger:
+                logger.log(f'阶段③断点摘要不可读（{_e}），重跑本阶段', 'WARN')
 
     # 1. 组装（若上次运行已有 contigs 且未强制重跑则复用——断点续跑）
     # 复用判定要覆盖 SPAdes 全部可能产物名：rna 模式从不生成
     # contigs.fasta（只有 transcripts*/hard_filtered_transcripts.fasta），
     # 原判定只认 contigs.fasta → rna 模式每次都重跑数小时。
     _spades_dir = os.path.join(out_dir, 'spades')
+    _fp_file = os.path.join(_spades_dir, '.input_fingerprint.json')
+    # 本次组装输入指纹（复用判据，见 _assembly_reuse_ok；写/比都在这一个文件）
+    from .preprocess import input_fingerprint
+    _fp = {
+        'inputs': [input_fingerprint(p) for p in (r1, r2) if p],
+        'params': {'assembly_mode': mode, 'min_contig_len': min_contig_len,
+                   'assembly_input': assembly_input},
+    }
     _cands = ['contigs.fasta', 'transcripts.fasta',
               'hard_filtered_transcripts.fasta',
               'soft_filtered_transcripts.fasta', 'scaffolds.fasta']
@@ -677,6 +751,9 @@ def assemble_and_classify(sample_dir, r1, r2, db_virus, mode='rnaviral',
             if os.path.isfile(_p) and os.path.getsize(_p) > 0:
                 contigs_raw = _p
                 break
+        if contigs_raw is not None and not _assembly_reuse_ok(
+                _fp_file, _fp, logger=logger):
+            contigs_raw = None            # 指纹/参数不匹配：不复用，重跑组装
     sp_info = {}
     if contigs_raw is None:
         contigs_raw = run_spades(r1, r2, out_dir, mode=mode, threads=threads,
@@ -684,9 +761,20 @@ def assemble_and_classify(sample_dir, r1, r2, db_virus, mode='rnaviral',
                                  progress=(lambda p, m: progress(
                                      p * 0.55, f'③ SPAdes：{m}'))
                                  if progress else None, info=sp_info)
+        # 记下本次组装输入的指纹与关键参数：下次断点复用前必须核对一致
+        try:
+            import json
+            os.makedirs(_spades_dir, exist_ok=True)
+            with safe_open(_fp_file, 'wt') as f:
+                json.dump(_fp, f, ensure_ascii=False, indent=1)
+        except OSError as e:
+            if logger:
+                logger.log(f'SPAdes 输入指纹落盘失败（不影响本次结果）: {e}',
+                           'WARN')
     else:
         if logger:
-            logger.log("复用已有 SPAdes 组装结果（跳过组装）")
+            logger.log("复用已有 SPAdes 组装结果（输入指纹与关键参数一致，"
+                       "跳过组装）")
         contigs_raw = check_path(contigs_raw, must_exist=True)
     if progress:
         progress(0.58, '③ contig 长度过滤')
@@ -738,14 +826,26 @@ def assemble_and_classify(sample_dir, r1, r2, db_virus, mode='rnaviral',
     #     class_source=blast 为 0，14% 落到 Unknown）。
     viral_tsv = os.path.join(out_dir, 'virus_contigs.tsv')
     viral_fa = os.path.join(out_dir, 'viral_contigs.fasta')
+    # 未分类候选池（审查 P1-3）：kunpeng 非 C / taxid≤0 的 contig 此前在
+    # 生成 viral_contigs.fasta 时被直接丢弃，从未进入 blastx/BFVD 验证——
+    # 对参考分类库差异大的新病毒会系统性漏检。这里把它们按长度合格为
+    # 条件保留成独立文件，供 ③b 的独立验证通道消费（不进下游注释）。
+    unclass_fa = os.path.join(out_dir, 'unclassified_contigs.fasta')
     viral_contigs = []
-    with safe_open(viral_fa, 'wt') as vf:
+    n_unclass_pool = 0
+    n_unclass_short = 0
+    with safe_open(viral_fa, 'wt') as vf, safe_open(unclass_fa, 'wt') as uf:
         for header, seq in iter_fasta(contigs_fa):
             cid = header.split()[0]
             flag, taxid = contig_tax.get(cid, ('-', 0))
             if flag == 'C' and taxid > 0:
                 viral_contigs.append(cid)
                 write_fasta_record(vf, cid, seq)
+            elif len(seq) >= min_contig_len:
+                n_unclass_pool += 1
+                write_fasta_record(uf, cid, seq)
+            else:
+                n_unclass_short += 1
     if progress:
         progress(0.755, '③ contig 级 BLASTN 最近参考')
     blast_tab, _blast_tsv = {}, None
@@ -807,6 +907,16 @@ def assemble_and_classify(sample_dir, r1, r2, db_virus, mode='rnaviral',
                                  'virus_classification.tsv'),
         'classification_warning': _cls_warn,
         'kreport': os.path.basename(res['kreport']) if res['kreport'] else None,
+        # 未分类候选池计数（P1-3）：进入池的数量 / 因长度不足被排除的数量。
+        # 报告口径：viral_contigs = 分类器判定候选；unclassified_pool = 分类
+        # 未定但长度合格的独立候选（03b 有独立验证通道）；short = 长度不足
+        # 被排除，原因在此明示而不是静默丢弃。
+        'unclassified_pool_n': n_unclass_pool,
+        'unclassified_pool_fa': 'unclassified_contigs.fasta',
+        'unclassified_excluded_short_n': n_unclass_short,
+        # 复用判据（审查 P1-1）：.done 快速返回时据此校验——输入 reads /
+        # 组装模式 / 长度阈值任一变化都必须重跑，不再只看 .done 存在。
+        'inputs_fp': _fp,
     }
     import json
     with safe_open(summary_file, 'wt') as f:

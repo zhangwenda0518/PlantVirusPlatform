@@ -178,9 +178,36 @@ def run_fastp(sample_dir, r1, r2, threads=None, logger=None, force=False,
                          must_exist=False, in_platform=True)
     os.makedirs(out_dir, exist_ok=True)
     if is_step_done(out_dir, step) and not force:
+        # 断点复用必须核对源输入指纹（与 fq2fa 同款防护）：换输入文件 /
+        # 子采样↔全量切换后，旧质控产物会被静默沿用，下游宿主去除/组装
+        # 实际吃的是另一批 reads。指纹还须包含**处理参数**（审查 P1-1）：
+        # dedup / min_len 改了而输入文件没变（同路径同大小同 mtime）时，
+        # 旧产物同样不代表本次设置。
+        try:
+            min_len_chk = int(min_len or cfg.defaults.get('fastp_min_len')
+                              or 15)
+        except (TypeError, ValueError):
+            min_len_chk = 15
+        cur_fp = [input_fingerprint(p) for p in (r1, r2) if p]
+        cur_params = {'dedup': bool(dedup), 'min_len': min_len_chk}
+        try:
+            with safe_open(os.path.join(out_dir, 'fastp.json')) as f:
+                prev = json.load(f)
+            prev_fp = prev.get('inputs')
+            prev_params = prev.get('params')
+        except (OSError, ValueError):
+            prev_fp, prev_params = None, None
+        # 旧版 fastp.json 没有 params 键：视为不匹配（宁可重跑也不沿用
+        # 参数不明的旧产物）
+        if prev_fp == cur_fp and prev_params == cur_params:
+            if logger:
+                logger.log("Fastp 质控已完成（输入与参数未变化），跳过")
+            return _summary(out_dir)
         if logger:
-            logger.log("Fastp 质控已完成，跳过")
-        return _summary(out_dir)
+            why = ('源输入已变化' if prev_fp != cur_fp
+                   else '处理参数已变化（dedup/min_len）')
+            logger.log(f"Fastp 质控产物的{why}（文件/大小/mtime 或参数不"
+                       "同），重新质控", "WARN")
 
     o1 = os.path.join(out_dir, 'fastp_R1.fastq.gz')
     o2 = os.path.join(out_dir, 'fastp_R2.fastq.gz') if r2 else None
@@ -218,6 +245,11 @@ def run_fastp(sample_dir, r1, r2, threads=None, logger=None, force=False,
         raise RuntimeError(
             f"无法读取 fastp 报告摘要（{s.get('parse_error') or '文件缺失'}）"
             f"——无法确认质控后 reads 数，请检查 fastp 输出或重跑该阶段")
+    with safe_open(os.path.join(out_dir, 'fastp.json'), 'wt') as f:
+        # 复用判据全量记录（P1-1）：源输入指纹 + 生效参数
+        json.dump({'inputs': [input_fingerprint(p) for p in (r1, r2) if p],
+                   'params': {'dedup': bool(dedup), 'min_len': min_len}},
+                  f, ensure_ascii=False, indent=1)
     mark_step_done(out_dir, step)
     if logger:
         logger.log("Fastp 质控完成: " + os.path.basename(str(o1)))
@@ -255,4 +287,10 @@ def _summary(out_dir):
         # 不要静默：解析失败会让 run_fastp 的 reads_after==0 守卫失效
         # （s.get 返回 None），①/②/③ 对着空输出继续跑。
         s['parse_error'] = f'{type(e).__name__}: {e}'
+    try:
+        # 源输入指纹（断点复用 / 管道采纳历史产物前的唯一安全判据）
+        with safe_open(os.path.join(out_dir, 'fastp.json')) as f:
+            s['inputs'] = json.load(f).get('inputs')
+    except (OSError, ValueError):
+        pass
     return s

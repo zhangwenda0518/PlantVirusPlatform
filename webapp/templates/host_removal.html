@@ -63,6 +63,12 @@
           <button class="btn small" onclick="browseDir('hr_db')">📂</button>
         </div>
 
+        <label data-i18n="tk.outDirOpt">输出目录（可选，不填 = 默认 run/tool_runs/）</label>
+        <div class="filerow">
+          <input id="hr_outdir" type="text" placeholder="选择输出目录（产物写在其下「运行名」子目录）" data-i18n-ph="tk.outDirOptPh">
+          <button class="btn small" onclick="browseDir('hr_outdir')">📂</button>
+        </div>
+
         <div style="margin-top:12px">
           <label style="margin-top:12px" data-i18n="tk.batchSamplesLbl">⏩ 按样品批量（📋 多选，可按项目全选；自动取各样品登记的 R1/R2，单双端自动识别）</label>
           <div class="filerow">
@@ -130,7 +136,8 @@ async function runHostRemoval(btn) {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'hostremoval',
-                             threads: +val('hr_threads') || null, params })});
+                             threads: +val('hr_threads') || null, params,
+                             out_dir: val('hr_outdir') })});
     if (!r.ok) { alert(t('hr.startFail','启动失败: ') + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);

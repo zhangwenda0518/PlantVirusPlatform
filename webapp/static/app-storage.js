@@ -15,6 +15,11 @@ async function checkStorageBanner() {
     const low = (d.disks || []).filter(x => x.warn);
     let b = $('storage-banner');
     if (!low.length) { if (b) b.remove(); return; }
+    // 本标签页会话内点过「知道了」就不再打扰；关掉浏览器/开新会话会再提醒
+    if (sessionStorage.getItem('stBannerDismissed') === '1') {
+      if (b) b.remove();
+      return;
+    }
     if (!b) {
       b = document.createElement('div');
       b.id = 'storage-banner';
@@ -30,8 +35,21 @@ async function checkStorageBanner() {
         + t('st.suggest', '建议保留 ') + d.threshold_gb + 'GB '
         + t('st.above', '以上')).join('<br>')
       + '<br>' + t('st.lowHint',
-          '可到「设置 → 存储与磁盘」查看占用明细；或把数据库目录改到空间更大的盘。');
+          '可到「设置 → 存储与磁盘」查看占用明细；或把数据库目录改到空间更大的盘。')
+      + '<div style="margin-top:6px">'
+      + '<button class="btn small" onclick="dismissStorageBanner()">'
+      + t('st.gotIt', '知道了，本次不再提示') + '</button>'
+      + '<button class="btn small" style="margin-left:6px" '
+      + 'onclick="sessionStorage.removeItem(\'stBannerDismissed\');'
+      + 'location.href=\'/settings\'">'
+      + t('st.gotoStorage', '去清理 / 查看占用') + '</button></div>';
   } catch (e) { /* 磁盘检查失败不应影响正常使用 */ }
+}
+
+function dismissStorageBanner() {
+  try { sessionStorage.setItem('stBannerDismissed', '1'); } catch (e) {}
+  const b = $('storage-banner');
+  if (b) b.remove();
 }
 
 function _storageRow(x, indent) {

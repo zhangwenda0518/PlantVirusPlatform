@@ -24,6 +24,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import sys
 import time
 import json
@@ -56,6 +57,25 @@ def emit_progress(**kw):
     平台批量模式解析此行驱动进度条，人类阅读日志不受影响）。"""
     kw.setdefault('t', round(time.time(), 1))
     print('PROGRESS ' + json.dumps(kw, ensure_ascii=False), flush=True)
+
+
+# curl：Windows 10+ 自带；缺失则下载链必挂，启动时探测一次快速失败（P3-17c）
+_CURL = None
+
+
+def probe_curl(log=None):
+    """探测 curl（curl.exe 优先，其次 PATH 里的 curl）。返回可执行名或 None。"""
+    global _CURL
+    _CURL = shutil.which('curl.exe') or shutil.which('curl')
+    if log:
+        log.info("curl: %s", _CURL or "未找到")
+    return _CURL
+
+
+def _ascii_space_free(path) -> bool:
+    """路径是否 ASCII 且不含空格（curl -o 落非 ASCII 路径时的中转判定）。"""
+    s = str(path)
+    return ' ' not in s and s.isascii()
 
 
 def sanitize_seq(seq: str) -> str:
@@ -296,6 +316,24 @@ def wait_and_download(session_url_or_id, out_dir: Path, acc: str, log,
     base = os.path.normpath(os.path.abspath(str(out_dir)))
     zip_p = _in_base(base, f"{stem}.zip")
     tsv_p = _in_base(base, f"{stem}.tsv")
+    # curl 落盘点：输出目录含非 ASCII（如平台根在中文路径下）时先写
+    # %TEMP% 的 ASCII 临时文件，下载完再拷回，避免 curl 编码问题（P3-17d）
+    dl_p = zip_p
+    _tmp_zip = None
+    if not _ascii_space_free(base):
+        import tempfile
+        fd, _tmp_zip = tempfile.mkstemp(prefix='vp_logan_', suffix='.zip')
+        os.close(fd)
+        dl_p = _tmp_zip
+
+    def _ret(v):
+        """返回前清理 %TEMP% 中转 zip（非 ASCII 落点专用，P3-17d）。"""
+        if _tmp_zip and os.path.isfile(_tmp_zip):
+            try:
+                os.remove(_tmp_zip)
+            except OSError:
+                pass
+        return v
     start_t = time.time()
     if driver_ref is None:
         driver_ref = [None]
@@ -309,7 +347,8 @@ def wait_and_download(session_url_or_id, out_dir: Path, acc: str, log,
     while time.time() < deadline:
         try:
             r = subprocess.run(
-                ["curl.exe", "-s", "-o", "NUL", "-w", "%{http_code}", "-I", "-L", url],
+                [_CURL or "curl.exe", "-s", "-o", os.devnull,
+                 "-w", "%{http_code}", "-I", "-L", url],
                 capture_output=True, text=True, timeout=60)
             code = r.stdout.strip()
         except Exception as e:
@@ -319,46 +358,49 @@ def wait_and_download(session_url_or_id, out_dir: Path, acc: str, log,
             _cb(stage='downloading', sid=sid)
             log.info("%s 就绪 (HTTP 200), 开始下载", sid)
             try:
-                r = subprocess.run(["curl.exe", "-L", "--fail",
-                                    "-o", zip_p, url],
+                r = subprocess.run([_CURL or "curl.exe", "-L", "--fail",
+                                    "-o", dl_p, url],
                                    capture_output=True, timeout=600)
                 if r.returncode != 0:
                     log.warning("%s 下载失败 rc=%d", sid, r.returncode)
-                    return "DL_FAIL"
+                    return _ret("DL_FAIL")
             except Exception as e:
                 log.warning("%s 下载异常: %s", sid, e)
-                return "DL_FAIL"
+                return _ret("DL_FAIL")
+            if dl_p != zip_p and os.path.isfile(dl_p):
+                # 非 ASCII 落点 → 拷回真实产物路径（P3-17d）
+                shutil.copyfile(dl_p, zip_p)
             if not os.path.isfile(zip_p) or os.path.getsize(zip_p) == 0:
                 log.warning("%s 下载文件为空/缺失", sid)
-                return "DL_FAIL"
+                return _ret("DL_FAIL")
             tsv_names = []
             try:
                 with zipfile.ZipFile(zip_p) as z:
                     tsv_names = [nm for nm in z.namelist() if nm.endswith(".tsv")]
                     if not tsv_names:
                         log.warning("%s zip 内无 tsv", sid)
-                        return "DL_FAIL"
+                        return _ret("DL_FAIL")
                     Path(tsv_p).write_bytes(z.read(tsv_names[0]))
                     for j, nm in enumerate(tsv_names[1:], 1):
                         alt_p = _in_base(base, f"{stem}_{j}.tsv")
                         Path(alt_p).write_bytes(z.read(nm))
             except zipfile.BadZipFile:
                 log.warning("%s zip 损坏", sid)
-                return "DL_FAIL"
+                return _ret("DL_FAIL")
             _cb(stage='downloaded', sid=sid, tsv=os.path.basename(tsv_p))
-            return tsv_p
+            return _ret(tsv_p)
         if time.time() >= age_deadline:
             break
         if code == "400" and time.time() - start_t >= dead_after:
             log.warning("%s 持续 HTTP 400 超 %ds, 判定 session 失效", sid, dead_after)
-            return "DEAD"
+            return _ret("DEAD")
         # 每 5 分钟用浏览器看一眼「刚提交的这条」的实时结果页, 渲染出 FAILED 即提前判死
         if driver_ref[0] is not None and time.time() - last_probe_t >= 300:
             last_probe_t = time.time()
             st = dom_status_probe((driver_ref[0]() if callable(driver_ref[0]) else driver_ref[0]), sid, log)
             if st == "FAILED":
                 log.warning("%s 结果页渲染 FAILED/No match found, 提前判定为阴性", sid)
-                return "DEAD"
+                return _ret("DEAD")
         _cb(stage='waiting', sid=sid, waited=int(time.time() - start_t),
             http=code, span=first_wait + max_wait)
         wait_step = 30 if time.time() < warm_until else poll
@@ -368,7 +410,7 @@ def wait_and_download(session_url_or_id, out_dir: Path, acc: str, log,
         log.warning("%s 距提交已超 3 小时未完成, 判定失败", sid)
     else:
         log.info("%s 本轮等满 %ds 未完成, 先继续下一条 (稍后补漏)", sid, max_wait)
-    return ""
+    return _ret("")
 
 
 # ---------------------------------------------------------------- 主流程
@@ -384,10 +426,11 @@ def main():
                     choices=["All", "All_No_viral_human", "Fast", "Fast_No_human", "Fast_No_RefSeq",
                              "Transcriptomic", "Metatranscriptomic", "Metagenomic", "GenBank_RefSeq"])
     ap.add_argument("--email", default="",
-                    help="通知邮箱, 逗号分隔多个则轮换（必填；不再内置"
-                         "任何个人默认邮箱）")
+                    help="通知邮箱, 逗号分隔多个则**每次提交随机轮换**"
+                         "（避免连续重复；必填；不再内置任何个人默认邮箱）")
     ap.add_argument("--email-rotate", type=int, default=5,
-                    help="每提交 N 条轮换到下一个邮箱 (默认 5, 单邮箱时无效)")
+                    help="[已弃用/不生效] 历史参数：现实现为每条随机轮换邮箱，"
+                         "不做「每 N 条顺序轮换」；保留仅为兼容旧命令行")
     ap.add_argument("--first-wait", type=int, default=300)
     ap.add_argument("--max-wait", type=int, default=1800)
     args = ap.parse_args()
@@ -418,7 +461,12 @@ def main():
     )
     log = logging.getLogger("logan_submit")
     if len(emails) > 1:
-        log.info("邮箱池: %d 个, 每 %d 条轮换", len(emails), args.email_rotate)
+        # 2026-10-03 修复 P3-17a：实际是「每条随机轮换」，不再谎称每 N 条
+        log.info("邮箱池: %d 个, 每次提交随机轮换（避免连续重复）", len(emails))
+    if probe_curl(log) is None:
+        log.error("未找到 curl（curl.exe / PATH 中的 curl）：Logan 结果下载"
+                  "依赖 curl，请先启用 Windows 自带 curl 或安装 curl 后重试")
+        sys.exit(3)
 
     entries = parse_input(in_path.read_text(encoding="utf-8-sig", errors="replace"))
     total = len(entries)
@@ -463,6 +511,7 @@ def main():
     pick_email.last = None
 
     results = []
+    unconfirmed = []          # 提交后未见 session（UNKNOWN）：纳入兜底回收与汇总
     try:
         pending = []
         for n, (acc, seq) in enumerate(entries, 1):
@@ -530,8 +579,38 @@ def main():
             elif status == "TIMEOUT":
                 rec["status"] = "UNKNOWN"
                 log.warning("[%d/%d] %s 提交后未确认 session, 不重提", n, len(entries), acc)
+                # 2026-10-03 修复 P3-17b：Submit 已点击但 600s 内未见新 session
+                # 不等于失败（可能在服务器排队）——纳入兜底回收清单并在汇总输出，
+                # 不再静默丢在结果表里。
+                unconfirmed.append(rec)
             results.append(rec)
             time.sleep(args.delay)
+
+        # 会话兜底回收：末尾再扫一次 localStorage，把未归属的新 session 作为
+        # 候选下载链接列出（供人工核对），并写入对应条目的 message
+        if unconfirmed:
+            cand = []
+            try:
+                raw = driver.execute_script(
+                    "return localStorage.getItem('user-sessions')")
+                sids = json.loads(raw) if raw else []
+                known = {r["session_url"].rstrip("/").split("/")[-1]
+                         for r in results if r.get("session_url")}
+                cand = [s for s in sids if s not in known]
+            except Exception as e:
+                log.debug("session 兜底扫描失败(忽略): %s: %s",
+                          type(e).__name__, str(e)[:120])
+            log.warning("提交后未确认 session 的条目 %d 条（可能已在服务器排队，"
+                        "本轮未重提）：%s", len(unconfirmed),
+                        ", ".join(r["accession"] for r in unconfirmed))
+            if cand:
+                cand_urls = ["https://logan-search.org/api/download/%s" % s
+                             for s in cand]
+                log.warning("兜底扫描发现 %d 个未归属 session（候选下载链接，"
+                            "需人工核对归属）：%s", len(cand), ", ".join(cand_urls))
+                for rec in unconfirmed:
+                    rec["message"] += (" | 候选 session（未确认归属，需人工核对）: "
+                                       + ", ".join(cand_urls))
 
         round_no = 1
         while pending:
@@ -596,6 +675,11 @@ def main():
     Path(_in_base(base, "result.csv")).write_text(buf.getvalue(), encoding="utf-8-sig")
 
     ok = sum(1 for r in results if r["tsv"])
+    unk = [r for r in results if r["status"] == "UNKNOWN"]
+    if unk:
+        log.warning("未确认 session（UNKNOWN）%d 条——已计入 result.csv，"
+                    "请人工到 logan-search.org 核对或重跑批量补漏: %s",
+                    len(unk), ", ".join(r["accession"] for r in unk))
     log.info("完成: %d/%d 成功, 结果: %s", ok, len(results),
              os.path.join(base, "result.csv"))
 

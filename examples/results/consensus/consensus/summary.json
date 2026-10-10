@@ -2,7 +2,7 @@
  "n_refs": 2,
  "total_len": 13084,
  "n_mapped_reads": 1200,
- "n_variants": 7235,
+ "n_variants": 27,
  "n_snv": 0,
  "n_isnv": 0,
  "present": [
@@ -11,7 +11,11 @@
  "low_support": [
   "example_contig_2"
  ],
+ "unsupported_short_reads": false,
+ "max_read_len_sampled": 150,
+ "unknown": [],
  "min_cov_pct": 10.0,
+ "min_qual_effective": true,
  "refs": [
   {
    "length": 6096,
@@ -21,11 +25,11 @@
    "max_depth": 46,
    "covered_bp": 5930,
    "coverage_pct": 97.28,
-   "depth_ok_pct": 95.95,
+   "depth_ok_pct": 96.83,
    "contig": "example_contig_1",
    "mapped_reads": 1200,
-   "called_pct": 95.95,
-   "n_variants": 247,
+   "called_pct": 96.83,
+   "n_variants": 27,
    "n_snv": 0,
    "n_isnv": 0,
    "present": "yes"
@@ -42,7 +46,7 @@
    "contig": "example_contig_2",
    "mapped_reads": 0,
    "called_pct": 0.0,
-   "n_variants": 6988,
+   "n_variants": 0,
    "n_snv": 0,
    "n_isnv": 0,
    "present": "no"
@@ -50,7 +54,7 @@
  ],
  "params": {
   "min_qual": 20,
-  "min_depth": 10,
+  "min_depth": 4,
   "min_freq": 0.5,
   "ambig": "N",
   "min_mapq": 10,
@@ -58,5 +62,5 @@
   "min_minor_count": 2,
   "preset": "sr"
  },
- "out_dir": "D:\\桌面\\植物病毒分析平台\\tool_runs\\consensus_20260909_232131\\consensus"
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\consensus_20261006_162449_10fd85\\consensus"
 }

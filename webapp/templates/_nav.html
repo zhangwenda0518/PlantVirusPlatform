@@ -63,3 +63,44 @@
     <a href="#" class="iconbtn" title="打开平台目录" onclick="event.preventDefault();fetch('/api/open_platform_dir')">📂</a>
   </span>
 </nav>
+
+<!-- AI 助手 · 对话驱动坞（全局：随导航注入每个页面）
+     定位：顾问层——解读分析结果 / 指导下一步 / 主动播报 / 决策闸门确认，
+     不代替任何分析动作。事件流：/api/ai/events（SSE 常驻）；
+     提问：/api/ai/chat（POST + fetch 流）。闸门待决时自动弹出本坞。 -->
+<button id="aiFab" class="ai-fab" onclick="AI.toggle()"
+        data-i18n-title="ai.dock.open" title="AI 助手">✨<span
+        id="aiFabBadge" class="ai-fab-badge" hidden></span></button>
+<div id="aiDock" class="ai-dock" hidden>
+  <div class="ai-dock-head">
+    <span class="ai-dock-title">✨ <span data-i18n="ai.dock.title">AI 助手</span>
+      <i id="aiReadyDot" class="ai-dot" hidden></i></span>
+    <span class="ai-dock-ops">
+      <select id="aiSampleSel" onchange="AI.onSampleChange(this.value)"
+              data-i18n-title="ai.dock.sample" title="样品"></select>
+      <button class="ai-ico" onclick="AI.clear()" data-i18n-title="ai.dock.clear"
+              title="清空对话">⟲</button>
+      <a class="ai-ico" href="/settings#aiCard" data-i18n-title="ai.dock.settings"
+         title="AI 设置">⚙</a>
+      <button class="ai-ico" onclick="AI.toggle(false)"
+              data-i18n-title="ai.dock.close" title="收起">✕</button>
+    </span>
+  </div>
+  <div id="aiMsgs" class="ai-msgs"></div>
+  <div class="ai-chips">
+    <button class="ai-chip" onclick="AI.chip('interpret')"
+            data-i18n="ai.dock.chipInterpret">解读这个样品</button>
+    <button class="ai-chip" onclick="AI.chip('tasks')"
+            data-i18n="ai.dock.chipTasks">任务状态</button>
+    <button class="ai-chip" onclick="AI.chip('next')"
+            data-i18n="ai.dock.chipNext">下一步建议</button>
+    <button class="ai-chip" onclick="AI.chip('params')"
+            data-i18n="ai.dock.chipParams">参数建议</button>
+  </div>
+  <div class="ai-inputrow">
+    <textarea id="aiInput" rows="1" data-i18n-ph="ai.dock.inputPh"
+              placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+    <button id="aiSendBtn" class="ai-send" onclick="AI.sendOrStop()">➤</button>
+  </div>
+</div>
+<script src="/static/app-ai.js?v={{ asset_v }}"></script>

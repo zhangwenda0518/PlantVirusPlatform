@@ -126,7 +126,11 @@ def status(root=None):
 
 
 def organize(dry_run=False, logger=None):
-    """把活动区里非标准命名的条目按规则归位到固定目录。"""
+    """把活动区里非标准命名的条目按规则归位到固定目录。
+
+    单条容错（2026-10-03 修复 P3-22）：某条移动失败（被占用/权限）不再让整批
+    抛异常中断，失败条目记入 failed 并在汇总输出成功/失败数。
+    """
     root = ensure_fixed_dirs()
 
     def _log(m):
@@ -135,7 +139,7 @@ def organize(dry_run=False, logger=None):
         else:
             print(m)
 
-    moved, skipped = [], []
+    moved, skipped, failed = [], [], []
     for name in sorted(os.listdir(root)):
         p = os.path.join(root, name)
         if name in FIXED_DIRS or _RUN_RE.match(name):
@@ -146,14 +150,19 @@ def organize(dry_run=False, logger=None):
         for pat, target in _ORGANIZE_RULES:
             if pat.match(name):
                 dst_dir = os.path.join(root, target)
-                os.makedirs(dst_dir, exist_ok=True)
                 dst = os.path.join(dst_dir, name)
                 if os.path.exists(dst):
                     skipped.append((name, f'{target}/ 已存在同名'))
                     break
-                moved.append((name, target))
-                if not dry_run:
-                    shutil.move(p, dst)
+                try:
+                    if not dry_run:
+                        os.makedirs(dst_dir, exist_ok=True)
+                        shutil.move(p, dst)
+                    moved.append((name, target))
+                except OSError as e:
+                    failed.append((name, f'{type(e).__name__}: {e}'))
+                    _log(f'  ✗ 移动失败 {name} → {target}/'
+                         f'（{type(e).__name__}: {e}），保留原位')
                 break
         else:
             skipped.append((name, '无法识别类型，保留原位（请人工判断）'))
@@ -161,7 +170,10 @@ def organize(dry_run=False, logger=None):
         _log(f'  {"将移动" if dry_run else "已移动"} {name} → {target}/')
     for name, why in skipped:
         _log(f'  跳过 {name}（{why}）')
-    return {'moved': len(moved), 'skipped': len(skipped), 'dry_run': dry_run}
+    _log(f'  汇总: 成功 {len(moved)} 条, 跳过 {len(skipped)} 条, '
+         f'失败 {len(failed)} 条')
+    return {'moved': len(moved), 'skipped': len(skipped),
+            'failed': len(failed), 'dry_run': dry_run}
 
 
 def archive(before=None, older_days=None, dry_run=False, logger=None):

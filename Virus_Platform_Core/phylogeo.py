@@ -294,9 +294,10 @@ REGION_ALIASES = {
     'United States of America': 'United States',
 }
 
-# 不是采样地点、不该在采样分布图上占点的「伪区划」（数据质量桶）。
-# M3 图上排除它们，但会把条数单独报出来 —— 排除不等于没发生。
-NON_PLACE_REGIONS = {'Unknown', 'missing', 'not applicable', 'N/A', 'na'}
+# ⚠️ 2026-10-03 删：原常量 `NON_PLACE_REGIONS = {'Unknown', 'missing', …}` 全仓
+#    **无任何代码引用**（M3 采样分布图早已改用别的口径），只留下"排除伪区划"
+#    的注释性常量 → 死代码，删除。判"没有区划信息"的统一实现见
+#    `phylodyn_kit.is_no_region`（与 `phylodyn_govern._is_unknown_level` 对齐）。
 
 _LAT_ALIASES = ('latitude', 'lat', '纬度', 'y')
 _LON_ALIASES = ('longitude', 'lon', 'lng', 'long', '经度', 'x')
@@ -378,11 +379,36 @@ def _read_coord_rows(path):
     return out, skipped
 
 
+def _circular_mean_lon(lons):
+    """经度序列 → **环形均值**（单位向量合成：mean(cosθ)/mean(sinθ) → atan2）。
+
+    ⚠️ 2026-10-03 修：经度是**环形量**，跨 ±180° 日界线的锚点
+    （178 / −179.5 / 179 / −178）用普通均值会翻到地球另一侧（≈0）→ 弧线横穿
+    整张地图；环形均值给 ≈179.9，仍贴近日界线。纬度不是环形量（−90..90 无环），
+    故仍用普通均值/中位数。返回 [−180, 180] 内的度数。
+    退化情形（正负完全抵消，如 0 与 180 对点）向量长度≈0、方向无意义 →
+    退回普通均值并保持有限值（不返回 NaN）。
+    """
+    vals = [float(v) for v in lons]
+    if not vals:
+        return None
+    s = sum(math.sin(math.radians(v)) for v in vals)
+    c = sum(math.cos(math.radians(v)) for v in vals)
+    if abs(s) < 1e-12 and abs(c) < 1e-12:
+        return sum(vals) / len(vals)
+    return math.degrees(math.atan2(s, c))
+
+
 def coord_table_centroid(rows):
     """逐行坐标条目 → {名称: [lat, lon]}（同名多行取均值 = 质心）。
 
     两种逐行条目都收：`_read_coord_rows` 的 (name, lat, lon, 行号) 元组，
     与 `parse_coord_rows` 的 {name, lat, lon, line} 字典。
+
+    ⚠️ 纬度普通均值；**经度改环形均值**（`_circular_mean_lon`）—— 原实现逐轴
+    均值，跨 ±180° 的同区划锚点会翻到地球另一侧（审计实测
+    178/−179.5/179/−178 → lon ≈ 0）。A2 的 `merge_coords → parse_coord_table`
+    弧线落点链路都吃这里，修一处即全链一致。
     """
     acc = {}
     for r in rows:
@@ -390,12 +416,12 @@ def coord_table_centroid(rows):
             name, lat, lon = r.get('name'), r.get('lat'), r.get('lon')
         else:
             name, lat, lon = r[0], r[1], r[2]
-        a = acc.setdefault(name, [0.0, 0.0, 0])
-        a[0] += lat
-        a[1] += lon
-        a[2] += 1
-    return {nm: [round(v[0] / v[2], 5), round(v[1] / v[2], 5)]
-            for nm, v in acc.items()}
+        a = acc.setdefault(name, ([], []))
+        a[0].append(float(lat))
+        a[1].append(float(lon))
+    return {nm: [round(sum(la) / len(la), 5),
+                 round(_circular_mean_lon(lo), 5)]
+            for nm, (la, lo) in acc.items()}
 
 
 def parse_coord_table(path):
@@ -597,10 +623,12 @@ def match_sample_coords(leaf_names, safe2header, meta, coord_rows):
 
 
 def resolve_region_positions(regions, states, sample_points, user_coords):
-    """区划落点优先级：**样本坐标中位数 > 用户坐标表 > 内置质心表**。
+    """区划落点优先级：**样本坐标（纬度中位数 / 经度环形均值）> 用户坐标表 > 内置质心表**。
 
-    样本坐标中位数：该区划下所有有坐标样本的 lat/lon 中位数 —— 比「区划质心」
-    更贴数据（样本散布时，质心会把弧线端点拖到没有样本的位置）。
+    样本坐标口径：该区划下所有有坐标样本的**纬度中位数** + **经度环形均值**
+    （环形量不能逐轴平均，跨 ±180° 日界线会翻到地球另一侧 —— 2026-10-03 修，
+    见 `_circular_mean_lon`）。比「区划质心」更贴数据（样本散布时，质心会把
+    弧线端点拖到没有样本的位置）。
     回退部分直接复用 `merge_coords`（用户表优先 → 内置表 → missing），
     保持与既有口径完全一致。
 
@@ -621,13 +649,13 @@ def resolve_region_positions(regions, states, sample_points, user_coords):
             rest.append(r)
             continue
         lats = sorted(p[0] for p in pts)
-        lons = sorted(p[1] for p in pts)
+        lons = [p[1] for p in pts]
         m = len(pts) // 2
         if len(pts) % 2:
-            lat, lon = lats[m], lons[m]
+            lat = lats[m]
         else:
             lat = (lats[m - 1] + lats[m]) / 2.0
-            lon = (lons[m - 1] + lons[m]) / 2.0
+        lon = _circular_mean_lon(lons)     # 经度：环形均值（非逐轴中位数）
         coords[r], src[r] = [round(lat, 5), round(lon, 5)], 'samples'
         n_used += len(pts)
     c2, s2, m2 = merge_coords(rest, user_coords)
@@ -1087,13 +1115,28 @@ def _fitch(root, states):
             leaf_set[id(n)] = s
             sets[id(n)] = set(s)
             continue
-        inter = None
-        union = set()
+        # 多元（含二叉、多叉）Fitch —— 对每个候选状态 x 统计"候选集包含 x 的
+        # 子节点个数" c(x)，祖先候选集 = argmax_x c(x)。
+        #
+        # 推导：节点取状态 x 时，与子节点 c 的连接代价 = 0（x ∈ S_c）或 1（x ∉ S_c），
+        # 故该节点总代价 = m − c(x)（m = 子节点数）；取最小即 max c(x)。
+        # 并列最大值的状态**全部保留**在候选集里（悬挂方式不唯一，交给 down-pass
+        # 的 tie-break 决定，这是有意的）。
+        #
+        # ⚠️ 2026-10-03 修：原实现是"两两求交，交空取并集"—— 二叉时与上式等价
+        # （交集非空 → 每个 x 的 c=2、argmax=交集；交集空 → 每个 x 至多属一个子集、
+        # argmax=并集），但**多叉节点**会漏掉"某状态被多数子集共享、交集却已空"
+        # 的情况 → 祖先候选集偏大 → 系统性高估最少迁移步数。审计反例
+        # `((B,A),(A,B,B),(B,A))`：旧 4 步、真值 3 步（修后 3 步，见回归用例）。
+        cand = {}
         for c in n['children']:
-            cs = sets[id(c)]
-            union |= cs
-            inter = cs if inter is None else (inter & cs)
-        sets[id(n)] = (inter if inter else union) or {'Unknown'}
+            for x in sets[id(c)]:
+                cand[x] = cand.get(x, 0) + 1
+        if not cand:
+            sets[id(n)] = {'Unknown'}
+            continue
+        best = max(cand.values())
+        sets[id(n)] = {x for x, v in cand.items() if v == best} or {'Unknown'}
 
     def _canon(s):
         """候选集的规范取值：优先非 Unknown（确定性 tie-break，便于复现）。"""
@@ -2152,6 +2195,13 @@ def import_beast(beast_log=None, beast_trees=None, burnin=0.1, min_prob=0.0,
             out['artifacts'].append('beast_log.json')
 
     if beast_trees:
+        # 无 log 的树导入 = 未做收敛诊断（审查 P1-10）：后验树自相关/有效
+        # 样本量无法从树数本身判断，走廊频率只能当探索性结果。显式落进
+        # warnings 与 trees 摘要，防止被读成"稳定的后验支持"。
+        if not beast_log:
+            out['warnings'].append(
+                '仅导入 BEAST 树（未提供 .log）：未做 ESS/收敛诊断，'
+                '走廊/频率结果仅为探索性，正式报告需配套日志诊断')
         _p(0.95, '导入 BEAST 树（后验样本 / MCC 单树）')
         tb = beast_io.tree_corridors(
             beast_trees, burnin=burnin, max_trees=max_trees,
@@ -2163,6 +2213,8 @@ def import_beast(beast_log=None, beast_trees=None, burnin=0.1, min_prob=0.0,
             'n_branches_per_tree', 'n_unresolved', 'n_same_state',
             'n_lowprob', 'labels', 'corridors', 'tree_height', 'time_hist',
             'anim_truncated', 'max_anim_trees', 'min_prob', 'warnings')}
+        # P1-10：收敛是否被核验（有 log 才有 ESS 诊断），前端/报告可见
+        out['trees']['convergence_checked'] = bool(beast_log)
         # 逐树事件（动画数据）不放进 summary：前端按需拉产物文件
         out['trees']['n_anim_trees'] = len(tb.get('sample_events') or [])
         out['trees']['has_events'] = bool(tb.get('sample_events'))
@@ -2232,62 +2284,11 @@ def import_beast(beast_log=None, beast_trees=None, burnin=0.1, min_prob=0.0,
     return out, driver, _normalize_beast_corridors(corr)
 
 
-def ltt_and_skyline(root, node_dates):
-    """从**定年树**算 LTT（谱系随时间）与**经典 skyline**（Pybus 2000 口径）。
-
-    ⚠️ **这不是 BSP（贝叶斯天际线）**：BSP 要 MCMC 采样后验分布，这里只是
-    **点估计**。相邻分支事件之间用 `E[Δt] = 2Ne / (k(k−1))` 反解
-    `Ne = Δt · k(k−1) / 2`（经典 skyline 估计量），不给出可信区间、没有先验。
-    时间单位＝LSD2 输出里的年份；严格解释 Ne 需要知道世代时间（病毒常按年近似）。
-
-    node_dates: {id(node): 年代}（来自 parse_lsd2_dated_tree）。
-    返回 dict：tmrca / n_internal / points[{date,n_lineages}] /
-    skyline[{t0,t1,k,ne}] / note。
-    """
-    internals = [(node_dates.get(id(n)), n) for n in _iter_pre(root)
-                 if n['children']]
-    # ⚠️ 只按年代排序：写成 sorted([(d, n) ...]) 时，若两个节点年代**相同**，
-    # Python 会接着比较第二个元素（节点 dict）→ TypeError:
-    # "'<' not supported between instances of 'dict' and 'dict'"（实测踩到）。
-    dated = sorted([(d, n) for d, n in internals if d is not None],
-                   key=lambda x: x[0])
-    if len(dated) < 3:
-        return {'tmrca': None, 'n_internal': len(dated), 'points': [],
-                'skyline': [],
-                'note': '定年树里带年代的内部节点不足（<3），算不出 LTT/skyline'}
-    tmrca = dated[0][0]
-    # LTT：根处 2 条谱系，每经过一个内部节点 +1（谱系随时间，自老向新）
-    points = [{'date': round(tmrca, 4), 'n_lineages': 2}]
-    k = 2
-    for d, _n in dated[1:]:
-        k += 1
-        points.append({'date': round(d, 4), 'n_lineages': k})
-    # 经典 skyline：区间 [d_i, d_{i+1}] 上有 k 条谱系、1 次分支事件
-    #
-    # ⚠️ k 必须**显式计数**，不能写成 `2 + i`：LSD2 会把节点年代四舍五入，
-    # 于是常有**同年代节点**（同一年上同时发生两次分支）；按下标推会把谱系数
-    # 少算（这次实测里恰好对上，纯属巧合）。这里的定义：
-    #   区间 (d_i, d_{i+1}) 内并存的分支数 = 2 + 年代 ≤ d_i 的非根内部节点数
-    skyline = []
-    for i in range(len(dated) - 1):
-        d0 = dated[i][0]
-        d1 = dated[i + 1][0]
-        if d1 - d0 <= 0:                 # 同年代的分支事件不构成区间
-            continue
-        kk = 2 + sum(1 for j in range(1, len(dated)) if dated[j][0] <= d0)
-        dt = d1 - d0
-        skyline.append({'t0': round(d0, 4), 't1': round(d1, 4), 'k': kk,
-                        'ne': round(dt * kk * (kk - 1) / 2.0, 4)})
-    return {
-        'tmrca': round(tmrca, 4),
-        'n_internal': len(dated),
-        'points': points,
-        'skyline': skyline,
-        'note': ('经典 skyline 点估计（Pybus 2000，非 BSP 后验）：'
-                 '区间内 Ne = Δt·k(k−1)/2；时间单位＝年，'
-                 '严格解释需世代时间。要后验分布与 Markov jump 请用 BEAST'
-                 '（YR-MPE 提供 Windows 原生 mb.exe / pb_mpi.exe）。'),
-    }
+# ⚠️ 2026-10-03 删：`ltt_and_skyline`（LSD2 定年树的 LTT + 经典 skyline 点估计）
+#    全仓**无任何代码引用** —— A1 于 2026-09-17 收敛到 TreeTime 后，LSD2 通路
+#    未接线，LTT 的唯一实现是 `phylodyn_trees.ltt_from_tree`（t-pdltt 卡在用）。
+#    该函数只被 docs/*.md 的历史对比文档提到过；保留它会让"哪套 LTT 才是活的"
+#    继续含糊。若将来恢复 LSD2 通路（`lsd2_dating` 仍在），按 git 历史取回即可。
 
 
 # ---------------------------------------------------------------- MOTP 迁移随时间
@@ -2396,7 +2397,7 @@ def time_tree_segments(root, x_of, axis_label='采样年（日历年）', source
     """（定年）树 → **时间轴直角树**的 plotly 单 trace 折线坐标（T3 时间树）。
 
     x_of: {id(node): 时间坐标}（LSD2 用 `parse_lsd2_dated_tree` 的年代；TreeDater
-    用 `tree_root_distances` 换出的「距今年」）。与 `ltt_and_skyline` 同一套输入
+    用 `tree_root_distances` 换出的「距今年」）。与 `ltt_from_tree` 同一套输入
     约定 —— 传进来的必须是**同一棵树对象**上算出的字典（id() 才有效）。
 
     形态：叶按 DFS 顺序占 y=0..n-1，内部节点 y = 子节点 y 均值；每条边画
@@ -3401,7 +3402,8 @@ def root_to_tip(tree_path, dates, date_trait='year'):
             adj[ci].append((i, ln))
         return i
 
-    ri = _walk(root)
+    _walk(root)      # 只为建 adj/names（返回值 _walk 里即 _reg(root) 的 id，
+                     #  从未被使用 → F841，2026-10-03 删去赋值）
 
     # 删掉辅助键，收集叶（度=1）与其名字
     leaves = [i for i, nb in adj.items() if len(nb) == 1]

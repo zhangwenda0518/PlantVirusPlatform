@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 
 from flask import (Blueprint, Response, abort, jsonify, request,
@@ -15,7 +16,8 @@ from flask import (Blueprint, Response, abort, jsonify, request,
 from Virus_Platform_Core.config import PLATFORM_ROOT
 from Virus_Platform_Core.utils import (TaskLogger, check_path, fmt_size, safe_open)
 from Virus_Platform_Core.web.common import tree_overlay_for
-from Virus_Platform_Core.web.state import cfg, tool_runs_root as _tool_runs_root
+from Virus_Platform_Core.web.state import (cfg, run_real_dir as _run_real_dir,
+                                           tool_runs_root as _tool_runs_root)
 from Virus_Platform_Core.web.tasks import tm
 
 _log = logging.getLogger('Virus_Platform_Core.web.tool_results')
@@ -29,7 +31,7 @@ def _analysis_out(run_dir, contig, action):
 
     run/contig/action 先做严格字符校验 + 规范化，杜绝 ../ 穿越。
     """
-    if action not in ('blastn', 'blastx', 'cdd', 'primer'):
+    if action not in ('blastn', 'blastx', 'primer'):
         abort(400, '无效的分析类型')
     if not re.fullmatch(r'[A-Za-z0-9_\-]{1,80}', os.path.basename(run_dir)):
         abort(400, '无效的运行名')
@@ -63,7 +65,7 @@ def api_tool_viral_contigs():
     run = request.args.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    tsv = check_path(os.path.join(_tool_runs_root(), run,
+    tsv = check_path(os.path.join(_run_real_dir(run),
                                   'virus_classification.tsv'),
                      must_exist=False, in_platform=True)
     rows = []
@@ -74,7 +76,7 @@ def api_tool_viral_contigs():
                 r['near_complete'] = r.get('near_complete') == 'True'
                 rows.append(r)
     # 并入宿主预测列（若该运行已做宿主预测）
-    hp = check_path(os.path.join(_tool_runs_root(), run,
+    hp = check_path(os.path.join(_run_real_dir(run),
                                  '08_host_analysis', 'host_prediction.tsv'),
                     must_exist=False, in_platform=True)
     host_map = {}                      # 先初始化：未做宿主预测的运行无该文件
@@ -98,7 +100,7 @@ def api_tool_verify_result():
     run = request.args.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    vdir = check_path(os.path.join(_tool_runs_root(), run, 'verify'),
+    vdir = check_path(os.path.join(_run_real_dir(run), 'verify'),
                       must_exist=False, in_platform=True)
     rows, summary = [], {}
     calls_tsv = os.path.join(vdir, 'calls.tsv')
@@ -131,7 +133,7 @@ def api_tool_verify_export():
         abort(400, '无效的运行名')
     if not contigs:
         abort(400, '请先勾选要导出的行')
-    vdir = check_path(os.path.join(_tool_runs_root(), run, 'verify'),
+    vdir = check_path(os.path.join(_run_real_dir(run), 'verify'),
                       must_exist=False, in_platform=True)
     if not os.path.isdir(vdir):
         abort(404, f'运行 {run} 没有验证产物（verify/ 目录不存在）')
@@ -180,7 +182,7 @@ def api_tool_kvsuite_refs():
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
     import csv as _csv
-    base = check_path(os.path.join(_tool_runs_root(), run, 'kvsuite'),
+    base = check_path(os.path.join(_run_real_dir(run), 'kvsuite'),
                       must_exist=False, in_platform=True)
 
     def _read_ids(path):
@@ -280,6 +282,35 @@ def api_tool_kvsuite_refs():
     })
 
 
+_kv_fig_lock = threading.Lock()
+
+
+def _kv_ensure_figures(base):
+    """确保 kvsuite/figures/ 下有识别/定量可视化图（freq/coabundance，
+    绘图对象 = 通过过滤的结果）。
+
+    旧运行没有图 -> 首次访问时从 filter/filtered.tsv 现算并落盘缓存；
+    已齐全则直接返回。任何失败降级为返回当前已有的图。
+    """
+    fig_dir = os.path.join(base, 'figures')
+    listed = sorted(f for f in (os.listdir(fig_dir) if os.path.isdir(fig_dir)
+                                else []) if f.lower().endswith('.png'))
+    need = {'freq_multi_metrics.png'}
+    if need <= set(listed):
+        return listed
+    tsv = os.path.join(base, 'filter', 'filtered.tsv')
+    if not os.path.isfile(tsv):
+        return listed
+    with _kv_fig_lock:
+        try:
+            from Virus_Platform_Core.known_virus_suite.kv_fig import (
+                generate_figures)
+            listed = generate_figures(tsv, fig_dir, logger=_log)
+        except Exception as e:  # noqa: BLE001
+            _log.warning('kvsuite 图表生成失败 (%s): %s', base, e)
+    return listed
+
+
 @bp.route('/api/tool/kvsuite_result')
 def api_tool_kvsuite_result():
     """known_virus_suite 结果：鉴定 / 过滤 / 共识 QC / 变异注释 四张表 + 图文件。
@@ -290,7 +321,7 @@ def api_tool_kvsuite_result():
     run = request.args.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    base = check_path(os.path.join(_tool_runs_root(), run, 'kvsuite'),
+    base = check_path(os.path.join(_run_real_dir(run), 'kvsuite'),
                       must_exist=False, in_platform=True)
 
     def _read_tsv(path, limit=None):
@@ -390,6 +421,11 @@ def api_tool_kvsuite_result():
                         snpgenie_products[acc] = _read_tsv(prod, 200)
                         break
 
+    # 识别/定量可视化图表（参考管线 freq/coabundance 两组图，matplotlib
+    # 出 PNG+PDF）。绘图对象 = 通过过滤（确认存在）的结果；过滤表为运行的
+    # 不可变产物，图按需生成一次即缓存；失败只记日志，不影响结果接口。
+    figures = _kv_ensure_figures(base)
+
     summary = {}
     vsum = os.path.join(base, 'variant_summary.json')
     if os.path.isfile(vsum):
@@ -415,6 +451,7 @@ def api_tool_kvsuite_result():
     summary['n_snpgenie'] = len(evo_manifest.get('snpgenie') or [])
 
     return jsonify({'run': run, 'summary': summary, 'plots': plots,
+                    'figures': figures,
                     'variant_plots': variant_plots_png,
                     'evo_plots': evo_plots_png,
                     'evo_manifest': evo_manifest,
@@ -507,7 +544,7 @@ def api_tool_consensus_result():
     run = request.args.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    cdir = check_path(os.path.join(_tool_runs_root(), run, 'consensus'),
+    cdir = check_path(os.path.join(_run_real_dir(run), 'consensus'),
                       must_exist=False, in_platform=True)
     rows, variants, summary = [], [], {}
 
@@ -589,7 +626,7 @@ def api_tool_structcmp_data():
     run = request.args.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    js = check_path(os.path.join(_tool_runs_root(), run,
+    js = check_path(os.path.join(_run_real_dir(run),
                                  'identity_matrix.json'),
                     must_exist=True, in_platform=True)
     return send_file(js, mimetype='application/json')
@@ -601,7 +638,7 @@ def api_tool_msa_data():
     run = request.args.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    aln = check_path(os.path.join(_tool_runs_root(), run, 'aln.fasta'),
+    aln = check_path(os.path.join(_run_real_dir(run), 'aln.fasta'),
                      must_exist=True, in_platform=True)
     from Virus_Platform_Core.msa_view import snp_view_data
     try:
@@ -616,7 +653,7 @@ def api_tool_quicktree_data():
     run = request.args.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    run_dir = check_path(os.path.join(_tool_runs_root(), run),
+    run_dir = check_path(_run_real_dir(run),
                          must_exist=True, in_platform=True)
     tree_file = None
     for name in ('nj.nwk', 'tree.nwk'):
@@ -801,7 +838,7 @@ def api_tool_report():
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
     force = request.args.get('force') in ('1', 'true', 'yes')
-    run_dir = check_path(os.path.join(_tool_runs_root(), run),
+    run_dir = check_path(_run_real_dir(run),
                          must_exist=True, in_platform=True)
     from Virus_Platform_Core.viz import build_contig_report
     try:
@@ -824,7 +861,7 @@ def api_tool_report_data():
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
     force = request.args.get('force') in ('1', 'true', 'yes')
-    run_dir = check_path(os.path.join(_tool_runs_root(), run),
+    run_dir = check_path(_run_real_dir(run),
                          must_exist=True, in_platform=True)
     import glob as _glob
     krs = (_glob.glob(os.path.join(run_dir, '*.kreport2')) +
@@ -919,11 +956,22 @@ def api_tool_hostpredict_run():
     run = body.get('run') or ''
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    run_dir = check_path(os.path.join(_tool_runs_root(), run),
+    run_dir = check_path(_run_real_dir(run),
                          must_exist=True, in_platform=True)
     tsv = os.path.join(run_dir, 'virus_classification.tsv')
     if not os.path.isfile(tsv):
         abort(400, '该运行没有 virus_classification.tsv（仅 contig 分类运行支持）')
+    # 可选置信度门槛（0-1 小数）；不传/空 = 不过滤（历史行为）
+    min_conf = body.get('min_confidence')
+    if min_conf in (None, ''):
+        min_conf = None
+    else:
+        try:
+            min_conf = float(min_conf)
+        except (TypeError, ValueError):
+            abort(400, 'min_confidence 需为 0-1 之间的小数')
+        if not 0.0 <= min_conf <= 1.0:
+            abort(400, 'min_confidence 需为 0-1 之间的小数')
     from Virus_Platform_Core.kunpeng import db_ready
     if not db_ready(cfg.databases['host']):
         abort(400, '宿主库未就绪，请先到「数据库构建」页构建宿主库')
@@ -941,7 +989,8 @@ def api_tool_hostpredict_run():
                                fasta=vfa if os.path.isfile(vfa) else None,
                                threads=cfg.threads, logger=logger)
         prog('predict', 0.15, 'ICTV 宿主概率级联预测')
-        res = predict_hosts(run_dir, logger=logger, force=True)
+        res = predict_hosts(run_dir, logger=logger, force=True,
+                            min_confidence=min_conf)
         prog('done', 1.0, f"完成：宿主判定 {res.get('n_contigs', 0)} 条")
         logger.close()
         return res
@@ -961,7 +1010,7 @@ def api_tool_analysis():
     seq = (request.args.get('seq') or '').strip()
     engine = _norm_engine(request.args.get('engine'))
     tag = _engine_tag(engine)
-    if not contig or action not in ('blastn', 'blastx', 'cdd', 'primer'):
+    if not contig or action not in ('blastn', 'blastx', 'primer'):
         abort(400, '参数不完整')
     # 直接用字符串序列查询（seq 输入的伪 run 缓存）
     if seq:
@@ -986,12 +1035,13 @@ def api_tool_analysis():
 
 @bp.route('/api/tool/analyze', methods=['POST'])
 def api_tool_analyze():
-    """单 contig 深度分析四件套：blastn / blastx / cdd / primer。
+    """单 contig 深度分析三件套：blastn / blastx / primer。
 
     body: {run, contig, action, seq?, engine?}
       engine=local（默认）→ 本地内置库（Virus_Platform_Core.local_search：blastn 病毒参考库 /
-        DIAMOND vs viral_prot / mmseqs2 vs CDD），离线、秒级；
+        DIAMOND vs viral_prot），离线、秒级；
       engine=online → NCBI 在线（Virus_Platform_Core.contig_annot，域名白名单 + IP 校验）。
+    （曾有的第四件 cdd（CDD 保守域搜索）已于 2026-09-29 随本地 CDD 库下线。）
     结果缓存为 run/analysis/<contig>[_local]_<action>.json。
     """
     body = request.get_json(force=True) or {}
@@ -1002,7 +1052,7 @@ def api_tool_analyze():
     in_seq = seq  # 供闭包安全读取（避免 UnboundLocalError）
     engine = _norm_engine(body.get('engine'))
     tag = _engine_tag(engine)
-    if action not in ('blastn', 'blastx', 'cdd', 'primer'):
+    if action not in ('blastn', 'blastx', 'primer'):
         abort(400, '无效的分析类型')
     if not run or not contig:
         abort(400, '参数不完整')
@@ -1025,7 +1075,17 @@ def api_tool_analyze():
                              must_exist=True, in_platform=True)
         out_path = _analysis_out(run_dir, contig + tag, action)
     if os.path.isfile(out_path):
-        return jsonify({'task': None, 'cached': True})
+        # 缓存命中也要探针：任务被杀/磁盘写满可能留下截断的坏 JSON，
+        # 只判 isfile 就返回 cached=True，前端会永远读到坏结果且不会重算。
+        try:
+            with safe_open(out_path) as f:
+                json.loads(f.read())
+            return jsonify({'task': None, 'cached': True})
+        except (OSError, ValueError):
+            try:
+                os.remove(out_path)          # 坏缓存删除 → 下面正常重算
+            except OSError:
+                pass
 
     def job(log, prog, cancel):
         logger = TaskLogger(callback=log)
@@ -1054,34 +1114,13 @@ def api_tool_analyze():
             qfa = os.path.join(run_dir, f'query_{action}.fasta')
             with safe_open(qfa, 'wt') as f:
                 f.write(f'>{contig}\n{seq}\n')
-            if action == 'cdd':
-                prog('cdd', 0.4, 'mmseqs2 搜索本地 CDD 库（离线，translated）')
-                res = ls.cdd_local(qfa, run_dir, threads=cfg.threads,
-                                   logger=logger)
-                result = {'action': 'cdd', 'contig': contig, 'engine': 'local',
-                          'coord': res.get('coord'),
-                          'query_len': res.get('query_len'),
-                          'orf_len_aa': res.get('orf_len_aa'),
-                          'db': res.get('db'), 'hits': res['hits']}
-            else:
-                prog(action, 0.4, ('本地 blastn vs 病毒参考核酸库（离线）'
-                                   if action == 'blastn' else
-                                   '本地 DIAMOND blastx vs RefSeq 病毒蛋白库（离线）'))
-                fn = ls.blastn_local if action == 'blastn' else ls.blastx_local
-                hits = fn(qfa, run_dir, threads=cfg.threads, logger=logger)
-                result = {'action': action, 'contig': contig, 'engine': 'local',
-                          'hits': hits}
-
-        elif action == 'cdd':
-            prog('orf', 0.3, '6-frame 翻译取最长 ORF')
-            prot = ca.longest_orf_protein(seq)
-            if len(prot) < 50:
-                raise RuntimeError('未找到 ≥50aa 的 ORF，无法做 CDD 域搜索')
-            prog('cdd', 0.5, '提交 NCBI CDD（数分钟，耐心等待）')
-            cdsid = ca.submit_cdd(f'>{contig}\n{prot}\n')
-            hits = ca.poll_cdd(cdsid, cancel=cancel)
-            result = {'action': 'cdd', 'contig': contig, 'engine': 'online',
-                      'orf_len_aa': len(prot), 'hits': hits}
+            prog(action, 0.4, ('本地 blastn vs 病毒参考核酸库（离线）'
+                               if action == 'blastn' else
+                               '本地 DIAMOND blastx vs RefSeq 病毒蛋白库（离线）'))
+            fn = ls.blastn_local if action == 'blastn' else ls.blastx_local
+            hits = fn(qfa, run_dir, threads=cfg.threads, logger=logger)
+            result = {'action': action, 'contig': contig, 'engine': 'local',
+                      'hits': hits}
 
         else:  # blastn / blastx（NCBI URL API，virus-restricted）
             prog('submit', 0.3, f'提交 NCBI {action}（数分钟，耐心等待）')
@@ -1093,8 +1132,13 @@ def api_tool_analyze():
             result = {'action': action, 'contig': contig, 'engine': 'online',
                       'rid': rid, 'hits': hits}
 
-        with safe_open(out_path, 'wt') as f:
+        # 原子落盘：先写 .tmp 再 os.replace，避免读到写了一半的 JSON
+        # （本文件既是缓存也是 /api/tool/analysis 的直接读源，非原子写会
+        # 让并发读拿到截断内容）。
+        tmp_out = out_path + '.tmp'
+        with safe_open(tmp_out, 'wt') as f:
             json.dump(result, f, ensure_ascii=False, indent=1)
+        os.replace(tmp_out, out_path)
         prog('done', 1.0, '完成')
         logger.close()
         return {'out': out_path}
@@ -1107,7 +1151,8 @@ def api_tool_analyze():
 
 # ------------------------------------------------------------------
 # 从序列出发的引物设计（PCR / qPCR + 探针 + 热力学评估）
-# 不评估 BLAST 脱靶；覆盖图数据为百分比定位，前端纯 div 渲染
+# 脱靶检查默认关（specificity=true 且已配置 host-db 时才跑宿主 blastn）；
+# 覆盖图数据为百分比定位，前端纯 div 渲染
 # ------------------------------------------------------------------
 @bp.route('/api/tool/primer_design', methods=['POST'])
 def api_tool_primer_design():
@@ -1118,7 +1163,8 @@ def api_tool_primer_design():
       "fasta_text": "FASTA 文本内容",
       "type": "PCR" | "qPCR",
       "core": {核心层参数},
-      "adv": {进阶层参数}
+      "adv": {进阶层参数},
+      "specificity": false  // 可选：宿主基因组 blastn 脱靶检查（默认关）
     }
 
     同步返回设计结果（单序列通常 <2s），不建后台任务。
@@ -1130,6 +1176,9 @@ def api_tool_primer_design():
     ptype = (d.get('type') or 'PCR').strip()
     core = d.get('core') or {}
     adv = d.get('adv') or {}
+    # 默认关；打开时透传 primer.check_specificity_blast（需已配置 host-db），
+    # 结果/summary 如实写 specificity_checked（2026-10-03 修复 P2-14④）
+    specificity = bool(d.get('specificity'))
     if not isinstance(core, dict):
         core = {}
     if not isinstance(adv, dict):
@@ -1144,7 +1193,8 @@ def api_tool_primer_design():
             return jsonify({'error': str(e)}), 400
     try:
         res = pd.run_design(fasta_text=fasta_text, fasta_path=fpath,
-                            ptype=ptype, core=core, adv=adv)
+                            ptype=ptype, core=core, adv=adv,
+                            specificity=specificity)
     except FileNotFoundError as e:
         return jsonify({'error': str(e)}), 404
     except ValueError as e:

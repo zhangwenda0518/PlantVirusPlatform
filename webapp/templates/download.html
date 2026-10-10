@@ -46,6 +46,16 @@
         <input id="dlConc" type="number" value="2" min="1" max="4">
       </div>
     </div>
+    <!-- 2026-09-30：可选自定义输出位置。不填 = 默认 downloads/<批次>；
+         指定的目录即批次目录本身（不再嵌批次 id 层）。后端经 check_path
+         校验：仅允许平台内或设置页已挂载的输出根内，越界 400 原因透出。 -->
+    <label data-i18n="dl.outDir">输出位置（可选，不填 = 默认 downloads/ 目录）</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="dlOutDir" type="text" style="flex:1" spellcheck="false"
+             placeholder="如 D:\GSA数据\Lycium —— 指定的目录即本批数据的存放目录"
+             data-i18n-ph="dl.phOutDir">
+      <button class="btn small" onclick="browseDir('dlOutDir')">📁 <span data-i18n="se.pick">浏览</span></button>
+    </div>
     <label data-i18n="dl.items">编号 / URL 列表（每行一条；SRR·ERR·DRR·CRR 或 https 数据文件 URL；# 开头为注释）</label>
     <textarea id="dlItems" rows="7" style="font-family:var(--mono);font-size:12px"
       placeholder="SRR23843744&#10;ERR7586041&#10;CRR125671&#10;# 或: https://ftp.sra.ebi.ac.uk/vol1/fastq/.../xxx.fastq.gz"></textarea>
@@ -64,6 +74,7 @@
   </main>
   </div>
 </div>
+{% include "_browse_dlg.html" %}
 
 <script src="/static/i18n.js?v={{ asset_v }}"></script>
 <script src="/static/app.js?v={{ asset_v }}"></script>
@@ -113,11 +124,13 @@ async function createBatch() {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ name: val('dlName') || 'batch',
                              items, concurrency: +val('dlConc') || 2,
-                             convert_sra: $('dlConv').checked })});
+                             convert_sra: $('dlConv').checked,
+                             out_dir: val('dlOutDir').trim() })});
     if (!r.ok) { $('dlErr').textContent = (await r.json()).error || '创建失败'; return; }
     $('dlItems').value = '';
+    $('dlOutDir').value = '';     // 每批一目录：创建后清空，避免下一批误混
     refresh();
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error(e); }
 }
 
 /* 实时传输指标条：仅在进行中显示（速度 / 已下载·总量 / 剩余时间） */
@@ -193,6 +206,12 @@ function batchHtml(b) {
     </div>
     <div class="bar" data-dl-bar="${esc(b.id)}"><i data-dl-overall="${pct}" style="width:${pct}%"></i></div>
     ${dlMetrics(b)}
+    ${b.dir ? `<p class="hint" style="margin:4px 0 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span>📁 ${t('dl.outDirShort', '输出位置')}</span>
+        <span style="user-select:all;font-family:var(--mono)">${esc(b.dir)}</span>
+        <button class="btn small" style="padding:1px 8px" data-d="${esc(b.dir)}"
+                onclick="openOutDir(this.dataset.d)" title="${t('c.openDir', '在资源管理器中打开')}">📂</button>
+      </p>` : ''}
     ${b.convert_msg ? `<p class="hint"${b.convert_failed ? ' style="color:var(--red-700,#b03a34)"' : ''}>${esc(b.convert_msg)}</p>` : ''}
     ${b.error ? `<div class="err">${esc(b.error)}</div>` : ''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
@@ -326,7 +345,7 @@ async function intoPipeline(bid) {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ batch: bid, project: project || null, enqueue })});
     const d = await r.json();
-    if (!r.ok) { alert((d.error) || '转入失败'); return; }
+    if (!r.ok) { alert((d.error) || t('ui.dl.intoFail')); return; }
     toast(t('dl.intoOk', '已转入分析流程'),
           `${(d.created||[]).length} ${t('dl.samples', '个样品')}` +
           (d.queued ? ` · ${t('dl.enqueued', '已入队')}` : '') +
@@ -335,7 +354,7 @@ async function intoPipeline(bid) {
     if (!POP && d.created && d.created.length) {
       setTimeout(() => location.href = '/pipeline?sample=' + encodeURIComponent(d.created[0]), 900);
     }
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error(e); }
 }
 
 async function batchAction(bid, action) {
@@ -348,10 +367,10 @@ async function batchAction(bid, action) {
   if (confirms[action] && !confirm(confirms[action])) return;
   try {
     const r = await fetch(`/api/dl/batch/${encodeURIComponent(bid)}/${action}`, {method: 'POST'});
-    if (!r.ok) { alert((await r.json()).error || '操作失败'); return; }
+    if (!r.ok) { alert((await r.json()).error || t('ui.common.opFail')); return; }
     delete dlFileCache[bid];          // 明细已变，强制重取
     refresh();
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error(e); }
 }
 
 let refreshTimer = null;
@@ -377,7 +396,7 @@ async function refresh() {
       if (fbox && dlFileCache[bid]) { fbox.style.display = ''; renderDlFiles(bid, fbox); }
     });
     if (POP) document.title = `${t('dl.title')}（${list.filter(b => b.status === 'downloading').length}）`;
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error(e); }
   finally {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(refresh, active ? 2000 : 6000);

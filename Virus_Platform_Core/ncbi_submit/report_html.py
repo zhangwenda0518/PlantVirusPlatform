@@ -20,7 +20,7 @@ report_html.py — 交互式全表编辑报告 v2.0
  HTML 写出走平台 Virus_Platform_Core.utils.safe_open，提交清单改为 Sequin/BankIt 流程）
 """
 
-import argparse, os, sys
+import argparse, json, os, sys
 import html
 from pathlib import Path
 from datetime import datetime
@@ -90,6 +90,7 @@ td.filled{background:#e8f5e9}td.filled .cell-content{color:#2e7d32}
 .tabs{display:flex;gap:0;margin-bottom:16px}
 .tab{padding:8px 16px;background:#e0e0e0;cursor:pointer;font-size:12px;border-radius:8px 8px 0 0;margin-right:2px}
 .tab.active{background:#fff;font-weight:600}
+.alert-warn{background:#fdecea;border:1px solid #e57373;border-left:5px solid #c62828;color:#8e1b1b;padding:10px 14px;border-radius:6px;font-size:12px;margin-bottom:12px;line-height:1.6}
 """
 
 JS_EDITABLE = """
@@ -253,7 +254,7 @@ def load_table(tsv_path):
     if not tsv_path or not os.path.exists(tsv_path):
         return [], []
     df = pd.read_csv(tsv_path, sep='\t' if str(tsv_path).endswith('.tsv') else None,
-                     engine='python')
+                     engine='python', encoding='utf-8-sig')
     return list(df.columns), [list(df.iloc[i]) for i in range(len(df))]
 
 
@@ -266,22 +267,51 @@ def generate_html(csv_path, run_title, output_path, miuvig_path=None, asm_path=N
     n_seqs = len(df)
     n_viruses = df['organism'].nunique() if 'organism' in df.columns else 0
 
+    # ── 顶部告警区块：序列字符替换率（sequences.fsa 导出的旁挂报告） ──
+    # export_submission_fasta 会写 fasta_export_report.json（与 csv 同目录）；
+    # 替换总数（U→T + 非 IUPAC→N）超过序列总长 1% 时在报告顶部显式提示。
+    warn_html = ''
+    _frep_p = os.path.join(os.path.dirname(os.path.abspath(csv_path)),
+                           'fasta_export_report.json')
+    if os.path.isfile(_frep_p):
+        try:
+            with open(_frep_p, 'r', encoding='utf-8') as _f:
+                _frep = json.load(_f)
+        except (OSError, ValueError):
+            _frep = {}
+        if isinstance(_frep, dict) and _frep.get('warn_substitution'):
+            _n = lambda k: int(_frep.get(k, 0) or 0)
+            _pct = (_n('substituted') * 100.0 / _n('total_len')) if _n('total_len') else 0.0
+            warn_html = (
+                '<div class="alert-warn">'
+                f'<b>⚠ 序列字符替换告警</b>：sequences.fsa 中字符替换 '
+                f"{_n('substituted')}/{_n('total_len')}（{_pct:.2f}%）超过 1% —— "
+                f"U→T {_n('u_to_t')} 处（RNA→DNA 等价形式，正常）；"
+                f"非 IUPAC 字符→N {_n('replaced')} 处（建议核对原始序列质量后再提交）。"
+                '</div>')
+
     # ── 汇总统计（taxonomy/features/topology 文件可选） ──
     summary_parts = []
     if suvtk_tax_path and os.path.isfile(suvtk_tax_path):
-        with open(suvtk_tax_path) as f:
+        with open(suvtk_tax_path, encoding='utf-8', errors='replace') as f:
             n_tax = sum(1 for _ in f) - 1
         summary_parts.append(f'taxonomy: {n_tax} sequences classified')
     if suvtk_feat_path and os.path.isfile(suvtk_feat_path):
-        n_cds = sum(1 for l in open(suvtk_feat_path) if l.strip().split()[-1:] == ['CDS'])
+        n_cds = sum(1 for l in open(suvtk_feat_path, encoding='utf-8',
+                                    errors='replace')
+                    if l.strip().split()[-1:] == ['CDS'])
         summary_parts.append(f'features: {n_cds} CDS annotated')
     if hypo_path and os.path.isfile(hypo_path):
-        n_hypo = sum(1 for l in open(hypo_path) if 'hypothetical' in l.lower())
-        n_anno = sum(1 for l in open(hypo_path) if 'inference\talignment' in l)
+        n_hypo = sum(1 for l in open(hypo_path, encoding='utf-8',
+                                     errors='replace')
+                     if 'hypothetical' in l.lower())
+        n_anno = sum(1 for l in open(hypo_path, encoding='utf-8',
+                                     errors='replace')
+                     if 'inference\talignment' in l)
         summary_parts.append(f'hypothetical proteins: {n_anno} annotated, {n_hypo} remaining')
     if topo_path and os.path.isfile(topo_path):
         rows = []
-        with open(topo_path) as f:
+        with open(topo_path, encoding='utf-8', errors='replace') as f:
             hdr = f.readline().strip().split('\t')
             for line in f:
                 cols = line.strip().split('\t')
@@ -336,7 +366,7 @@ def generate_html(csv_path, run_title, output_path, miuvig_path=None, asm_path=N
     topo_summary = 'No data'
     if topo_path and os.path.isfile(topo_path):
         topo_rows = []
-        with open(topo_path) as f:
+        with open(topo_path, encoding='utf-8', errors='replace') as f:
             topo_hdr = f.readline().strip().split('\t')
             for line in f:
                 cols = line.strip().split('\t')
@@ -351,16 +381,17 @@ def generate_html(csv_path, run_title, output_path, miuvig_path=None, asm_path=N
                 topo = row.get('final_topology','').lower()
                 cls = 'filled' if 'linear' in topo else ('missing' if 'circular' not in topo else '')
                 dtr_flag = '&#10003;' if row.get('dtr_detected','False').lower() == 'true' else ''
-            topo_body_str += (
-                f'<tr>'
-                f'<td>{_esc(row.get("contig",""))}</td>'
-                f'<td>{_esc(row.get("taxonomy",""))}</td>'
-                f'<td>{_esc(row.get("rule_topology",""))}</td>'
-                f'<td class="{_esc(cls)}">{_esc(row.get("final_topology",""))}</td>'
-                f'<td style="text-align:right">{_esc(row.get("seq_length",""))}</td>'
-                f'<td style="text-align:center">{dtr_flag}</td>'
-                f'<td style="font-size:10px;color:#888">{_esc(row.get("evidence",""))}</td>'
-                f'</tr>\n')
+                # 缩进必须在本 for 循环体内：此前在循环外，逐行累加退化为只输出最后一行
+                topo_body_str += (
+                    f'<tr>'
+                    f'<td>{_esc(row.get("contig",""))}</td>'
+                    f'<td>{_esc(row.get("taxonomy",""))}</td>'
+                    f'<td>{_esc(row.get("rule_topology",""))}</td>'
+                    f'<td class="{_esc(cls)}">{_esc(row.get("final_topology",""))}</td>'
+                    f'<td style="text-align:right">{_esc(row.get("seq_length",""))}</td>'
+                    f'<td style="text-align:center">{dtr_flag}</td>'
+                    f'<td style="font-size:10px;color:#888">{_esc(row.get("evidence",""))}</td>'
+                    f'</tr>\n')
 
     # --- checklist（平台流程：⑥b 注释 → 拓扑 → Sequin/BankIt 提交） ---
     chk = [
@@ -390,6 +421,7 @@ def generate_html(csv_path, run_title, output_path, miuvig_path=None, asm_path=N
         topo_header=topo_header, topo_body=topo_body_str,
         topo_summary=topo_summary,
         summary=summary_html,
+        warning=warn_html,
         checklist=chk_html,
         css=CSS, js=JS_EDITABLE,
     )

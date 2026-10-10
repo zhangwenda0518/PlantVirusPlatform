@@ -30,7 +30,7 @@
       <p class="cover-lead" data-i18n="hm.heroLead">看见样本里的病毒世界。</p>
       <p data-i18n="hm.heroSub">发现、鉴定、定量、溯源植物 RNA 病毒——再低的丰度也看得见；从原始测序数据到可发表的基因组证据，一台 Windows 电脑完成。</p>
       <!-- 工程口径一行：本地化 / 内置库 / 13 步级联 / 默认离线 -->
-      <p class="cover-eng" data-i18n="hm.heroEng">Windows 单机本地分析 · 内置病毒数据库 3.4 GB · 13 步级联默认全程离线</p>
+      <p class="cover-eng" data-i18n="hm.heroEng">Windows 单机本地分析 · 内置病毒数据库 3.4 GB · ⓪~⑩ 15 阶段默认全程离线</p>
     </div>
   </div>
 
@@ -45,7 +45,7 @@
     </div>
     <div class="cover-card">
       <div class="cc-head"><b>Ⅲ</b><span data-i18n="hm.cover.wf.t">流程</span></div>
-      <p data-i18n="hm.cover.wf.d">原始 reads 进，基因组图谱出：质控、去宿主、识别、组装、验证、注释、建树、引物、基因组图、报告，13 步自动衔接——一条候选病毒的"全套尽调"，一次运行完成。</p>
+      <p data-i18n="hm.cover.wf.d">原始 reads 进，基因组图谱出：质控、去宿主、识别、组装、验证、注释、建树、引物、基因组图、报告，15 个阶段自动衔接——一条候选病毒的"全套尽调"，一次运行完成。</p>
     </div>
     <div class="cover-card">
       <div class="cc-head"><b>Ⅳ</b><span data-i18n="hm.cover.sg.t">意义</span></div>
@@ -69,7 +69,7 @@
     <a class="module-card entry" href="/pipeline">
       <div class="mc-icon">🧪</div>
       <div class="mc-name" data-i18n="nav.pipeline">自动化分析流程</div>
-      <div class="mc-desc" data-i18n="hm.entry.flow.d">新建样品，13 步级联：质控 → 宿主去除 → 已知病毒识别与定量 → 组装 → ORF/注释 → 进化树/引物 → 基因组图 → 报告</div>
+      <div class="mc-desc" data-i18n="hm.entry.flow.d">新建样品，⓪~⑩ 15 阶段级联（默认 13 步）：质控 → 宿主去除 → 已知病毒识别与定量 → 组装 → ORF/注释 → 进化树/引物 → 基因组图 → 报告</div>
     </a>
     <a class="module-card entry" href="/tools?g=resource">
       <div class="mc-icon">🌐</div>
@@ -96,13 +96,14 @@
       <div class="mc-name" data-i18n="nav.g.annotate">病毒注释分析</div>
       <div class="mc-desc" data-i18n="hm.entry.annotate.d">ORF 预测 · 功能注释 · 保守域/同源复核 · 基因组图谱</div>
     </a>
-    <!-- 2026-09-18：引物设计 / dsRNA 设计从注释组拆出，独立成「检测与防治」。
-         注释回答「它是什么」，这两项回答「怎么检出来 / 怎么防住」——
-         产物是引物对与 RNAi 分子，面向下游湿实验，故单列一组。 -->
+    <!-- 2026-09-18：引物设计从注释组拆出，独立成「检测与防治」；
+         2026-09-29 dsRNA 设计曾整体迁出，2026-10-03 已恢复（引擎三模块 +
+         t-dsrna 工具卡）。注释回答「它是什么」，本组回答「怎么检出来 /
+         怎么防住 / 天然防治线索」——产物面向下游湿实验，故单列一组。 -->
     <a class="module-card entry" href="/tools?g=detect">
       <div class="mc-icon">🎯</div>
       <div class="mc-name" data-i18n="nav.g.detect">检测与防治</div>
-      <div class="mc-desc" data-i18n="hm.entry.detect.d">引物设计（primer3 分窗/保守区）· dsRNA 设计（选窗 → 效价 → 脱靶 → T7 引物）</div>
+      <div class="mc-desc" data-i18n="hm.entry.detect.d">引物设计（primer3 分窗/保守区）· dsRNA 设计（选窗 → 效价 → 脱靶 → T7 引物）· miRNA 靶标预测（PAmiRDB）</div>
     </a>
     <!-- 2026-09-17：比较基因组分析入口已恢复（09-15 误与「进化动力学分析」
          一起撤掉，两者是不同业务对象：不同病毒之间 vs 同一个基因内部）。
@@ -128,6 +129,9 @@
   <h2 class="sec" data-i18n="hm.recentSection">🧪 最近样品</h2>
   <div id="homeSamples" class="module-grid"><p class="hint" data-i18n="c.loading">加载中…</p></div>
 </div>
+
+<!-- AI 助手对话坞已全局化：随 _nav.html 注入每个页面（2026-10-02），
+     本页不再单独携带。事件流/快捷指令/闸门确认在任何页面都可用。 -->
 
 <script src="/static/i18n.js?v={{ asset_v }}"></script>
 <script src="/static/app.js?v={{ asset_v }}"></script>

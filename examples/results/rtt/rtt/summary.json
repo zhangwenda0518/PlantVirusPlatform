@@ -84,8 +84,11 @@
  "method": "nj",
  "trait": "year",
  "strong_signal": true,
- "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20260921_035633_923ac0\\rtt",
+ "warnings": [
+  "13 条跨区边全部没有两端坐标 —— 迁移事件分类除 Import 外都是 Unresolved；要出距离分带请提供坐标表（coords）或元数据 lat/lon 列。"
+ ],
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20261006_162643_d8b980\\rtt",
  "aln": "D:\\桌面\\植物病毒分析平台\\examples\\example_phylogeo.fasta",
  "meta": "D:\\桌面\\植物病毒分析平台\\examples\\example_phylogeo.meta.csv",
- "dated_nexus": "D:\\桌面\\植物病毒分析平台\\examples\\results\\rtt\\rtt\\tree.date.nexus"
+ "dated_nexus": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20261006_162643_d8b980\\rtt\\tree.date.nexus"
 }

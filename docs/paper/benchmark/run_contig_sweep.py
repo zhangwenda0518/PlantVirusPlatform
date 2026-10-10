@@ -18,11 +18,26 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 sys.path.insert(0, REPO)
 
-KV_REF = os.path.join(REPO, 'databases', 'virusref_db', 'kv_index', 'reference.fasta')
-BARI_S3 = r'E:\谷歌下载\测试数据验证\Raw-data-Bari.Workshop\Sample_3.fastq'
+# 评测快照参考库（2026-09 的 kv_index；2026-09-29 起被 plant_ref 取代）。
+# 优先级：环境变量 VP_BENCH_DB > 旧默认路径；缺库时报清晰中文错误。
+_DB_DIR = os.environ.get('VP_BENCH_DB') or os.path.join(
+    REPO, 'databases', 'virusref_db', 'kv_index')
+KV_REF = os.path.join(_DB_DIR, 'reference.fasta')
+if not os.path.isfile(KV_REF):
+    raise SystemExit(
+        f'[基准库缺失] 找不到参考库 FASTA：{KV_REF}\n'
+        f'说明：本评测快照绑定 2026-09 的 kv_index 库（manifest 2026-09-19），'
+        f'2026-09-29 起平台默认库已改为 virusref_db/plant_ref/，旧目录已移除。\n'
+        f'复现请先重建等价库，或用环境变量 VP_BENCH_DB=<库目录> 显式指定。')
+# Bari 原始数据路径：评测机外部目录，可用环境变量 VP_BENCH_BARI 覆盖
+BARI_S3 = os.environ.get(
+    'VP_BENCH_BARI',
+    r'E:\谷歌下载\测试数据验证\Raw-data-Bari.Workshop\Sample_3.fastq')
 CUTOFFS = [30, 40, 50, 60, 80, 100, 150, 200]
 TARGETS = ['NC_043447.1', 'NC_043448.1']
-OUT = sys.argv[1] if len(sys.argv) > 1 else r'C:\vp_srna_test\bench\contig_sweep'
+OUT = (sys.argv[1] if len(sys.argv) > 1
+       else os.environ.get('VP_BENCH_SWEEP_OUT')
+       or r'C:\vp_srna_test\bench\contig_sweep')
 
 
 def read_fa(path):

@@ -100,9 +100,9 @@ except Exception:
 # ViennaRNA 的 _RNA.pyd 用 MSVC C++ 运行库（导入表依赖 MSVCP140.dll），
 # 但平台其余扩展都只用 VCRUNTIME140 —— PyInstaller 的依赖分析因此没有把
 # MSVCP140.dll 收进 _internal（2026-09-18 实测：冻结版 import RNA 报
-# "Failed to load ViennaRNA RNAlib Python wrapper"，dsRNA 全链路失效）。
-# 源码模式不受影响（System32 里有）。这里从 System32 显式随包携带
-# （VC 运行库可随应用再分发，PyInstaller 对其它应用也是这么做的）。
+# "Failed to load ViennaRNA RNAlib Python wrapper"，dsRNA 全链路 / miRNA
+# 靶标预测均失效）。源码模式不受影响（System32 里有）。这里从 System32
+# 显式随包携带（VC 运行库可随应用再分发，PyInstaller 对其它应用也是这么做的）。
 import os as _os
 import sys as _sys
 _binaries = []
@@ -129,9 +129,42 @@ a = Analysis(
     datas=datas,
     hiddenimports=['Virus_Platform_Core.public_meta.search_engine',
                    'Virus_Platform_Core.public_meta.info_engine',
+                   # 病毒样本预筛引擎（Web 侧以 --run-engine 子进程调用，
+                   # 见 engine_entry.py 的 _ENGINES）
+                   'Virus_Platform_Core.public_meta.prescreen_engine',
+                   # 病毒谱：把预筛产物聚合成「病毒视角」（Web 侧直接 import，
+                   # 不是子进程引擎；模块级 import 了 taxonomy，须显式登记）
+                   'Virus_Platform_Core.public_meta.virome',
                    'Virus_Platform_Core.logan_submit', 'Virus_Platform_Core.lovis4u_run',
                    'Virus_Platform_Core.ncbi_submit.unified_metadata', 'Virus_Platform_Core.engine_entry',
                    'Virus_Platform_Core.cdd_search',   # CDD 低内存分片回退（函数内惰性导入）
+                   # CRISPR 检测试剂设计（tool_jobs 内惰性导入，静态分析
+                   # 不到；2026-10-07 生产审查补登。冻结版无 primer3 时
+                   # 自动降级枚举路，无 ViennaRNA 时跳过结构过滤）
+                   'Virus_Platform_Core.crispr_design',
+                   # AI 助手（对话驱动智能代理，2026-10-08 补登）：web/ai_assist.py
+                   # 顶层 import 了 chat/digest/broadcast/provider（静态分析可达），
+                   # 但 **executors 只被函数内惰性 import 引用**
+                   # （chat.py 的 propose_action 分派、tools.py 的 dispatch、
+                   #   ai_assist.py 的两条 /api/ai/actions 路由）——
+                   # 与本项目其它惰性导入引擎（crispr_design / dsrna_* / kv_*）
+                   # 同因，须显式登记；否则冻结版里「AI 执行单 / 自动重试 /
+                   # 自动调参」会 ImportError，而对话与播报看起来一切正常
+                   # （静默失效，最难发现）。其余 5 个一并登记以防静态分析漏。
+                   'Virus_Platform_Core.ai_agent.executors',
+                   'Virus_Platform_Core.ai_agent.broadcast',
+                   'Virus_Platform_Core.ai_agent.audit',
+                   'Virus_Platform_Core.ai_agent.chat',
+                   'Virus_Platform_Core.ai_agent.digest',
+                   'Virus_Platform_Core.ai_agent.provider',
+                   'Virus_Platform_Core.ai_agent.tools',
+                   # 轨道 B（BEAST 交接，2026-10-08 接线）：beast_handoff 只被
+                   # web/tool_jobs.py 的 _tool_job_beastexport 函数内 import 引用，
+                   # beast_io 只被 phylogeo.import_beast 函数内 import 引用 ——
+                   # 均为惰性导入，随本项目惯例显式登记，避免冻结版里
+                   # 「打包 BEAST 作业包 / BEAST 产物导入」静默 ImportError。
+                   'Virus_Platform_Core.beast_handoff',
+                   'Virus_Platform_Core.beast_io',
                    # 已知病毒引擎（2026-09-10 由顶层 engines/ 并入包内子包；
                    # 用相对导入后 PyInstaller 静态分析不到，须显式登记）
                    'Virus_Platform_Core.known_virus_suite.kv_common',
@@ -145,9 +178,10 @@ a = Analysis(
                    'Virus_Platform_Core.known_virus_suite.kv_variant_evo',
                    'Virus_Platform_Core.known_virus_suite.known_virus_suite',
                    'Virus_Platform_Core.kv_stage',
-                   # dsRNA 设计全链路（2026-09）：三模块均为函数内惰性 import，
-                   # PyInstaller 静态分析不到，须显式登记；RNA 为 viennarna 的
-                   # 编译扩展（dsRIP 效价打分的折叠能项）
+                   # dsRNA 设计全链路（2026-09 接线，2026-10-03 恢复）：三模块均为
+                   # 函数内惰性 import，PyInstaller 静态分析不到，须显式登记；
+                   # RNA 为 viennarna 的编译扩展（dsRIP 效价打分的折叠能项，
+                   # 亦供 miRNA 靶标预测的 RNAhybrid/psRNATarget/TAPIR 复刻引擎）
                    'Virus_Platform_Core.dsrna_scoring',
                    'Virus_Platform_Core.dsrna_pipeline',
                    'Virus_Platform_Core.dsrna_offtarget',

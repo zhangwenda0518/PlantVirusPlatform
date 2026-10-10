@@ -38,9 +38,12 @@ discovery 跑在 Linux 服务器上（实测数据根 /home/zhangwenda/data-test
 """
 
 import argparse
+import datetime
+import hashlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -205,6 +208,39 @@ def _count_fasta(path):
     return n
 
 
+# manifest 哈希：超过该体积的文件不读盘（实测交接包都是小文件，此阈值只为兜底）
+_HASH_MAX_BYTES = 500 * 1024 * 1024
+
+
+def _sha256(path, max_bytes=_HASH_MAX_BYTES):
+    """文件 sha256 → (hash, note)。> max_bytes 跳过并标注，读失败也标注。"""
+    try:
+        size = path.stat().st_size
+        if size > max_bytes:
+            return '', f'skipped_size>{max_bytes // 1024 ** 2}MB'
+        h = hashlib.sha256()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                h.update(chunk)
+        return h.hexdigest(), ''
+    except OSError as e:
+        return '', f'error_{type(e).__name__}'
+
+
+def _git_rev(cands=()):
+    """尽力取 git 版本（rev-parse --short HEAD）；非仓库/无 git/失败一律返回 ''。"""
+    for d in cands:
+        try:
+            r = subprocess.run(
+                ['git', '-C', str(d), 'rev-parse', '--short', 'HEAD'],
+                capture_output=True, text=True, timeout=10)
+            if r.returncode == 0 and (r.stdout or '').strip():
+                return r.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return ''
+
+
 def main():
     ap = argparse.ArgumentParser(description='打包 MMPV discovery 产物供平台收养')
     ap.add_argument('dataset', help='discovery 数据集目录，如 /home/zhangwenda/data-test/out10')
@@ -254,7 +290,19 @@ def main():
             'files': [rel for _, rel in picked],
             'total_bytes': notes['total_bytes'],
             'hostname': os.uname().nodename if hasattr(os, 'uname') else '',
+            # ── 溯源信息：抓取时间(UTC) / 代码版本 / 每文件 sha256 ──
+            'created_utc': datetime.datetime.now(
+                datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'git_rev': _git_rev((dataset, Path.home() / 'MMPV-RNA',
+                                 Path('/home/zhangwenda/MMPV-RNA'))),
+            'file_hashes': [],
         }
+        for p, rel in picked:
+            _h, _note = _sha256(p)
+            entry = {'path': rel, 'bytes': p.stat().st_size, 'sha256': _h}
+            if _note:
+                entry['note'] = _note           # 大文件跳过/读失败时如实标注
+            man['file_hashes'].append(entry)
         raw = json.dumps(man, ensure_ascii=False, indent=1).encode('utf-8')
         ti = tarfile.TarInfo(f'{ds_name}/manifest.json')
         ti.size = len(raw)

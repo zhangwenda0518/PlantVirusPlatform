@@ -8,3 +8,6 @@ Pillow>=10.0           # tests/make_brand.py 生成品牌图
 psutil>=5.9            # dev_tools/build_virus_db.py、内存自检
 # 打包（PyInstaller spec 在 dev_tools/ 下维护）
 pyinstaller>=6.0
+# 可选：宿主基因组 gget/Ensembl 下载源（python main.py host-genome --source gget）
+# 依赖较重（ipython/matplotlib 等），不装也能用 NCBI 源；Web 下载面板未装时会给出安装提示
+gget==0.30.5

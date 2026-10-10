@@ -11,12 +11,15 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 
 from flask import abort
 
 from Virus_Platform_Core.config import DIRS, PLATFORM_ROOT
-from Virus_Platform_Core.utils import (TaskLogger, check_path, safe_open)
+from Virus_Platform_Core.utils import (DEFAULT_CMD_TIMEOUT_SEC, TaskLogger,
+                                       check_path, safe_open,
+                                       task_register_proc)
 from Virus_Platform_Core.web.state import cfg, tool_runs_root as _tool_runs_root
 
 
@@ -33,17 +36,56 @@ CONSENSUS_FALLBACK_LAYER = '01_host_removal'
 KV_DEFAULT_STAGE = 'identify+filter'
 
 
+def _opt_num_param(ctx, key):
+    """可选数值门槛参数（⑥b 层1 min_pident/min_qcov 用）。
+
+    空/0/非法 → None（None = 不过滤，保持历史结果）；正确值按 float 返回。
+    """
+    v = ctx.p.get(key)
+    if v in (None, '', 0, '0'):
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 else None
+
+
+def _job_req(ctx, key, what):
+    """job 体内取必填输入文件（与 tools_api 的 ctx.req 同语义，但不 abort）。
+
+    任务线程里没有 Flask 请求上下文：abort(400) 只会被记成
+    「BadRequest: 400 Bad Request」，用户看不到「请选择xxx」的文案。
+    这里改抛带原文案的 ValueError（TaskManager 会把 message 原样呈现）。
+    相对路径按平台根解析；绝对路径允许电脑任意位置（只读）。
+    """
+    v = (ctx.p.get(key) or '').strip()
+    if not v:
+        raise ValueError(f'请选择{what}')
+    return check_path(v if os.path.isabs(v)
+                      else os.path.join(PLATFORM_ROOT, v), must_exist=True)
+
+
 def _tool_job_convert(ctx):
-    """格式转换：.sra→FASTQ/FASTA（sracha）、FASTQ→FASTA（seqkit）。"""
+    """格式转换：.sra→FASTQ/FASTA（sracha）、FASTQ→FASTA（seqkit）。
+
+    双端 FASTQ（input + input2）：R1/R2 **分别**转换、分别输出
+    （R1→R1 产物、R2→R2 产物，不合并）；.sra 自含双端，不接受 input2。"""
     inp = ctx.req('input', '输入文件')
+    inp2 = ctx.opt('input2')
     target = ctx.p.get('target') or 'fastq'
     if target not in ('fastq', 'fasta'):
         abort(400, '无效的目标格式')
     ilower = str(inp).lower()
     if ilower.endswith('.sra'):
         mode = 'sra'
+        if inp2:
+            abort(400, '.sra 文件自含双端信息，无需另选 R2')
     elif ilower.endswith(('.fastq', '.fq', '.fastq.gz', '.fq.gz')):
         mode = 'fastq2fasta' if target == 'fasta' else None
+        if inp2 and not str(inp2).lower().endswith(
+                ('.fastq', '.fq', '.fastq.gz', '.fq.gz')):
+            abort(400, 'R2 文件格式与 R1 不一致（需 .fastq[.gz] / .fq[.gz]）')
     elif ilower.endswith(('.fa', '.fasta', '.fa.gz', '.fasta.gz')):
         abort(400, '输入已是 FASTA，无需转换')
     else:
@@ -84,14 +126,21 @@ def _tool_job_convert(ctx):
                 raise RuntimeError('sracha 无输出')
         else:
             seqkit = cfg.tool('seqkit')
-            dst = os.path.join(ctx.run_dir,
-                               os.path.basename(inp).rsplit('.', 2)[0] + '.fa.gz')
-            prog('fq2fa', 0.3, 'seqkit fq2fa 转换中')
             from Virus_Platform_Core.utils import run_cmd
-            run_cmd([seqkit, 'fq2fa', '-w', '0',
-                     '-j', str(ctx.threads or cfg.threads), inp,
-                     '-o', dst], logger=logger)
-            out_files = [dst]
+            # 双端：R1/R2 逐条独立转换（文件名自带 _R1/_R2 后缀，产物
+            # 自然分开命名）；单端循环一次，行为与原来完全一致。
+            inputs = [inp, inp2] if inp2 else [inp]
+            for i, src in enumerate(inputs):
+                tag = f'R{i + 1} ' if len(inputs) > 1 else ''
+                dst = os.path.join(ctx.run_dir,
+                                   os.path.basename(src).rsplit('.', 2)[0]
+                                   + '.fa.gz')
+                prog('fq2fa', 0.3 if i == 0 else 0.7,
+                     f'seqkit fq2fa 转换中（{tag or "单端"}）')
+                run_cmd([seqkit, 'fq2fa', '-w', '0',
+                         '-j', str(ctx.threads or cfg.threads), src,
+                         '-o', dst], logger=logger)
+                out_files.append(dst)
         prog('done', 1.0, f'完成：{len(out_files)} 个文件')
         logger.close()
         return {'n_files': len(out_files),
@@ -164,8 +213,11 @@ def _tool_job_orf(ctx):
     orf_model = (ctx.p.get('model') or '').strip()
     if orf_model not in ('pyrodigal_rv', 'pyrodigal'):
         orf_model = ''
-    # 功能注释层选择：prot（序列同源）/ pfam（HMM）/ cdd（结构域）；空=全部
+    # 注解层选择：prot（序列同源）/ pfam（HMM）；空=全部
     orf_libs = ctx.p.get('libs')
+    # 层1 命中门槛（百分数；空/0 = 不过滤）
+    min_pident = _opt_num_param(ctx, 'min_pident')
+    min_qcov = _opt_num_param(ctx, 'min_qcov')
 
     def job(log, prog, cancel):
         import json as _json
@@ -202,6 +254,7 @@ def _tool_job_orf(ctx):
                 ctx.run_dir, threads=ctx.threads, logger=logger, force=True,
                 engine=orf_engine or None, db=orf_db or None,
                 model=orf_model or None, libs=orf_libs,
+                min_pident=min_pident, min_qcov=min_qcov,
                 progress=lambda p, m: prog('orfa', 0.72 + p * 0.26, m))
         prog('done', 1.0, '完成')
         logger.close()
@@ -218,8 +271,11 @@ def _tool_job_orfa(ctx):
     orf_model = (ctx.p.get('model') or '').strip()
     if orf_model not in ('pyrodigal_rv', 'pyrodigal'):
         orf_model = ''
-    # 注释层选择：prot（层1 序列同源）/ pfam（层2 HMM）/ cdd（层2 结构域）
+    # 注释层选择：prot（层1 序列同源）/ pfam（层2 HMM）
     orf_libs = ctx.p.get('libs')
+    # 层1 命中门槛（百分数；空/0 = 不过滤，保持历史结果）
+    min_pident = _opt_num_param(ctx, 'min_pident')
+    min_qcov = _opt_num_param(ctx, 'min_qcov')
     if run:
         if not re.fullmatch(r'[A-Za-z0-9_]+', run) or not run.startswith('orf_'):
             abort(400, f'无效的 ORF 运行名: {run}')
@@ -234,6 +290,7 @@ def _tool_job_orfa(ctx):
                                      force=True, engine=orf_engine or None,
                                      db=orf_db or None,
                                      model=orf_model or None, libs=orf_libs,
+                                     min_pident=min_pident, min_qcov=min_qcov,
                                      progress=lambda p, m: prog(
                                          'orfa', 0.15 + p * 0.8, m))
             res = dict(res)
@@ -353,7 +410,8 @@ def _tool_job_identify(ctx):
         from Virus_Platform_Core.kunpeng import classify, parse_classify_output
         inputs = [inp]
         if itype == 'pe':
-            inputs.append(ctx.req('input2', 'R2 FASTQ'))
+            # 工厂期没查 R2：这里补的必须是 raise（任务线程里 abort 丢文案）
+            inputs.append(_job_req(ctx, 'input2', 'R2 FASTQ'))
         prog('classify', 0.1, 'kunpeng 病毒库分类中')
         res = classify(ctx.db_virus, inputs, os.path.join(ctx.run_dir, 'classify'),
                        paired=(itype == 'pe'), threads=ctx.threads,
@@ -556,6 +614,16 @@ def _tool_job_structcmp(ctx):
             names.append(_short(h, len(names) + 1))
             cols.append(s.upper())
         n = len(names)
+        # 同一性矩阵要求所有序列等长（MAFFT 全长比对的结果）。zip() 会按较短
+        # 序列静默截断：MAFFT 未正常完成时算出的 identity 会偏大且无任何提示，
+        # 这里先校验长度，不等直接报错（比对列数也才有意义）。
+        if len({len(c) for c in cols}) > 1:
+            _bad = next(i for i, c in enumerate(cols)
+                        if len(c) != len(cols[0]))
+            raise RuntimeError(
+                f'比对结果长度不一致（{names[0]}: {len(cols[0])} vs '
+                f'{names[_bad]}: {len(cols[_bad])}），无法计算 identity 矩阵；'
+                '请检查 MAFFT 是否正常完成')
         matrix = [[100.0] * n for _ in range(n)]
         for i in range(n):
             for j in range(i + 1, n):
@@ -592,16 +660,17 @@ def _tool_job_verify(ctx):
     """候选序列验证（对齐 02b/09b）：宿主筛选 → 长度分流 → 双路过滤。
 
     输入可选已有 contigs 运行（run）或独立 FASTA（fasta）。
-    参数：host（默认 all）、methods（blastx/cdd 组合）、combine（union/intersection）。
+    参数：host（默认 all）、methods（blastx/bfvd 组合）、combine（union/intersection）。
+    （B 路证据源 2026-09-29 由 CDD 换为 BFVD：病毒专属库、免白名单。）
     """
     run_ref = (ctx.p.get('run') or '').strip()
     fasta = ctx.opt('fasta') if ctx.p.get('fasta') else None
     host = (ctx.p.get('host') or 'all').strip() or 'all'
     combine = (ctx.p.get('combine') or 'union').strip()
-    methods = ctx.p.get('methods') or ['blastx', 'cdd']
+    methods = ctx.p.get('methods') or ['blastx', 'bfvd']
     if isinstance(methods, str):
         methods = [m.strip() for m in methods.split(',') if m.strip()]
-    methods = [m for m in methods if m in ('blastx', 'cdd')]
+    methods = [m for m in methods if m in ('blastx', 'bfvd')]
 
     if run_ref and not re.fullmatch(r'[A-Za-z0-9_\-]+', run_ref):
         abort(400, '无效的运行名')
@@ -628,7 +697,9 @@ def _tool_job_verify(ctx):
                     shutil.copyfile(s, os.path.join(run_dir, _fn))
         else:
             if not fasta:
-                abort(400, '请选择 contigs 运行或输入 FASTA')
+                # job 体在任务线程执行，abort(400) 只会变成
+                # 「BadRequest: 400 Bad Request」（用户看不到提示文案）
+                raise ValueError('请选择 contigs 运行或输入 FASTA')
             vfa = fasta
 
         summary = verify(run_dir, vfa, host=host, methods=methods,
@@ -667,7 +738,8 @@ def _tool_job_consensus(ctx):
             return default
 
     min_qual = _num(ctx.p.get('min_qual'), 20, int)
-    min_depth = _num(ctx.p.get('min_depth'), 1, int)
+    # 默认 4（深度>3）与 consensus.MIN_DEPTH 保持一致（1 会让单条 read 就能定共识/出 SNV）
+    min_depth = _num(ctx.p.get('min_depth'), 4, int)
     min_freq = _num(ctx.p.get('min_freq'), 0.5, float)
     min_mapq = _num(ctx.p.get('min_mapq'), 10, int)
     min_minor_freq = _num(ctx.p.get('min_minor_freq'), 0.02, float)
@@ -757,7 +829,9 @@ def _tool_job_consensus(ctx):
                 raise RuntimeError('该运行无 viral_contigs.fasta（先跑 contig 分类）')
         else:
             if not fasta:
-                abort(400, '请选择 contigs 运行、kvsuite 参考或输入参考 FASTA')
+                # job 体在任务线程执行：abort(400) 只会变成
+                # 「BadRequest: 400 Bad Request」，用户看不到提示文案
+                raise ValueError('请选择 contigs 运行、kvsuite 参考或输入参考 FASTA')
             vfa = fasta
 
         # ---- reads ----
@@ -775,7 +849,7 @@ def _tool_job_consensus(ctx):
             elif os.path.isfile(p):
                 file_toks.append(p)
             else:
-                abort(400, 'reads 路径不存在：%s' % p)
+                raise ValueError('reads 路径不存在：%s' % p)
         reads.extend(pair_read_files(file_toks))
         if not reads:
             if kv_run:
@@ -784,12 +858,12 @@ def _tool_job_consensus(ctx):
                 sheet = os.path.join(_tool_runs_root(), kv_run,
                                      'sample_sheet.tsv')
                 if not os.path.isfile(sheet):
-                    abort(400, 'kvsuite 运行 %s 无 sample_sheet.tsv，'
-                               '请手动指定回贴 reads' % kv_run)
+                    raise ValueError('kvsuite 运行 %s 无 sample_sheet.tsv，'
+                                     '请手动指定回贴 reads' % kv_run)
                 with open(sheet, encoding='utf-8-sig', errors='replace') as fh:
                     hdr = fh.readline().rstrip('\n').split('\t')
                     if 'r1' not in hdr:
-                        abort(400, 'sample_sheet.tsv 缺 r1 列：%s' % sheet)
+                        raise ValueError('sample_sheet.tsv 缺 r1 列：%s' % sheet)
                     i1 = hdr.index('r1')
                     i2 = hdr.index('r2') if 'r2' in hdr else len(hdr)
                     for line in fh:
@@ -799,8 +873,8 @@ def _tool_job_consensus(ctx):
                         r2 = cols[i2].strip() if len(cols) > i2 else ''
                         reads.append((cols[i1].strip(), r2 or None))
                 if not reads:
-                    abort(400, 'kvsuite 运行 %s 的 sample_sheet.tsv 没有'
-                               '有效 reads，请手动指定' % kv_run)
+                    raise ValueError('kvsuite 运行 %s 的 sample_sheet.tsv 没有'
+                                     '有效 reads，请手动指定' % kv_run)
                 log('reads 默认取该 kvsuite 运行的输入序列：'
                     '%d 个样本（sample_sheet.tsv）' % len(reads))
             elif src_run:
@@ -813,7 +887,7 @@ def _tool_job_consensus(ctx):
                 log('reads 默认取 contig 运行的去宿主后全量（%s）'
                     % CONSENSUS_FALLBACK_LAYER)
             else:
-                abort(400, '请直接给出回贴 reads 文件/目录')
+                raise ValueError('请直接给出回贴 reads 文件/目录')
 
         summary = consensus_and_variants(
             ctx.run_dir, vfa, reads, out_subdir='consensus',
@@ -1073,25 +1147,56 @@ def _tool_job_kvsuite(ctx):
                                 stderr=subprocess.STDOUT,
                                 text=True, encoding='utf-8',
                                 errors='replace', bufsize=1, env=env)
+        # 全平台唯一一处裸 Popen（不经 run_cmd）：必须手工登记，否则取消时
+        # TaskManager 的硬停止看不到它，引擎挂死也会永久占住 heavy 名额。
+        task_register_proc(proc)
+        # 超时看门狗：主线程阻塞在 stdout 读循环里，wait(timeout) 轮不到，
+        # 由守护线程在超时后 taskkill 杀整棵树，读循环随即拿到 EOF。
+        _timeout = DEFAULT_CMD_TIMEOUT_SEC or None
+        _timed_out = threading.Event()
+        _wd_stop = threading.Event()
+        if _timeout:
+            def _kill_watchdog():
+                if not _wd_stop.wait(_timeout):
+                    _timed_out.set()
+                    log(f'[WARN] known_virus_suite 运行超过 {_timeout}s，'
+                        f'强制终止进程树')
+                    try:
+                        subprocess.run(
+                            ['taskkill', '/F', '/T', '/PID', str(proc.pid)],
+                            capture_output=True)
+                    except Exception:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+            threading.Thread(target=_kill_watchdog, daemon=True).start()
         tail = []
-        for line in proc.stdout:
-            line = line.rstrip('\n')
-            if not line:
-                continue
-            log(line)
-            tail.append(line)
-            if len(tail) > 40:
-                tail.pop(0)
-            # cancel 是 threading.Event（见 TaskServer._run），必须用 is_set()，
-            # 直接 cancel() 会报 'Event' object is not callable。
-            if cancel is not None and cancel.is_set():
-                # taskkill /T 杀整棵进程树：只 kill 引擎本身会留下
-                # salmon/samtools 孤儿继续吃 CPU/磁盘
-                subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)],
-                               capture_output=True)
-                proc.wait()
-                raise RuntimeError('用户取消')
+        try:
+            for line in proc.stdout:
+                line = line.rstrip('\n')
+                if not line:
+                    continue
+                log(line)
+                tail.append(line)
+                if len(tail) > 40:
+                    tail.pop(0)
+                # cancel 是 threading.Event（见 TaskServer._run），必须用 is_set()，
+                # 直接 cancel() 会报 'Event' object is not callable。
+                if cancel is not None and cancel.is_set():
+                    # taskkill /T 杀整棵进程树：只 kill 引擎本身会留下
+                    # salmon/samtools 孤儿继续吃 CPU/磁盘
+                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)],
+                                   capture_output=True)
+                    proc.wait()
+                    raise RuntimeError('用户取消')
+        finally:
+            _wd_stop.set()
         rc = proc.wait()
+        if _timed_out.is_set():
+            raise RuntimeError(
+                f'known_virus_suite 超时（运行 {_timeout}s 后被强制终止）；'
+                f'末几行：\n' + '\n'.join(tail[-8:]))
         if rc != 0:
             raise RuntimeError(f'known_virus_suite 退出码 {rc}；末几行：\n'
                                + '\n'.join(tail[-8:]))
@@ -1577,6 +1682,11 @@ def _tool_job_phylogeo(ctx):
       motp_bin   迁移随时间（MOTP）的分箱宽度（年）；>0 才做
       dated_tree LSD2 的 `.date.nexus`（给了就用真正的节点年代，否则退回近似）
       coords     坐标表（可选）：逐样本点层 + 区划落点（样本坐标中位数优先）
+      beast_log / beast_trees  BEAST 产物（轨道 B 回读）：服务器跑完的 `.log` /
+                 `.trees`（或 MCC 树），本地**只读导入**、不跑 MCMC（见
+                 beast_handoff / beast_io）。两个都不给 = 不做 BEAST 面板；
+                 导入失败只影响 BEAST 面板，主分析（树/矩阵/统计）照常。
+                 beast_burnin / beast_min_prob / beast_max_trees 为导入参数。
     """
     inp = ctx.req('input', '比对 FASTA')
     meta = (ctx.p.get('meta') or '').strip()
@@ -1588,6 +1698,11 @@ def _tool_job_phylogeo(ctx):
         method = 'nj'
     dated_tree = ctx.opt('dated_tree')          # 可选文件（不存在则视为未给）
     coords_path = ctx.opt('coords')             # 可选：坐标表（样本点层）
+    # BEAST 产物（轨道 B 回读）：服务器跑完的 `.log` / `.trees`，本地**只读导入**。
+    # 两个都不给 = 不做 BEAST 面板（与历史行为一致）。契约见 beast_handoff.py /
+    # beast_io.py；这里是**唯一**把用户选的产物接到 analyze() 的调用方。
+    beast_log = ctx.opt('beast_log')
+    beast_trees = ctx.opt('beast_trees')
     date_trait = (ctx.p.get('date_trait') or 'year').strip() or 'year'
     try:
         motp_bin = float(str(ctx.p.get('motp_bin') or 0).strip() or 0)
@@ -1606,6 +1721,19 @@ def _tool_job_phylogeo(ctx):
     rrt_perm = _int('rrt_perm', 0, 20000, 0)
     rssp_bs = _int('rssp_bs', 0, 2000, 0)
     seed = _int('seed', 0, 10 ** 9, 0)
+
+    def _fnum(key, lo, hi, default):
+        """BEAST 导入的浮点参数（越界/非法一律钳回默认；burnin 上界 0.9）。"""
+        try:
+            v = float(str(ctx.p.get(key) or default).strip() or default)
+        except (TypeError, ValueError):
+            return default
+        return max(lo, min(v, hi))
+
+    # 只有给了 beast_log / beast_trees 才有意义（analyze 内部据此决定是否导入）
+    beast_burnin = _fnum('beast_burnin', 0.0, 0.9, 0.1)
+    beast_min_prob = _fnum('beast_min_prob', 0.0, 1.0, 0.0)
+    beast_max_trees = _int('beast_max_trees', 0, 200000, 2000)
     # 样本点层进 summary 的上限（逐样本 1 条；超限不进轮询载荷，条数如实上报，
     # 全量永远在 sample_coords.tsv 里 —— 不允许静默丢点）
     SP_MAX = 3000
@@ -1626,6 +1754,9 @@ def _tool_job_phylogeo(ctx):
                       out_dir=out_dir, rrt_perm=rrt_perm, rssp_bs=rssp_bs,
                       seed=seed, dated_tree=dated_tree, motp_bin=motp_bin,
                       date_trait=date_trait, coords_path=coords_path,
+                      beast_log=beast_log, beast_trees=beast_trees,
+                      beast_burnin=beast_burnin, beast_min_prob=beast_min_prob,
+                      beast_max_trees=beast_max_trees,
                       progress=lambda st, f_, m: prog(st, f_, m))
         # ---- 坐标命中情况（analyze 里解析；这里只做日志，不静默）----
         # 坏行/未命中区划/元数据坏坐标都**不静默**：skipped 与 missing 既进 job
@@ -1724,6 +1855,25 @@ def _tool_job_phylogeo(ctx):
         elif rssp_bs:
             log('[WARN] 本次没得到后验权重分带（RSPP 没有可用复本）——前端将'
                 '显示「未评估」，不要按计数口径自行解读"权重"')
+        # BEAST 产物导入（轨道 B 回读）：成/败都写日志 —— 失败只影响 BEAST
+        # 面板，主分析（树/矩阵/统计）照常；错误原文由 analyze 透出，不吞。
+        _bs = res.get('beast')
+        if _bs:
+            if _bs.get('error'):
+                log(f"[WARN] BEAST 产物导入失败：{_bs['error']}")
+            else:
+                log('BEAST 产物导入：'
+                    + (f"日志 {_bs.get('log_file') or '—'}"
+                       f"（{(_bs.get('log') or {}).get('n_samples', 0)} 个后验样本）"
+                       if _bs.get('log') else '无日志')
+                    + '；'
+                    + (f"树 {_bs.get('trees_file') or '—'}"
+                       f"（{(_bs.get('trees') or {}).get('mode') or '—'}，"
+                       f"{(_bs.get('trees') or {}).get('n_trees_used', 0)} 棵）"
+                       if _bs.get('trees') else '无树')
+                    + f"；走廊 {_bs.get('n_corr', 0)} 条"
+                    + (f"，弧线分带口径 {_bs.get('driver_label') or _bs.get('driver')}"
+                       if _bs.get('driver') else '，未采用 BEAST 分带'))
         sp_all = res.get('sample_points') or []
         if len(sp_all) > SP_MAX:
             log(f'[WARN] 样本点层只把前 {SP_MAX} 条放进 summary（共 {len(sp_all)} '
@@ -1748,6 +1898,10 @@ def _tool_job_phylogeo(ctx):
             'rssp': res.get('rssp'),
             # 后验权重分带（驱动源：RSPP 方向支持率；没跑 RSPP 时为 None）
             'weight_bands': res.get('weight_bands'),
+            # BEAST 产物导入（轨道 B 回读；未导入时为 None）。**必须透传**：
+            # digest 的 phylogeo 契约与前端 BEAST 面板都读 summary.json 的这一段，
+            # 此前只从 analyze() 返回、没进 summary ⇒ 前端与 AI 都看不到导入结果。
+            'beast': res.get('beast'),
             'rrt_perm': rrt_perm, 'rssp_bs': rssp_bs, 'seed': seed,
             'motp_bin': motp_bin, 'date_trait': date_trait,
             'dated_tree': dated_tree,
@@ -1773,6 +1927,86 @@ def _tool_job_phylogeo(ctx):
     return job
 
 
+def _tool_job_beastexport(ctx):
+    """BEAST 作业包导出（轨道 B 上半程）：本地**不跑 MCMC**，只把数据打包。
+
+    输入 = 比对 FASTA +（可选）元数据 CSV/TSV。产物落 run_dir/beastexport/：
+      aln.fasta / metadata.csv / README.txt（粘贴即用的服务器命令）/ job.json
+      （机器可读），（可选）iqtree.log / coords.tsv。
+    引擎 = Virus_Platform_Core/beast_handoff.py::export_job；与服务器侧
+    utils/beast1_bridge.py 的契约写死在该模块头（改服务器脚本要回来核对）。
+
+    闭环：本卡导出 → 拷贝到服务器跑（README 里三条命令）→ 把
+    merged/{mcc.tree, merged.log, merged.trees} 拿回来 → 系统地理卡的
+    「BEAST 产物导入」两栏读入（phylogeo.analyze 的 beast_log / beast_trees）。
+    """
+    inp = ctx.req('input', '比对 FASTA')
+    meta = (ctx.p.get('meta') or '').strip()
+    trait = (ctx.p.get('trait') or '').strip() or 'region'
+    date_trait = (ctx.p.get('date_trait') or 'year').strip() or 'year'
+    virus_tag = (ctx.p.get('virus_tag') or '').strip() or None
+    iqtree_log = ctx.opt('iqtree_log')
+    coords_path = ctx.opt('coords')
+    prior = (ctx.p.get('prior') or 'bdsky').strip().lower()
+    if prior not in ('bdsky', 'constant', 'skygrid', 'skyline'):
+        prior = 'bdsky'
+
+    def _int_param(key, default, lo, hi):
+        try:
+            v = int(str(ctx.p.get(key) or default).strip() or default)
+        except (TypeError, ValueError):
+            return default
+        return max(lo, min(v, hi))
+
+    chains = _int_param('chains', 5, 1, 64)
+    beast_threads = _int_param('beast_threads', 8, 1, 256)
+    chain_length = _int_param('chain_length', 50_000_000, 1_000_000, 10 ** 10)
+
+    def job(log, prog, cancel):
+        logger = TaskLogger(callback=log)
+        from Virus_Platform_Core import beast_handoff as bh
+        out_dir = os.path.join(ctx.run_dir, 'beastexport')
+        os.makedirs(out_dir, exist_ok=True)
+        prog('export', 0.2, '打包服务器 BEAST 作业包')
+        res = bh.export_job(
+            inp, meta_path=meta or None, out_dir=out_dir, virus_tag=virus_tag,
+            trait=trait, date_trait=date_trait, prior=prior, chains=chains,
+            threads=beast_threads, chain_length=chain_length,
+            iqtree_log=iqtree_log, coords_path=coords_path)
+        if not res.get('ok'):
+            # export_job 的失败分支带人话原因（元数据没匹配上 / 有效序列 <4 …）
+            raise RuntimeError(res.get('error') or 'BEAST 作业包导出失败')
+        c = res.get('counts') or {}
+        log(f"作业包已导出：{c.get('exported', 0)}/{c.get('in', 0)} 条序列"
+            f"（丢弃 {c.get('dropped', 0)}：重复 ID {c.get('dup_id', 0)} / "
+            f"ID 归一 {c.get('id_normalized', 0)}）")
+        loc = res.get('locations') or {}
+        log(f"区划离散化预演：{loc.get('n', 0)} 组 —— "
+            + '、'.join(str(x) for x in (loc.get('list') or []))[:200])
+        mh = res.get('model_hint') or {}
+        log(f"替换模型提示：{mh.get('server_model')}"
+            + (f"（来源 {os.path.basename(str(mh.get('source')))}）"
+               if mh.get('source') else ''))
+        for w in res.get('warnings') or []:
+            log(f'[WARN] {w}')
+        summary = {
+            'tool': 'beastexport', 'ok': True, 'out_dir': out_dir,
+            'counts': res.get('counts'), 'dates': res.get('dates'),
+            'locations': res.get('locations'),
+            'commands': res.get('commands'), 'server': res.get('server'),
+            'beast': res.get('beast'), 'model_hint': res.get('model_hint'),
+            'bring_back': res.get('bring_back'),
+            'files': res.get('files'), 'warnings': res.get('warnings'),
+            'seconds': res.get('seconds'),
+        }
+        with open(os.path.join(out_dir, 'summary.json'), 'w',
+                  encoding='utf-8') as f:
+            json.dump(summary, f, ensure_ascii=False, indent=1)
+        logger.close()
+        return summary
+    return job
+
+
 def _tool_job_dsrna(ctx):
     """dsRNA 设计全链路（引擎在 Virus_Platform_Core/dsrna_pipeline.py）：
 
@@ -1790,34 +2024,123 @@ def _tool_job_dsrna(ctx):
     """
     targets = ctx.req('input', '目标 FASTA')
 
+    def _int_param(key, default, lo=None, hi=None):
+        """显式解析整型参数：**0 是合法值**（max_mm=0 不许被 `or` 吞成默认）。
+
+        修复 2026-10-03：原实现 `int(ctx.p.get('max_mm') or 1)` 会把界面
+        明确选择的「0 错配」静默升成「≤1 错配」（前端注释亦写明不能用 `|| 1`，
+        后端此前仍吞）。非法值退默认，越界钳到 [lo, hi]。
+        """
+        raw = ctx.p.get(key)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            v = default
+        else:
+            try:
+                v = int(str(raw).strip())
+            except (TypeError, ValueError):
+                v = default
+        if lo is not None:
+            v = max(lo, v)
+        if hi is not None:
+            v = min(hi, v)
+        return v
+
     def job(log, prog, cancel):
         logger = TaskLogger(callback=log)
         from Virus_Platform_Core import dsrna_pipeline as dpipe
         params = {
-            'construct_len': int(ctx.p.get('construct_len') or 300),
-            'kmer_len': int(ctx.p.get('kmer_len') or 21),
-            'iterations': int(ctx.p.get('iterations') or 100),
-            'seed': int(ctx.p.get('seed') or 42),
-            'candidates': int(ctx.p.get('candidates') or 3),
-            'n_windows': int(ctx.p.get('n_windows') or 1),
+            'construct_len': _int_param('construct_len', 300, 30, 10000),
+            'kmer_len': _int_param('kmer_len', 21, 12, 32),
+            'iterations': _int_param('iterations', 100, 1, 100000),
+            'seed': _int_param('seed', 42, 0, 2 ** 31 - 1),
+            'candidates': _int_param('candidates', 3, 1, 10),
+            'n_windows': _int_param('n_windows', 1, 1, 6),
             'off_targets': (ctx.p.get('off_targets') or '').strip(),
             'panel': (ctx.p.get('panel') or '').strip(),
-            'max_mm': int(ctx.p.get('max_mm') or 1),
-            'efficiency_priority': int(ctx.p.get('efficiency_priority') or 50),
-            'safety_priority': int(ctx.p.get('safety_priority') or 50),
-            'primer_scope': (ctx.p.get('primer_scope') or 'best_window').strip(),
-            'primer_product_min': int(ctx.p.get('primer_product_min') or 200),
-            'primer_product_max': int(ctx.p.get('primer_product_max') or 300),
+            'max_mm': _int_param('max_mm', 1, 0, 2),
+            'efficiency_priority': _int_param('efficiency_priority', 50, 0, 100),
+            'safety_priority': _int_param('safety_priority', 50, 0, 100),
+            'primer_scope': (ctx.p.get('primer_scope')
+                             or 'best_window').strip(),
+            'primer_product_min': _int_param('primer_product_min', 200, 60,
+                                             2000),
+            'primer_product_max': _int_param('primer_product_max', 300, 60,
+                                             3000),
             'isolates': (ctx.p.get('isolates') or '').strip(),
         }
+        if params['primer_product_min'] > params['primer_product_max']:
+            params['primer_product_min'], params['primer_product_max'] = (
+                params['primer_product_max'], params['primer_product_min'])
         try:
             summary, _report = dpipe.run_chain(targets, params, ctx.run_dir,
                                                log, prog, cancel)
         except (dpipe.MemoryBudgetExceeded, dpipe.DsrnaExeError) as e:
             raise RuntimeError(str(e))
-        with open(os.path.join(summary['out_dir'], 'summary.json'), 'w',
-                  encoding='utf-8') as f:
+        with safe_open(os.path.join(summary['out_dir'], 'summary.json'),
+                       'wt') as f:
             json.dump(summary, f, ensure_ascii=False, indent=1)
+        logger.close()
+        return summary
+    return job
+
+
+def _tool_job_crispr(ctx):
+    """CRISPR/Cas12a 检测试剂设计（引擎在 Virus_Platform_Core/crispr_design.py）：
+
+    多分离物目标 FASTA（可多分体，header 含 RNA1/segment2 等标签自动分组）
+    → MAFFT 保守性共识 → TTTV PAM 扫描 + crRNA 漏斗（保守/GC/同聚物/
+    poly-T/RNAfold MFE）→ 位点侧翼 RPA/PCR 引物（primer3 主路 + 枚举兜底）
+    → 双库特异性（宿主基因组 k-mer 或 BLAST 路 + 近缘病毒）→ CASPER 式
+    复合评分 × 群体覆盖率因子 → 候选表/组合表/订购表/L1–L5 验证清单。
+    产物落 run_dir/crispr/。规则来源与许可口径见模块头注释与
+    docs/CRISPR检测设计模块规划_20261006.md。
+    """
+    targets = ctx.req('input', '目标 FASTA')
+
+    def _int_param(key, default, lo=None, hi=None):
+        raw = ctx.p.get(key)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return default
+        try:
+            v = int(str(raw).strip())
+        except (TypeError, ValueError):
+            v = default
+        if lo is not None:
+            v = max(lo, v)
+        if hi is not None:
+            v = min(hi, v)
+        return v
+
+    def job(log, prog, cancel):
+        logger = TaskLogger(callback=log)
+        from Virus_Platform_Core import crispr_design as cd
+        params = {
+            'amp_mode': (ctx.p.get('amp_mode') or 'RPA').strip().upper(),
+            'profile': (ctx.p.get('profile') or 'strict').strip(),
+            'probe_type': (ctx.p.get('probe_type') or 'none').strip().lower(),
+            'nuclease': (ctx.p.get('nuclease') or 'cas12a').strip().lower(),
+            # 钳制交给引擎（按酶档案 20–24 / 27–30）
+            'spacer_len': _int_param('spacer_len', 0, 0, 30),
+            'flank': _int_param('flank', 250, 100, 500),
+            'site_margin': _int_param('site_margin', 25, 10, 100),
+            'top_n': _int_param('top_n', 20, 1, 200),
+            'max_sites': _int_param('max_sites', 0, 0, 200),
+            'product_min': _int_param('product_min', 0, 0, 1000),
+            'product_max': _int_param('product_max', 0, 0, 1000),
+            'use_host': ctx.p.get('use_host', '1'),
+            'group_by_segment': ctx.p.get('group_by_segment', '1'),
+            'near_fasta': (ctx.p.get('near_fasta') or '').strip(),
+            'threads': ctx.threads or 0,
+        }
+        if params['amp_mode'] not in ('RPA', 'PCR'):
+            params['amp_mode'] = 'RPA'
+        if params['profile'] not in ('strict', 'relaxed'):
+            params['profile'] = 'strict'
+        try:
+            summary, _report = cd.run_chain(targets, params, ctx.run_dir,
+                                            log, prog, cancel)
+        except cd.CrisprDesignError as e:
+            raise RuntimeError(str(e))
         logger.close()
         return summary
     return job
@@ -1887,11 +2210,18 @@ def _tool_job_rtt(ctx):
                                   rtt['slope'], rtt['intercept'])
         except Exception as _e:  # noqa: BLE001
             dated_nexus = None
+        # analyze() 返回的 warnings（未解析 trait、同名净化、无时间信号等）
+        # 原实现直接丢弃：前端只看到一个斜率数字，方法学风险无迹可寻。
+        # 合并进 summary 并逐条写任务日志。
+        warns = list(res.get('warnings') or [])
+        for w in warns:
+            log(f'[WARN] {w}')
         summary = {'tool': 'rtt', 'slope': rtt['slope'],
                    'intercept': rtt['intercept'], 'r2': rtt['r2'],
                    'n': rtt['n'], 'points': rtt['points'][:200],
                    'method': method, 'trait': trait,
                    'strong_signal': rtt['r2'] >= 0.5,
+                   'warnings': warns,
                    'out_dir': out_dir,
                    'aln': inp, 'meta': meta,
                    'dated_nexus': dated_nexus}
@@ -2022,8 +2352,9 @@ def _tool_job_pdprep(ctx):
         out_dir = _pd_out(ctx, 'pdprep')
         warnings = []          # 各步骤的告警汇总（治理 / 去重 / QC / 降采样 都往里加）
         if source == 'files':
-            fa = ctx.req('fasta', '序列 FASTA')
-            cs = ctx.req('meta', '元数据 CSV/TSV')
+            # 工厂期没查这两项：用 _job_req（raise 带文案）而非 ctx.req（abort 丢文案）
+            fa = _job_req(ctx, 'fasta', '序列 FASTA')
+            cs = _job_req(ctx, 'meta', '元数据 CSV/TSV')
             prog('import', 0.3, '读取 FASTA + 元数据')
             res = pk.import_from_files(fa, cs, out_dir, strict=strict,
                                           govern=(ctx.p.get('govern') or '1') == '1',
@@ -2057,7 +2388,8 @@ def _tool_job_pdprep(ctx):
                 max_records=int(ctx.p.get('max_records') or 200),
                 strict=strict)
         else:
-            abort(400, f'未知来源: {source}')
+            # job 体在任务线程执行：abort(400) 只会变成「BadRequest」
+            raise ValueError(f'未知来源: {source}')
         for ln in res.get('issues', [])[:50]:
             logger.log(f"剔除/警告 {ln.get('name')}: {'; '.join(ln.get('problems', []))}\n")
         # ---- 步骤 A：元数据治理（默认开；归一 + 标注 + 体检，**只清空字段不丢行**）----
@@ -2411,14 +2743,16 @@ def _tool_job_mirna(ctx):
                 viruses = _mirna_parse_fasta(f.read(), 'virus', seq_max=MIRNA_SEQ_MAX_LEN)
 
         if not mirnas:
-            abort(400, '没有有效的 miRNA 序列（每条 ≥15 nt，仅含 A/C/G/T/U/N）')
+            # job 体在任务线程执行：abort(400) 只会变成「BadRequest」
+            raise ValueError('没有有效的 miRNA 序列（每条 ≥15 nt，仅含 A/C/G/T/U/N）')
         if not viruses:
-            abort(400, '没有有效的病毒序列（每条 ≥15 nt，仅含 A/C/G/T/U/N）')
+            raise ValueError('没有有效的病毒序列（每条 ≥15 nt，仅含 A/C/G/T/U/N）')
 
         n_pairs = len(mirnas) * len(viruses)
         if n_pairs > MIRNA_MAX_PAIRS:
-            abort(400, f'组合数过大：{len(mirnas)} miRNA × {len(viruses)} 病毒 = '
-                       f'{n_pairs} 对（上限 {MIRNA_MAX_PAIRS}），请减少输入序列数')
+            raise ValueError(
+                f'组合数过大：{len(mirnas)} miRNA × {len(viruses)} 病毒 = '
+                f'{n_pairs} 对（上限 {MIRNA_MAX_PAIRS}），请减少输入序列数')
 
         _algo_names = {'miranda': 'miRanda', 'psrna': 'psRNATarget',
                        'rnahybrid': 'RNAhybrid', 'rna22': 'RNA22',
@@ -2555,13 +2889,35 @@ def _tool_job_mirna(ctx):
                                   for c in tsv_cols) + '\n')
 
         elapsed = time.time() - t0
+        # 实际跑成并投票的引擎 / 失败跳过的引擎（跨命中并集）——与「请求引擎
+        # 列表」（algorithms）区分开：请求≠实际，原 summary 只记请求，会把
+        # 校验器崩溃伪装成"跑过但无命中"（2026-10-03 修复 P1-4）。
+        engines_actual = sorted({e for r in rows
+                                 for e in (r.get('engines_actual') or [])})
+        engines_skipped, engine_notes = [], []
+        for r in rows:
+            for s in (r.get('engines_skipped') or []):
+                if s not in engines_skipped:
+                    engines_skipped.append(s)
+            for n in (r.get('engine_notes') or []):
+                if n not in engine_notes:
+                    engine_notes.append(n)
+        if engines_skipped:
+            logger.log('校验引擎失败跳过（结果未纳入投票）: '
+                       + '; '.join(f"{s.get('engine')}: {s.get('reason')}"
+                                   for s in engines_skipped), 'WARN')
         summary = {
             'tool': 'mirna',
             'n_mirna': len(mirnas), 'n_virus': len(viruses),
             'n_pairs': n_pairs, 'n_hits': len(rows),
             'consensus_levels': levels,
             'full_mode': full_mode,
+            # algorithms = 请求的引擎（字段兼容保留）；engines_actual = 实际
+            # 参与共识的引擎；engines_skipped = 失败跳过的引擎 + 原因
             'algorithms': algs or list(ENGINE_KEYS)[:3],
+            'engines_actual': engines_actual,
+            'engines_skipped': engines_skipped,
+            'engine_notes': engine_notes,
             'binary': binary_info,
             'elapsed_sec': round(elapsed, 1),
             'results_json': os.path.join(out_dir, 'results.json'),
@@ -2774,8 +3130,10 @@ def _phylodyn_resume(from_run, seq_len=None):
     missing = [t for t in ('prep_fasta', 'dates', 'states')
                if t not in prep['outputs']]
     if missing:
-        abort(400, '上一轮目录缺少接口产物（%s）：%s'
-                   % ('、'.join(missing), root))
+        # 本函数只在 phylodyn 的 job 体内被调用（任务线程无请求上下文）：
+        # abort(400) 会退化成「BadRequest: 400 Bad Request」丢掉文案。
+        raise ValueError('上一轮目录缺少接口产物（%s）：%s'
+                         % ('、'.join(missing), root))
     return prep, clock, root
 
 

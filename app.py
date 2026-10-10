@@ -52,7 +52,7 @@ if __name__ == '__main__':
 # 副本，启动时镜像到纯 ASCII 的用户公共目录并插入 sys.path——必须在任何
 # 业务模块可能触发 primer3 导入之前完成。镜像失败仅影响引物热力学功能。
 # ⚠️ 位置必须在下方 --run-engine / --cli 派发之前：--run-engine 跑 dsRNA T7
-# 引物、--cli importprobe 子进程探测 primer3，两者都依赖镜像路径已入 sys.path。
+# 引物设计、--cli importprobe 子进程探测 primer3，两者都依赖镜像路径已入 sys.path。
 if getattr(sys, 'frozen', False):
     try:
         _p3_src = os.path.join(os.path.dirname(sys.executable),
@@ -107,9 +107,29 @@ if getattr(sys, 'frozen', False) and len(sys.argv) > 2 and sys.argv[1] == '--cli
 # 各 blueprint 也从那里取，避免 app ↔ blueprint 循环导入。
 from Virus_Platform_Core.web.state import _WWW  # noqa: E402
 
+def _pause_before_exit():
+    """退出前暂停（有控制台时等回车）；无 stdin 的场景（pythonw/计划任务/
+    测试子进程）input 会抛 EOFError 直接崩栈——吞掉，安静退出。"""
+    try:
+        input('按回车键退出...')
+    except (EOFError, OSError):
+        pass
+
+
 app = Flask(__name__, template_folder=os.path.join(_WWW, 'templates'),
             static_folder=os.path.join(_WWW, 'static'))
 app.config['JSON_AS_ASCII'] = False
+# 上传请求体硬上限（16GB）：此前未设，submit/meta 等上传点在请求线程整表
+# 读进内存，误传超大文件会把本机内存/磁盘打满（2026-10-04 审查 E4）。
+# 常规 FASTQ/FASTA（宿主基因组 ~2GB）覆盖足够；更大文件走「挂载数据目录」。
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 ** 3
+# 浏览器固定请求站点根的 /favicon.ico；不挂路由的话每次页面加载都有一条
+# 404 噪音（真身在 static/brand/favicon.ico）
+@app.route('/favicon.ico')
+def _favicon():
+    from flask import send_file
+    return send_file(os.path.join(_WWW, 'static', 'brand', 'favicon.ico'),
+                     mimetype='image/x-icon')
 # 模板热重载：debug=False 下 Jinja2 默认缓存模板，改 .html 后需重启才生效；
 # 打开后每次请求按 mtime 检测，本地平台开销可忽略，改模板即刷新可见。
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -164,6 +184,11 @@ app.json = _CleanJSONProvider(app)
 # ------------------------------------------------------------------
 _LOOPBACK_HOSTS = {'127.0.0.1', 'localhost', '::1'}
 
+# 服务实际绑定的端口，由 main() 在 _pick_port() 之后、_start_server() 之前写入。
+# None = 尚未起服务（test_client / 嵌入调用 / 打包自检），此时 Origin 校验
+# 退化为主机名校验，保证既有测试与本地脚本行为不变（见下）。
+_BOUND_PORT = None
+
 
 def _url_hostname(v):
     try:
@@ -173,29 +198,65 @@ def _url_hostname(v):
         return ''
 
 
+def _origin_same_platform(value):
+    """Origin/Referer 是否来自本平台源（http://<回环主机>:<绑定端口>）。
+
+    只比 hostname 不够：本机**其它端口**上的任意页面同样是 127.0.0.1，
+    浏览器视角与平台并不同源，却照样能驱动平台的破坏性端点（本地 CSRF）。
+    端口在启动时已知，这里按「完整源」比对（scheme + host + port 三项）；
+    未绑定端口（_BOUND_PORT is None）时退回主机名校验，避免 test_client
+    与本地冒烟脚本被误伤。
+    """
+    try:
+        from urllib.parse import urlparse
+        u = urlparse(value)
+    except ValueError:
+        return False
+    if (u.hostname or '').lower() not in _LOOPBACK_HOSTS:
+        return False
+    if _BOUND_PORT is None:
+        return True                 # 未起服务：仅回环主机名校验
+    if (u.scheme or '').lower() != 'http':
+        return False                # 平台只跑 http，其它协议一律拒绝
+    try:
+        return u.port == _BOUND_PORT
+    except ValueError:              # 端口非法（:abc / 超界）
+        return False
+
+
 @app.before_request
 def _guard_local_origin():
     host_hdr = (request.host or '') if request else ''
     if host_hdr:
-        hostname = host_hdr.rsplit(':', 1)[0].strip('[]').lower()
+        # 尾部圆点（"localhost.:8765"）是合法 DNS 写法，剥点后再比对
+        hostname = host_hdr.rsplit(':', 1)[0].strip('[]').lower().rstrip('.')
         if hostname and hostname not in _LOOPBACK_HOSTS:
             abort(403, '仅允许通过本机回环地址访问平台')
     origin = request.headers.get('Origin') or ''
     if origin:
-        # 浏览器对同源 POST 也带 Origin（与 Host 同源则放行）
-        if _url_hostname(origin) not in _LOOPBACK_HOSTS:
+        # 浏览器对同源 POST 也带 Origin（必须是本平台**完整源**才放行）
+        if not _origin_same_platform(origin):
             abort(403, '已拦截跨站请求（Origin 校验失败）')
     else:
         referer = request.headers.get('Referer') or ''
-        if referer and _url_hostname(referer) not in _LOOPBACK_HOSTS:
+        # 无 Origin 且非浏览器客户端（curl / 本机脚本 / 拖拽代理，都不发
+        # Origin）保持既有放行逻辑——拖拽代理依赖它。
+        # 威胁模型核对（2026-10-04 审查遗留项复核）：① 浏览器跨站请求
+        # （含 CSRF）fetch/form POST 必带 Origin，已在上方完整源校验拦截；
+        # ② 无 Origin 的只可能是本机进程，其权限等价于登录用户，回环
+        # 绑定已是边界（进一步收紧对 CSRF 无增益，只会打断 test_client
+        # 与 CLI）；③ 破坏性路由 14 个全为 POST、无 GET 型（否则跨站
+        # 导航不带 Origin 可直达）——三项成立，本放行是安全决策而非疏漏。
+        if referer and not _origin_same_platform(referer):
             abort(403, '已拦截跨站请求（Referer 校验失败）')
 
 # ------------------------------------------------------------------
 # Blueprint 注册
 # 路由清单守卫：python tests/_route_inventory.py
-#（锁定 179 条 rule + methods，拆分/新增后必须零差异）
+#（锁定 229 条 rule + methods，拆分/新增后必须零差异）
 # ------------------------------------------------------------------
 from Virus_Platform_Core.web import (  # noqa: E402
+    ai_assist as _bp_ai,
     build as _bp_build,
     cds_export as _bp_cds_export,
     download as _bp_download,
@@ -204,6 +265,7 @@ from Virus_Platform_Core.web import (  # noqa: E402
     logan as _bp_logan,
     meta as _bp_meta,
     pages as _bp_pages,
+    prescreen as _bp_prescreen,
     refs as _bp_refs,
     samples as _bp_samples,
     settings as _bp_settings,
@@ -224,8 +286,8 @@ from Virus_Platform_Core.web import (  # noqa: E402
 # archive/_retire_20260927/explorer/，代码与数据在本仓不再保留活动副本。
 # 注意：app.py 的 JSON 清洗器原从 web/explorer.py 借 _nan_to_null（每个
 # JSON 响应都走它）——现已内联为本文件顶部的 _nan_to_null，无外部依赖。
-for _bp in (_bp_pages, _bp_tool_results, _bp_refs, _bp_logan, _bp_io,
-            _bp_samples, _bp_download, _bp_submit, _bp_meta,
+for _bp in (_bp_pages, _bp_ai, _bp_tool_results, _bp_refs, _bp_logan, _bp_io,
+            _bp_samples, _bp_download, _bp_submit, _bp_meta, _bp_prescreen,
             _bp_settings, _bp_virome, _bp_tools, _bp_tasks, _bp_build,
             _bp_examples, _bp_cds_export):
     app.register_blueprint(_bp.bp)
@@ -351,14 +413,136 @@ def _open_window(url, mode='gui'):
         return False
 
 
+def _pid_alive(pid):
+    """pid 是否是一个仍在运行的进程（实例锁残留判定用）。"""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    if sys.platform == 'win32':
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        # 只 OpenProcess 成功不够（pid 被回收/僵尸也算存在）；
+        # 再取退出码，等于 STILL_ACTIVE(259) 才算真活着。
+        h = k32.OpenProcess(0x1000, False, pid)   # QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
+            return bool(ok) and code.value == 259
+        finally:
+            k32.CloseHandle(h)
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _acquire_instance_lock():
+    """单实例锁：run/.platform.lock（O_CREAT|O_EXCL）。返回 (status, path)。
+
+    为什么需要：多实例共享同一份 run/ 数据（queue.json 队列、tasks/*.json
+    状态、results/ 结果目录），而 web/samples.py 的并发保护是**进程内**的
+    set —— 跨进程完全失效，两个实例同时跑同一批样品会互相覆盖状态与结果。
+
+    status: 'ok'=抢到锁（path 为锁文件）| 'busy'=已有实例在跑（调用方应退出）
+            | 'skip'=锁不可用（磁盘/权限异常），放弃保护但不拦启动。
+    锁内容为「pid 时间戳」：pid 仍存活 → 报错退出；pid 已消失（上次异常
+    退出的残留锁）→ 覆盖接管。
+    """
+    from Virus_Platform_Core.config import PLATFORM_ROOT
+    path = os.path.join(PLATFORM_ROOT, 'run', '.platform.lock')
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except OSError as e:
+        print(f'  [提示] 实例锁目录不可用（{e}），跳过并发保护。')
+        return ('skip', None)
+    for _ in range(2):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            old_pid = 0
+            try:
+                with open(path, encoding='utf-8') as f:
+                    old_pid = int((f.read() or '0').split()[0])
+            except (OSError, ValueError, IndexError):
+                old_pid = 0
+            if old_pid and _pid_alive(old_pid):
+                print(f'  [错误] 检测到平台已在运行（pid={old_pid}）。')
+                print('  同一份 run/ 数据不允许两个实例同时读写，请先关闭'
+                      '已运行平台的窗口/控制台。')
+                print(f'  确认该进程已不存在后，可删除锁文件再启动: {path}')
+                _pause_before_exit()
+                return ('busy', None)
+            # 残留锁（上次异常退出，pid 已不存在）：覆盖接管
+            print(f'  [提示] 发现残留锁（pid={old_pid or "未知"} 已不存在），'
+                  '已接管。')
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            continue
+        except OSError as e:
+            print(f'  [提示] 实例锁创建失败（{e}），跳过并发保护。')
+            return ('skip', None)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(f'{os.getpid()} {time.strftime("%Y-%m-%d %H:%M:%S")}\n')
+        return ('ok', path)
+    return ('skip', None)
+
+
+def _release_instance_lock(path):
+    """退出时删除自己写的锁（pid 不匹配则不动，避免误删他人锁）。"""
+    if not path:
+        return
+    try:
+        with open(path, encoding='utf-8') as f:
+            if int((f.read() or '0').split()[0]) != os.getpid():
+                return
+        os.remove(path)
+    except (OSError, ValueError):
+        pass
+
+
 def main():
+    # 接管 SIGINT/SIGTERM/SIGBREAK：退出前把 AI 审计队列排空。Windows 下
+    # SIGTERM **不触发 atexit**（实测），只靠 atexit 会丢最后几秒的记录。
+    # 必须在主线程且尽早装（signal.signal 有线程限制，且装晚了会漏掉信号）。
+    try:
+        from Virus_Platform_Core.ai_agent import audit as _ai_audit
+        _ai_audit.install_signals()
+    except Exception:
+        pass
+    # 最早的启动动作：抢单实例锁（端口探测/起服务之前），防止第二个实例
+    # 共享 run/ 目录把状态与结果互相覆盖。
+    lock_status, lock_path = _acquire_instance_lock()
+    if lock_status == 'busy':
+        return
     mode = _gui_mode()
     try:
         port = _pick_port()
     except RuntimeError as e:
         print(f'  [错误] {e}')
-        input('按回车键退出...')
+        _release_instance_lock(lock_path if lock_status == 'ok' else None)
+        _pause_before_exit()
         return
+    # CSRF 端口校验的基准：起服务前写入，_guard_local_origin 按「完整源」
+    # 比对 Origin/Referer（见 _origin_same_platform）。
+    global _BOUND_PORT
+    _BOUND_PORT = port
+    # 实际端口落盘供拖拽代理等外部组件读取（此前代理只扫 8760-8789，
+    # 平台备选端口 8900/9600/随机段全在扫描区间外——2026-10-04 审查 E4）
+    try:
+        import pathlib as _pl
+        _port_file = _pl.Path(__file__).resolve().parent / 'run' / '.port'
+        _port_file.parent.mkdir(parents=True, exist_ok=True)
+        _port_file.write_text(str(port), encoding='ascii')
+    except OSError:
+        pass
     url = f'http://127.0.0.1:{port}'
     print('=' * 56)
     print('  植物病毒分析平台 启动中...'
@@ -376,7 +560,8 @@ def main():
         print(f'\n  [错误] 端口 {port} 监听失败: {e}')
         print('  可在管理员 PowerShell 运行以下命令查看被系统保留的端口段:')
         print('     netsh interface ipv4 show excludedportrange protocol=tcp')
-        input('按回车键退出...')
+        _release_instance_lock(lock_path if lock_status == 'ok' else None)
+        _pause_before_exit()
         return
     try:
         if _open_window(url, mode):
@@ -396,6 +581,7 @@ def main():
             srv.shutdown()
         except Exception:
             pass
+        _release_instance_lock(lock_path if lock_status == 'ok' else None)
 
 
 if __name__ == '__main__':

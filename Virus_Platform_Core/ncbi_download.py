@@ -21,6 +21,8 @@ import json
 import time
 import socket
 import ipaddress
+import logging
+import threading
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -39,6 +41,7 @@ SUMMARY_BATCH = 100           # esummary 每批 ID 数
 _MAX_XML_BYTES = 64 * 1024 * 1024   # 单响应 XML 大小上限
 
 _last_request = [0.0]         # 模块级限速时钟
+_last_request_lock = threading.Lock()   # 限速时钟必须原子读改写（并发请求会超速）
 
 
 def _open_eutils(url, params, timeout=120):
@@ -61,10 +64,13 @@ def _open_eutils(url, params, timeout=120):
     delay = 1.0
     last_err = None
     for attempt in range(1, _MAX_RETRIES + 1):
-        wait = _MIN_INTERVAL - (time.monotonic() - _last_request[0])
-        if wait > 0:
-            time.sleep(wait)
-        _last_request[0] = time.monotonic()
+        # 限速时钟的"读-算-写"必须持锁：多线程（如 run_ai_sanitizer 之外的
+        # 并发下载/gb_collection 缓存缺失批量取）同时读会一起通过，突破 3 req/s
+        with _last_request_lock:
+            wait = _MIN_INTERVAL - (time.monotonic() - _last_request[0])
+            if wait > 0:
+                time.sleep(wait)
+            _last_request[0] = time.monotonic()
         req = urllib.request.Request(url, data=data)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -218,10 +224,18 @@ def _collections_root():
 
 
 def collection_dir(name):
-    """集合目录（名称白名单校验，防路径注入）。"""
+    """集合目录（名称白名单校验，防路径注入）。
+
+    非 ASCII 名（中文）虽被允许，但会让 tar/跨平台拷贝与部分工具的路径编码
+    出问题，故记 WARN 提示（不阻断，保持向后兼容）。
+    """
     import re as _re
     if not _re.fullmatch(r'[A-Za-z0-9_\-\u4e00-\u9fff]{1,64}', str(name)):
         raise ValueError(f'集合名仅允许中英文/数字/_/-（≤64字符）: {name!r}')
+    if any(ord(ch) > 127 for ch in str(name)):
+        logging.getLogger(__name__).warning(
+            '集合名含非 ASCII 字符（%r）：建议用英文/数字命名，'
+            '跨平台拷贝与外部工具可能因编码不一致读不到', str(name))
     return check_path(os.path.join(_collections_root(), name), in_platform=True)
 
 
@@ -262,6 +276,93 @@ def _existing_accessions(fa_path):
     return accs
 
 
+def _acc_version(acc):
+    """accession 版本号：'ABC123.2' → 2；无版本号 → 0。"""
+    tail = str(acc or '').rsplit('.', 1)
+    if len(tail) == 2 and tail[1].isdigit():
+        return int(tail[1])
+    return 0
+
+
+def _versionless(acc):
+    return str(acc or '').split('.')[0].upper()
+
+
+def _existing_versions(fa_path):
+    """refs.fa → {无版本 accession: (完整 accession, 版本号)}。
+
+    跨次运行的版本升级（ACC.1 → ACC.2）必须靠无版本键识别：旧实现只用
+    refs.fa 头里的带版本名做索引，ACC.2 既不等于 ACC.1 也不等于 ACC，
+    于是两个版本被同时写进集合（双写、同一 accession 两份序列）。
+    """
+    out = {}
+    if os.path.isfile(fa_path):
+        with safe_open(fa_path) as f:
+            for line in f:
+                if not line.startswith('>'):
+                    continue
+                full = line[1:].split('|')[0].split()[0]
+                k, v = _versionless(full), _acc_version(full)
+                if k not in out or v > out[k][1]:
+                    out[k] = (full, v)
+    return out
+
+
+def _drop_and_append(fa_path, meta_path, drop_keys, new_records, log):
+    """替换式重写：删掉 drop_keys（无版本 accession）的旧记录，追加新记录。
+
+    版本升级（ACC.1 → ACC.2）时用：集合里同一 accession 只保留最新版本。
+    返回实际替换的条数。
+    """
+    kept_fa = []
+    if os.path.isfile(fa_path):
+        with safe_open(fa_path) as f:
+            cur = []
+            for line in f:
+                if line.startswith('>'):
+                    if cur:
+                        kept_fa.append(cur)
+                    cur = [line]
+                elif cur:
+                    cur.append(line)
+            if cur:
+                kept_fa.append(cur)
+    n_drop = 0
+    out_lines = []
+    for rec_lines in kept_fa:
+        head = rec_lines[0]
+        full = head[1:].split('|')[0].split()[0]
+        if _versionless(full) in drop_keys:
+            n_drop += 1
+            continue
+        out_lines.extend(rec_lines)
+    for r in new_records:
+        org = (r['organism'] or '').replace(' ', '_') or 'unknown'
+        out_lines.append(f">{r['acc']}|{org}\n")
+        seq = r['seq']
+        for i in range(0, len(seq), 60):
+            out_lines.append(seq[i:i + 60] + '\n')
+    with safe_open(fa_path, 'wt') as f:
+        f.writelines(out_lines)
+    # 元数据 TSV 同步：丢掉旧版本行，追加新行（文件缺失时连带建表头）
+    head, kept = '', []
+    if os.path.isfile(meta_path):
+        with safe_open(meta_path) as f:
+            lines = f.readlines()
+        head, rows = (lines[0], lines[1:]) if lines else ('', [])
+        kept = [ln for ln in rows
+                if _versionless((ln.split('\t') or [''])[0]) not in drop_keys]
+    if not head:
+        head = '\t'.join(META_FIELDS) + '\n'
+    with safe_open(meta_path, 'wt') as f:
+        f.write(head)
+        f.writelines(kept)
+        for r in new_records:
+            f.write('\t'.join(str(r.get(k, '')) for k in META_FIELDS) + '\n')
+    log(f'版本升级替换 {n_drop} 条旧记录 → {len(new_records)} 条新版本', 'WARN')
+    return n_drop
+
+
 def download_collection(term, name, db='nucleotide', max_records=100,
                         logger=None, prog=None, cancel=None):
     """检索并下载一个参考序列集合（幂等：重复运行按 accession 跳过已有）。
@@ -288,6 +389,9 @@ def download_collection(term, name, db='nucleotide', max_records=100,
     log(f"检索 [{term}] 命中 {total_hits} 条，下载前 {n_target} 条 (db={db})")
 
     existing = _existing_accessions(fa_path)
+    # 统一去重键 = accession 不含版本号：跨次运行的版本升级（ACC.1 → ACC.2）
+    # 只保留最新版本，不再双写（旧实现按带版本名索引，升级版会被当新记录追加）
+    existing_ver = _existing_versions(fa_path)
     if existing:
         log(f"续传模式: 已有 {len(existing)} 条，重复项将跳过")
 
@@ -296,8 +400,9 @@ def download_collection(term, name, db='nucleotide', max_records=100,
                    'date': time.strftime('%Y-%m-%d %H:%M:%S')}, f,
                   ensure_ascii=False, indent=2)
 
-    downloaded = skipped = 0
+    downloaded = skipped = upgraded = 0
     new_meta = []
+    pending_upgrade = {}          # 无版本 acc → 新版本记录（循环结束后统一替换）
     retstart = 0
     while retstart < n_target:
         if cancel is not None and getattr(cancel, 'is_set', lambda: False)():
@@ -312,20 +417,47 @@ def download_collection(term, name, db='nucleotide', max_records=100,
         if not records:
             log(f'批次 retstart={retstart} 解析到 0 条记录，停止', 'WARN')
             break
-        # 追加写 fasta + 收集元数据（按 accession 去重）
+        # 追加写 fasta + 收集元数据（统一按无版本 accession 去重）
         with safe_open(fa_path, 'at') as ffa:
             for r in records:
-                acc = r['acc'].split('.')[0]
-                if r['acc'] in existing or acc in existing:
-                    skipped += 1
+                pk = _versionless(r['acc'])
+                cur = existing_ver.get(pk)
+                if cur is not None:
+                    if _acc_version(r['acc']) > cur[1]:
+                        # 版本升级：保留最新版本（末尾统一替换旧记录）
+                        pending_upgrade[pk] = r
+                        upgraded += 1
+                        log(f"版本升级: {cur[0]} → {r['acc']}（将替换旧记录，"
+                            f"同一 accession 只保留最新版本）", 'WARN')
+                    else:
+                        skipped += 1
                     continue
                 org = r['organism'].replace(' ', '_') or 'unknown'
                 write_fasta_record(ffa, f"{r['acc']}|{org}", r['seq'])
-                existing.add(r['acc'])
-                existing.add(acc)
+                existing_ver[pk] = (r['acc'], _acc_version(r['acc']))
                 downloaded += 1
                 new_meta.append({k: r.get(k, '') for k in META_FIELDS})
         retstart += batch_max
+
+    # 版本升级统一替换（一次性重写，避免边下边改同一文件）
+    n_replaced = 0
+    if pending_upgrade:
+        n_replaced = _drop_and_append(fa_path, meta_path,
+                                      set(pending_upgrade), list(pending_upgrade.values()),
+                                      log)
+        # 升级记录进 query.json：保留的是哪个版本、替换了什么
+        try:
+            qp = os.path.join(cdir, 'query.json')
+            with safe_open(qp, 'rt') as f:
+                q = json.load(f)
+            q['version_upgrades'] = [
+                {'accession': _versionless(r0['acc']), 'kept': r0['acc'],
+                 'replaced': existing_ver.get(_versionless(r0['acc']), ('', 0))[0]}
+                for r0 in pending_upgrade.values()]
+            with safe_open(qp, 'wt') as f:
+                json.dump(q, f, ensure_ascii=False, indent=2)
+        except (OSError, ValueError):
+            pass
 
     # 元数据 TSV（追加模式，与 fasta 同步增长）
     if new_meta:

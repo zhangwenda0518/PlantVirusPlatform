@@ -3018,3 +3018,152 @@ phylodyn 三个组，15 / 14 / 13 / 12 个链接在 640px **一律折 2 行**，
 还有 `t-variant`（病毒变异分析，现属「病毒定量与共识」，产物是 SNP/变异图 = 检测）
 与 `/hostpredict`（现属「病毒识别和分类分析」）—— 要不要一并搬进来，等用户口径。
 
+
+## 2026-09-30 导航：「公共数据下载」回归「数据资源」组 + GSA 反爬坑
+
+### 导航调整（用户提出）
+
+「公共数据下载」（/download）从「样本处理」组移回「数据资源」组，排在
+「公共数据检索」正后。历史上它本来就在数据资源组，2026-09-06（本笔记
+第十八节）应要求移入样本处理组首位，理由是工作流顺序"拿数据→建样品→
+质控→分析"——但该衔接靠的是下载页文件行的跨模块按钮（🧾样品/🚫去宿主/
+🧹质控/🦠鉴定），并不依赖导航分组。语义上样本处理组其余各卡都是"处理
+本地已有文件"，只有下载是"从公共库获取"；且"公共数据检索/公共数据下载"
+这对名字对仗的页面分居两组确实别扭。
+
+改动两处（`Virus_Platform_Core/web/pages.py`）：NAV_GROUPS 的 download 卡
+从 sample.items 移入 resource.items（检索之后），`_PATH_TO_GROUP` 的
+`'/download': 'sample'` 改 `'resource'`（漏改则 /download 侧栏仍列样本组）。
+`webapp/templates/download.html` 无需动（无写死组名）。
+
+验证：test client 实测 /download 组顶栏=数据资源、resource 工作台 4 卡含
+下载、sample 5 卡不含；`_it_platform.py` PASSED（含导航↔卡对应检查）。
+`_it_nav_responsive.py` 报的 `/pipeline 640px` 折行与本次无关——stash 回退
+旧版复跑同样失败（甚至多一项 1920px，属真浏览器测量波动），见 2026-09-18
+节"640px 属极窄窗口、折行处在临界"的既有结论。
+
+### GSA（CRR）下载解析失败根因：NGDC 反爬验证页（重要踩坑）
+
+用户报告"CRR708330 解析失败（SSL EOF）"，排查出**两层**：
+
+1. **SSL 瞬断**（04:41 那次直接原因）：`_http_get` 原先一次失败即判死。
+   现已加指数退避重试 3 次（URLError/SSLError/TimeoutError/ConnectionError）。
+2. **根本原因**：NGDC 于 **2026-09-17 上线 JS 反爬验证页**（nginx 静态页，
+   ETag/Last-Modified 可证），对**无 Referer** 的脚本请求，
+   `/gsa/browse/` 详情页一律返回"正在进行安全检查"页。GSA 解析流程
+   （搜索页→详情页→提取下载链接）中搜索页能过、详情页被拦 → 症状是
+   "NGDC 未找到公开下载文件"。实测放行条件：**带站内 Referer 即可**
+   （`Referer: https://ngdc.cncb.ac.cn/gsa/search`）；页内 JS 算的
+   `auth_token` Cookie（base64(salt+UTC日期)，salt 从页内 `var secret=`
+   提取）作为兜底二次重放。**注意**：MMPV-RNA `gsa_sra.down.py` 的
+   requests.Session 写法（无 Referer）2026-09-17 之后同样会被拦。
+   修复在 `public_data.py::_http_get`：NGDC 域自动带 Referer，命中验证页
+   按页内 salt 算 token 重放。下载域名 download.cncb.ac.cn **不需要**
+   任何 Cookie，aria2c 直接下。
+
+另：meta 页「④ 运行任务」卡片加了日志折叠块（懒加载
+`/api/task/<id>/log`，展开状态跨 10s 轮询重绘保持）与「任务中心 →」
+入口——此前已完成的历史任务只有状态没有回看入口；完整历史（含重启前
+归档）一直在 /tasks 任务中心页。浏览器验收脚本 `tests/_check_meta_tasklog.py`。
+
+## 2026-09-30 续：公共数据下载支持自定义输出位置
+
+用户要求：下载任务可指定输出位置（不填 = 默认），下载后的批次卡能看到
+数据在哪。
+
+- **创建时**：`DownloadManager.create(..., out_dir=None)`（public_data.py）。
+  out_dir 非空 → `check_path(in_platform=True)` 校验后**该目录即批次目录
+  本身**（不再嵌 `<批次id>` 一层，用户指定哪里数据就在哪里）；目录自动
+  创建，已存在且非空时批次日志提醒"同名文件将被覆盖/续传"。越界（平台外
+  且未挂载输出根）抛 ValueError，`/api/dl/create` 捕获后 400 原因透出
+  （想用平台外目录：设置页挂载输出根即可，check_path 的 write_roots 自动
+  放行）。worker 落盘全走 `fe['out']`/`b['dir']`，自定义目录零适配。
+- **可见性**：snapshot 原先**不带 dir**（前端根本拿不到输出目录），已补
+  `'dir'` 字段；批次卡进度条下方显示 📁 完整路径 + 「📂 打开」按钮
+  （openOutDir，app-jobs.js 已有）。
+- **表单**：download.html 任务名/并发行下加「输出位置（可选）」输入 +
+  📁 browseDir 浏览按钮；创建成功后清空（每批一目录心智，防下一批误混）。
+  **download.html 原先没 include `_browse_dlg.html`** —— 页面一加
+  browseDir 就会踩"死键"坑（见 2026-09-11 节），已补 include。
+- **样品链路无需改**：文件行「🧾 样品」按钮预填的是文件实路径
+  （sendTo→sessionStorage→samples 页 R1/R2），自定义位置自动适配；
+  样品目录本身仍固定 `results/<样品名>/`（全平台样品发现/分析/结果的
+  根基假设，不宜随单次下载漂移）。
+- 验证：离线 create 4 行为（默认/自定义/越界 400/空白回落）+
+  API test client 5 断言 + 浏览器 6 断言（tests/_check_dl_outdir.py）+
+  `_it_dl_progress` / `_it_download_ui` / `_it_platform` 全 PASS。
+
+## 2026-09-30 续②：工具卡输出区被旧任务回显覆盖（格式转换实测）
+
+用户报告：格式转换连跑两次，第二次已完成（右上「任务完成」弹窗都是新
+run），输出区的运行日志却还停在第一次（旧输入文件的 CMD）。
+
+**根因**：`injectStageLogs`（app-jobs.js）对 `/api/tasks` 里**每个**名称
+匹配「格式转换」的任务都执行 `toolrun-convert 容器.innerHTML = ...`，而
+任务列表是**新→旧**序（TaskManager.order.insert(0)）——同卡旧任务数组
+靠后、后写覆盖新任务。凡是能对同名任务跑多次的卡（转换/质控/鉴定…全部
+TOOL_LABELS 卡、管道阶段日志 log-<key>、建库日志 buildrun-<key>）都有此
+隐患，转换只是最先被撞见。
+
+**修复**：injectStageLogs 里加 `claimed` Set，每个容器只吃数组里**第一个**
+（=最新）匹配任务；三处注入（stage/toolrun/buildrun）统一。运行中优先于
+已完成（顺序天然保证：新任务在前）。
+
+**测试**：tests/_check_toolrun_latest.py —— 真浏览器连跑两次转换
+（example_R1 → example_R2，seqkit 本地秒级），断言输出区最终是第二次的
+run 名与日志；回退修复复跑 → 第二项 TimeoutException（=用户所见 bug 复现），
+修复后 4 项全 PASS。测试基建备忘：
+- 工作台卡片默认 display:none，需 `showModule('t-convert')` 激活；
+- headless 全新 profile 必中 examples.js「首访自动弹示例结果」
+  （.dlgmask z-index 320），JS 直调 `runTool('convert', btn)` 可绕开一切
+  遮挡/点击拦截。
+
+## 2026-09-30 续③：格式转换支持双端（R1/R2 分别转换输出）
+
+用户需求：格式转换卡支持双端数据，双端则分别转换输出。
+
+- **前端**（tools.html t-convert 卡）：`cv_input` 下新增可选 `cv_input2`
+  （R2 文件）；`runTool('convert')` params 带 `input2`（trim，空则不传）。
+- **后端**（tool_jobs.py `_tool_job_convert`）：
+  - FASTQ→FASTA：`inputs = [inp, inp2] if inp2 else [inp]` 逐条独立跑
+    seqkit fq2fa，产物按输入文件名各自命名（`GQMIX.R1.fq.gz →
+    GQMIX.R1.fa.gz`），不合并；进度阶段 R1=0.3 / R2=0.7。
+  - `.sra` 输入自含双端（sracha 解码天然出 _1/_2），带 input2 直接 400
+    「.sra 文件自含双端信息，无需另选 R2」。
+  - R2 后缀与 R1 不一致 → 400。`ctx.opt('input2')` 自带存在性校验。
+- **验证**：API 层双端（R1/R2 两个 .fa.gz）/单端（行为不变）/
+  sra+R2 400 / R2 格式不符 400 全过；浏览器 5 断言
+  （tests/_check_convert_paired.py）含输出区双产物与两条命令日志；
+  `_check_toolrun_latest`、`_it_platform` 回归通过。
+
+## 2026-09-30 续④：样本处理四卡支持自定义输出目录（可选，不填默认）
+
+用户需求：⚡一键前处理 / 格式转换 / 序列质控 / 宿主去除与序列提取 都加
+输出目录设置（不填默认）。
+
+**方案（工具运行框架层统一，四卡一次覆盖，全 registry 工具同样受益）**：
+- 创建层（tools_api `/api/tool/run`）：body 顶层可选 `out_dir`，非空 →
+  `check_path(in_platform=True)` 校验（平台内/挂载输出根内），产物写
+  **<out_dir>/<run_name>/**（换父目录不换结构，多次运行不互混）；
+  `tool_runs/<run_name>/` 仍创建并写 `out_link.json` 指针登记实际目录。
+- 寻址层：`state.run_real_dir(run)` 统一解析（有指针→外移目录，无→原
+  目录）；`/api/tool/runs` 列表、产物下载 `/tool_runs/<run>/<file>`、
+  打开目录、删除运行、rdp/phylogeo/quicktree/contig 报告等 run 寻址全部
+  换用。**没有指针登记，外移运行在历史区就是失联卡片**——这是本设计
+  的关键不变量。
+- 签名刷新：`/api/tool/runs` 的缓存签名基于 tool_runs/<run> 的 mtime，
+  外移运行产物写在外部目录时列表会停在"只剩指针"——任务结束
+  `_job_with_run` 里 `os.utime(base_dir)` touch 一下。
+- 删除：清外移目录 + 指针目录两处；`_rmtree_retry`（Windows 下刚被
+  send_file 下载过的文件句柄未释放时，gc + 0.3s 后重试一趟）。
+- job 零改动：`ctx.run_dir` 已是外移后目录。
+- 前端：四卡各加「输出目录（可选）」输入 + browseDir（cv_outdir /
+  f_outdir / pc_outdir / hr_outdir）；runTool 的 convert/fastp/prepchain
+  分支与 hostremoval 页提交带 `out_dir`。
+- 验证：API 层 14 断言（tests/_check_tool_outdir.py：外移/指针/列表可见/
+  下载可达/touch 刷新/删除双清 + 四工具各跑）；浏览器 7 断言
+  （tests/_check_tool_outdir_ui.py：四卡字段渲染 + convert 端到端外部
+  out_dir 显示 + 产物落盘）；`_check_toolrun_latest`、`_it_platform`
+  回归通过。宿主库未建时 hostremoval 创建即 400（既有 db_ready 拦截，
+  与本功能无关）。test client 教训：send_file 的 response 不 close 会
+  占住文件句柄，让后续删目录在 Windows 上静默残留。

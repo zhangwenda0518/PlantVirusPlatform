@@ -136,6 +136,26 @@ def parse_beast_newick(text):
         return ann
 
     def _name():
+        # 前导空白先跳过（旧实现靠末尾 strip，效果相同，但引号判定要在跳过之后）
+        while pos[0] < len(s) and s[pos[0]] in ' \t':
+            pos[0] += 1
+        if pos[0] < len(s) and s[pos[0]] == "'":
+            # Newick 引号名：`'…'`，内部 `''` = 一个字面单引号。
+            # write_beast_newick 的 `_name_str` 会这样写含 `(),:;[]`/空白的名字
+            # （2026-10-03）；不认引号的话 `'C,three'` 会被逗号切成两个节点。
+            pos[0] += 1
+            buf = ''
+            while pos[0] < len(s):
+                ch = s[pos[0]]
+                pos[0] += 1
+                if ch == "'":
+                    if pos[0] < len(s) and s[pos[0]] == "'":   # '' → 字面单引号
+                        buf += "'"
+                        pos[0] += 1
+                        continue
+                    break                                       # 收尾引号
+                buf += ch
+            return buf
         buf = ''
         while pos[0] < len(s) and s[pos[0]] not in ',():[':
             buf += s[pos[0]]
@@ -300,6 +320,18 @@ def root_state_posterior(root, trait_hint=None):
 
 
 def _zip_sp(states, probs):
+    """`set` 与 `set.prob` 两个后验列表 → [(状态, 概率), …]。
+
+    ⚠️ 2026-10-03 补长度校验：原实现直接 `zip` —— 两个注解长度不一致时
+    **静默按短的截断**（`K.set` 4 个状态、`K.set.prob` 3 个值 → 少一个状态，
+    后验和就不是 1 了，还看不出来）。长度不一致直接报错，不猜。
+    """
+    states = list(states or [])
+    probs = list(probs or [])
+    if len(states) != len(probs):
+        raise ValueError('set 与 set.prob 个数不一致（%d vs %d）—— '
+                         '截断会把根状态后验静默算错，拒绝'
+                         % (len(states), len(probs)))
     try:
         pairs = [(s, float(p)) for s, p in zip(states, probs)]
     except (TypeError, ValueError):
@@ -315,7 +347,10 @@ def _parse_translate(tree_text):
     if not m:
         return {}
     out = {}
-    for mm in re.finditer(r'([A-Za-z0-9_.]+)\s+("[^"]*"|\'[^\']*\'|[^\s,;]+)\s*[,;]',
+    # 分隔符 [,;]? 必须可选：上面的截块 (.*?) 在块尾 ; 处停止，最后一条
+    # 翻译项（"N name" 后直接跟块尾 ;）在 group(1) 里没有尾随分隔符，
+    # 强制 [,;] 会把最后一条叶名映射静默丢掉。
+    for mm in re.finditer(r'([A-Za-z0-9_.]+)\s+("[^"]*"|\'[^\']*\'|[^\s,;]+)\s*[,;]?',
                           m.group(1)):
         name = mm.group(2).strip().strip('"').strip("'")
         if name:
@@ -339,22 +374,51 @@ def load_mcc_tree(path):
 # TempMig —— 分支-年迁移矩阵（对齐 VirPhyKit TempMig 口径）
 # ================================================================
 
+# 叶名末段数字"像不像采样年"的两道闸（2026-10-03，见 `_tip_years`）：
+#   ① 年份区间：病毒/类病毒的采样年都落在 1000–3000 内，之外必是编号/版本号；
+#   ② 跨度上限：真实采样跨度不会超过 500 年（一百年都算长的了），
+#      超过说明末段数字里混进了非年份 → 宁可报错让用户改写，不许算错年轴。
+_TIP_YEAR_MIN, _TIP_YEAR_MAX = 1000.0, 3000.0
+_TIP_YEAR_SPAN_MAX = 500.0
+
+
 def _tip_years(root):
-    """叶名末段 `_2008.58197` → 年；返回升序年列表（只收能解析的）。"""
+    """叶名末段 `_2008.58197` → 年；返回升序年列表（只收**可信**的采样年）。
+
+    ⚠️ 2026-10-03 修两处：
+      ① 原实现 `float(tail)` 一成功就当年份收下 —— `sample_1`、`|2`、`_3`
+         这类编号也会进年列表，于是 `mostcurrent = distinct[-2]`（"第二大年"，
+         VirPhyKit 口径）会被编号顶掉、日历整轴错位。现在候选必须落在
+         [_TIP_YEAR_MIN, _TIP_YEAR_MAX)（先试整段、再试前 8 字符，与旧口径
+         的两次尝试一致），且所有候选的**跨度**不超过 `_TIP_YEAR_SPAN_MAX`；
+      ② 一个可信年份都没有时**抛中文错误**。原实现返回空表 → 调用方
+         `distinct[-2]` 拿不到 → `mostcurrent = 0` → `rootyear = -ceil(T)`
+         凭空产出负年轴（静默错）。
+    """
     years = []
     for n, _p, _d in _walk(root):
-        if not n['children'] and n['name']:
-            tail = n['name'].rsplit('_', 1)[-1]
+        if n['children'] or not n['name']:
+            continue
+        tail = n['name'].rsplit('_', 1)[-1]
+        for probe in (tail, tail[:8]):
             try:
-                years.append(float(tail))
+                f = float(probe)
             except ValueError:
-                try:
-                    f = float(tail[:8])
-                    if 1000 <= f < 3000:
-                        years.append(f)
-                except ValueError:
-                    continue
-    return sorted(years)
+                continue
+            if _TIP_YEAR_MIN <= f < _TIP_YEAR_MAX:
+                years.append(f)
+            break
+    years.sort()
+    if not years:
+        raise ValueError(
+            '树上一个可信的采样年都没有 —— 叶名末段需形如 `_2008.58197`'
+            '（年份在 1000–3000 内）；采样年请写进 tip 名或改用元数据提供')
+    if years[-1] - years[0] > _TIP_YEAR_SPAN_MAX:
+        raise ValueError(
+            '叶名末段的"年份"跨度 %.1f 年（%.1f ~ %.1f）不像真实采样年 ——'
+            '多半混进了编号/版本号；采样年请写进 tip 名或改用元数据提供'
+            % (years[-1] - years[0], years[0], years[-1]))
+    return years
 
 
 def migration_matrix_from_mcc(tree_path, out_dir=None, trait_hint=None,
@@ -631,7 +695,13 @@ def bsp_from_beast_log(path, present_year=None, grid=120):
         t_max = max(t_max, T)
     if len(per_grid) < 2:
         raise ValueError('.log 里可解析的天际线样本不足 2 个')
-    present = float(present_year) if present_year else 2026.0
+    # ⚠️ 2026-10-03 修：present 不给**不再编造 2026.0** —— 硬编码会把"相对时间"
+    #    冒充成日历年。缺参时横轴改为相对时间（根 = 0，向现代递增），与
+    #    `ltt_from_tree`「无定年 → 横轴 = 根起算距离」同一口径，并在 note 里说明。
+    if present_year:
+        present = float(present_year)
+    else:
+        present = None
     ages = [t_max * (i + 1) / grid for i in range(grid)]
     med, lo, up, times = [], [], [], []
     for a in ages:
@@ -641,15 +711,21 @@ def bsp_from_beast_log(path, present_year=None, grid=120):
             gi = min(max(gi, 0), len(ps) - 1)
             vals.append(ps[gi])
         vals.sort()
-        times.append(round(present - a, 4))
+        times.append(round((present - a) if present is not None else a, 4))
         med.append(_quant(vals, 0.5))
         lo.append(_quant(vals, 0.025))
         up.append(_quant(vals, 0.975))
+    note = ('BEAST log 近似口径：组界按「等区间数 × 逐样本根高」近似；'
+            '精确组界需要 .trees，建议改用 Tracer 导出的 TSV')
+    if present is None:
+        note += ('；**调用方未提供 present 年** → 横轴为相对时间'
+                 '（根 = 0，单位年，向现代递增），不是日历年')
     return {'source': 'beast_log', 'n_samples': len(per_grid), 'n': len(times),
             'data': {'time': times, 'median': med, 'lower': lo, 'upper': up},
             'approx': True,
-            'note': ('BEAST log 近似口径：组界按「等区间数 × 逐样本根高」近似；'
-                     '精确组界需要 .trees，建议改用 Tracer 导出的 TSV')}
+            'axis': 'calendar_year' if present is not None else 'relative',
+            'present': present,
+            'note': note}
 
 
 def _quant(sorted_vals, q):
@@ -719,16 +795,29 @@ def _region_lookup(mapping_path):
 
 
 def _rtt_points_and_fit(dates, dists, regions=None):
-    """根到尾散点 + 最小二乘拟合。"""
+    """根到尾散点 + 最小二乘拟合。
+
+    返回 `(points, reg, r2, n_meta_not_on_tree)`。
+
+    ⚠️ 2026-10-03 修：只回归**两边都有**的叶（`set(dates) & set(dists)`）——
+    原实现 `names = sorted(dates)` 后直接 `dists[n]`，元数据里存在、但树上没有
+    的叶（常见：元数据整表导入、树只含子集）会 **KeyError 整条链崩掉**。
+    落在树外的元数据条数由第 4 个返回值如实上报，调用方写进结果（不静默）。
+    """
     from scipy.stats import linregress
-    names = sorted(dates)
+    names = sorted(set(dates) & set(dists))
+    if len(names) < 2:
+        raise ValueError(
+            '可比对的（树 × 元数据）叶不足 2 个：%d 个元数据名字里只有 %d 个能在'
+            '树上找到 —— 请核对叶名与元数据 name 列是否逐字一致'
+            % (len(dates), len(names)))
     xs = [dates[n] for n in names]
     ys = [dists[n] for n in names]
     reg = linregress(xs, ys)
     r2 = reg.rvalue ** 2
     points = [{'name': n, 'date': dates[n], 'dist': dists[n],
                'region': (regions or {}).get(n)} for n in names]
-    return points, reg, r2
+    return points, reg, r2, len(set(dates) - set(dists))
 
 
 def _perm_test_r2(xs, ys, n_perm=100, seed=0):
@@ -839,7 +928,10 @@ def treetime_rtt(aln_path, tree_path, meta_path, out_dir,
     elif locs:
         regions = {nm: loc for nm, loc in locs.items()}
 
-    points, reg, r2 = _rtt_points_and_fit(dates, dists, regions)
+    points, reg, r2, n_meta_not_on_tree = _rtt_points_and_fit(dates, dists, regions)
+    if n_meta_not_on_tree:
+        _log('元数据有 %d 条名字不在树上 → 本次回归**已忽略**（只回归树 × 元数据'
+             '的交集；原实现会直接 KeyError）' % n_meta_not_on_tree)
     xs = [p['date'] for p in points]
     ys = [p['dist'] for p in points]
     obs_r2, perm_p = _perm_test_r2(xs, ys, n_perm=n_perm)
@@ -884,6 +976,7 @@ def treetime_rtt(aln_path, tree_path, meta_path, out_dir,
     return {
         'engine': 'treetime',
         'n_tips': len(points),
+        'n_meta_not_on_tree': n_meta_not_on_tree,
         'clock_rate': rate,
         'engine_r2': engine_r2,
         'r2': r2,
@@ -914,10 +1007,11 @@ def inhouse_rtt(tree_path, meta_path, n_perm=100):
                 dists[nm] = d
     if len(dists) < 3:
         raise ValueError('树上可配对日期的叶不足 3 个')
-    points, reg, r2 = _rtt_points_and_fit(dates, dists)
+    points, reg, r2, n_meta_not_on_tree = _rtt_points_and_fit(dates, dists)
     obs_r2, perm_p = _perm_test_r2([p['date'] for p in points],
                                    [p['dist'] for p in points], n_perm=n_perm)
     return {'engine': 'inhouse', 'n_tips': len(points), 'clock_rate': reg.slope,
+            'n_meta_not_on_tree': n_meta_not_on_tree,
             'r2': r2, 'slope': reg.slope, 'p_value': reg.pvalue,
             'perm_n': n_perm, 'perm_r2': obs_r2, 'perm_p': perm_p,
             'root_date': min(dates.values()), 'timetree': None,
@@ -935,31 +1029,47 @@ def iter_beast_trees(path, burnin=0.1, max_trees=None):
     * burnin：按比例丢弃最前段（默认 10%）
     * max_trees：超过时**等步长抽样**（横跨整段，不只取前段）
     * 支持 Translate 块；每棵树必须是单行（BEAST 标准输出即如此）
+    * ⚠️ 2026-10-03 改**流式**：原实现 `read_text` 整文件 + 把所有 tree 行
+      缓冲进列表 —— 大 .trees（数千棵 × 长枝长/叶名）光文本就可达 GB 级，
+      再加解析出的树对象内存翻倍。现在两遍**逐行**读：
+        第一遍只数 `tree ` 行数（顺带在首个 tree 行前抓 Translate 块，它总在
+          文件头），第二遍按等步长选出的行号**只解析被选中的行**。
+      峰值内存 ≈ 被选中的 `max_trees` 棵（`max_trees` 因此同时封顶解析量与内存），
+      且不把整份文本读进内存。行号口径与旧实现完全一致（同一批等步长下标）。
     """
-    text = read_text(path)
-    trans = _parse_translate(text)
-    raw = []
-    for ln in text.splitlines():
-        if '(' not in ln:
-            continue
-        if not ln.lstrip().lower().startswith('tree '):
-            continue
-        raw.append(ln)
-    if not raw:
+    n_tree, header = 0, []
+    with open(path, encoding='utf-8-sig', errors='replace') as f:
+        for ln in f:
+            if '(' in ln and ln.lstrip().lower().startswith('tree '):
+                n_tree += 1
+            elif n_tree == 0:
+                header.append(ln)     # 首个 tree 行之前的头部（Translate 在这里）
+    if not n_tree:
         raise ValueError(f'{path} 里没有 tree 行（不是 BEAST .trees 后验树集？）')
-    skip = int(len(raw) * float(burnin))
-    picked = raw[skip:]
-    if max_trees and len(picked) > max_trees:
-        step = len(picked) / float(max_trees)
-        picked = [picked[int(i * step)] for i in range(max_trees)]
+    trans = _parse_translate(''.join(header))
+    skip = int(n_tree * float(burnin))
+    n_pick = n_tree - skip
+    if max_trees and n_pick > max_trees:
+        step = n_pick / float(max_trees)
+        idx = [skip + int(i * step) for i in range(max_trees)]
+    else:
+        idx = list(range(skip, n_tree))
+    sel = set(idx)
     out = []
-    for i, ln in enumerate(picked, skip + 1):
-        root = parse_beast_newick(ln)
-        if trans:
-            for n, _p, _d in _walk(root):
-                if not n['children'] and n['name'] in trans:
-                    n['name'] = trans[n['name']]
-        out.append((i, root, tree_height(root)))
+    k = -1
+    with open(path, encoding='utf-8-sig', errors='replace') as f:
+        for ln in f:
+            if '(' not in ln or not ln.lstrip().lower().startswith('tree '):
+                continue
+            k += 1
+            if k not in sel:
+                continue
+            root = parse_beast_newick(ln)
+            if trans:
+                for n, _p, _d in _walk(root):
+                    if not n['children'] and n['name'] in trans:
+                        n['name'] = trans[n['name']]
+            out.append((k + 1, root, tree_height(root)))
     return out
 
 
@@ -1077,6 +1187,22 @@ def _ann_str(v):
     return s
 
 
+def _name_str(name):
+    """Newick 名字 → 可安全写回的字符串（2026-10-03）。
+
+    含 `(),:;[]`、空白或单引号的名字必须用**单引号**包裹（内部的 `'` 按 Newick
+    标准翻倍转义），否则 `A B` / `x:1` / `(a)` 这类名字回读（或被 BEAST 读）时
+    会被解析成别的东西 —— 严重时整棵树解析失败。不含特殊字符的名字原样输出，
+    与既有产物保持逐字一致。
+    """
+    s = '' if name is None else str(name)
+    if not s:
+        return ''                       # 无名字：保持"什么都不写"（不写空引号）
+    if any(c in s for c in "(),:;[]' \t\r\n"):
+        return "'" + s.replace("'", "''") + "'"
+    return s
+
+
 def write_beast_newick(root, trait=None, states=None, root_set=None):
     """带注解 newick 序列化。
 
@@ -1102,7 +1228,9 @@ def write_beast_newick(root, trait=None, states=None, root_set=None):
         return '[&' + ','.join('%s=%s' % (k, _ann_str(v)) for k, v in anns.items()) + ']'
 
     def _rec(n):
-        head = (n['name'] or '') + _anns(n)
+        # 叶名/内部名经 `_name_str` 引号化：含 `(),:;[]`/空白的名字不引号
+        # 会写出**非法 newick**（回读或喂 BEAST 时被解析成别的东西）
+        head = _name_str(n['name']) + _anns(n)
         if n['children']:
             return '(' + ','.join(_rec(c) for c in n['children']) + ')' + head + ':' + repr(float(n['length'] or 0.0))
         return head + ':' + repr(float(n['length'] or 0.0))
@@ -1250,15 +1378,18 @@ def treedater_available():
     if not exe:
         return False, '未找到 Rscript（3rd/R/*/bin/Rscript.exe 或 platform.json tools.rscript）'
     try:
+        # encoding/errors 显式给：Windows 上 text=True 默认用 ANSI 代码页（GBK），
+        # R 的英文输出里混进非 GBK 字节会抛 UnicodeDecodeError（2026-10-03 修）
         r = subprocess.run(
             [exe, '-e', "cat(requireNamespace('treedater', quietly=TRUE))"],
-            capture_output=True, text=True, timeout=180, env=_r_env(exe))
+            capture_output=True, text=True, encoding='utf-8', errors='replace',
+            timeout=180, env=_r_env(exe))
         ok = r.stdout.strip().endswith('TRUE')
         msg = ('R 在但缺 treedater 包：Rscript -e '
                + chr(34) + 'install.packages(' + chr(34) + 'treedater' + chr(34) + ')'
                + chr(34))
         return (ok, exe if ok else msg)
-    except (OSError, subprocess.SubprocessError) as e:
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as e:
         return False, f'Rscript 调用失败: {e}'
 
 
@@ -1291,7 +1422,7 @@ def treedater_ltt(tree_path, meta_path, out_dir, seq_len=None, ncpu=1, prog=None
         for k in sorted(dates):
             f.write('%s,%s\n' % (k, dates[k]))
     BS = chr(92)
-    TAB, NL = BS + 't', BS + 'n'
+    TAB = BS + 't'          # NL 原与 TAB 一起赋值但从未使用（F841），2026-10-03 删
     r_lines = [
         'require(treedater); require(ape)',
         'args <- commandArgs(trailingOnly = TRUE)',
@@ -1477,7 +1608,7 @@ def ltt_from_tree(tree_path, meta_path=None, use_lsd2=False, seq_len=None,
         return (present - a) if tip_dates else a
 
     pts = [{'x': round(_x(a), 6), 'n': n_lin} for a, n_lin in curve]
-    xs = [p['x'] for p in pts]
+    #（原 `xs = [p['x'] …]` 从未被使用 → F841，2026-10-03 删；下面用的是 xs2）
     ys = [math.log(p['n']) for p in pts if p['n'] > 0]
     xs2 = [_x(a) for a, n in curve if n > 0]
     slope = None
@@ -1505,11 +1636,3 @@ def ltt_from_tree(tree_path, meta_path=None, use_lsd2=False, seq_len=None,
         'curve': pts,
         'curve_file': os.path.basename(csv_out) if csv_out else None,
     }
-
-
-def _internal_ages(root):
-    """yield (内节点 age, T-累计距) —— 无注释height时用累计距换算。"""
-    ages, T = node_ages(root)
-    for n, _p, _d in _walk(root):
-        if n['children']:
-            yield ages[id(n)]

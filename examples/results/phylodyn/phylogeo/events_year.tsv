@@ -1,9 +1,9 @@
 Year	Origin	Destination	Method	ChildNode	BranchLength
-2005.508	Asia	Europe	TreeTime-ML	NODE_0000009	17.09961
+2005.508	Asia	Europe	TreeTime-ML	NODE_0000009	17.09581
 2009.456	Asia	Europe	TreeTime-ML	SIM_Asia_5|Europe|2009	8.32614
 2009.624	Asia	Americas	TreeTime-ML	NODE_0000005	31.19375
 2018.456	Americas	Asia	TreeTime-ML	SIM_Americas_5|Asia|2018	8.43417
-1988.408	Americas	Asia	Fitch	NODE_0000004	
+1988.412	Americas	Asia	Fitch	NODE_0000004	
 2005.508	Asia	Europe	Fitch	NODE_0000009	
 2009.456	Asia	Europe	Fitch	SIM_Asia_5|Europe|2009	
 2018.456	Americas	Asia	Fitch	SIM_Americas_5|Asia|2018	

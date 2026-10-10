@@ -20,6 +20,9 @@ from .config import DIRS
 from .utils import (check_path, safe_open, iter_fastq_records,
                     log_res_plan, fmt_eta, is_step_done, mark_step_done,
                     resolve_sample_name, safe_sample_name)
+# ②b 阶段目录名唯一来源（kv_stage.STAGE_DIR）；本模块内不再硬编码
+# '02b_kvsuite'，避免改名时两处走神（读/写/卡片表引用同一常量）。
+from .kv_stage import STAGE_DIR as KV_STAGE_DIR
 
 # hostana 与 verify 都只依赖 assembly（互不喂数据），顺序是业务口径而非依赖：
 # 2026-09-20 用户定为「组装·kunpeng鉴定分类 → 宿主预测 → 再结构域鉴定」，
@@ -168,14 +171,43 @@ def _load_done_summary(sample_dir, stage_dir, fname='summary.json'):
         return None
 
 
-def subsample_fastq(r1, r2, out_dir, n_pairs, logger=None, progress=None):
-    """取前 n_pairs 对 reads 写子样本。返回 (sub_r1, sub_r2|None)。"""
+def subsample_fastq(r1, r2, out_dir, n_pairs, logger=None, progress=None,
+                    mode='prefix', seed=42):
+    """子采样：mode='prefix' 取前 n_pairs 对（快速冒烟）；mode='random'
+    固定 seed 的蓄水池抽样取 n_pairs 对（审查 P1-2——前缀子样本若与
+    lane/批次/上机时间相关会集中来自单一子群，低丰度病毒与组成估计有偏；
+    随机模式供代表性抽检，最终分析应用全量 reads）。返回 (sub_r1, sub_r2|None)。
+
+    R1/R2 双端输入时逐条显式取用两侧记录：原先 zip(iter1, iter2) 在一侧
+    提前结束时静默截断（拿到的可能是"半截配对"），这里改为抛 ValueError
+    并报出两侧已读条数，让不配对输入在子采样这一步就失败而不是悄悄产出
+    少一半 reads 的子样本（下游宿主占比/组装全部受它影响）。
+    """
+    if mode == 'random':
+        return _subsample_random(r1, r2, out_dir, n_pairs, logger,
+                                 progress, seed)
     sub1 = os.path.join(out_dir, 'sub_R1.fastq.gz')
     n = 0
     if r2:
         sub2 = os.path.join(out_dir, 'sub_R2.fastq.gz')
+        n1 = n2 = 0
+        it1, it2 = iter_fastq_records(r1), iter_fastq_records(r2)
         with safe_open(sub1, 'wt') as w1, safe_open(sub2, 'wt') as w2:
-            for rec1, rec2 in zip(iter_fastq_records(r1), iter_fastq_records(r2)):
+            while True:
+                rec1 = next(it1, None)
+                rec2 = next(it2, None)
+                if rec1 is None and rec2 is None:
+                    break
+                if rec1 is not None:
+                    n1 += 1
+                if rec2 is not None:
+                    n2 += 1
+                if rec1 is None or rec2 is None:
+                    raise ValueError(
+                        f'子采样输入 R1/R2 条数不一致：已读出 R1 {n1} 条 / '
+                        f'R2 {n2} 条时 {("R1" if rec1 is None else "R2")} '
+                        f'提前结束（第 {min(n1, n2) + 1} 对处失配）——请确认 '
+                        f'R1/R2 来自同一次测序且配对正确')
                 w1.write(''.join(rec1))
                 w2.write(''.join(rec2))
                 n += 1
@@ -218,6 +250,18 @@ class _RunState:
     def est(self, stage):
         return _est_stage_sec(self.perf, stage,
                               self.input_bytes if stage in _GB_STAGES else 0)
+
+    def set_input_bytes(self, nbytes):
+        """子采样后修正输入字节数：gb 阶段（fastp/host/kvsuite…）的耗时按
+        实际进管的数据量估，仍按全量文件大小算会把 ETA/总进度分母放大到
+        子样本的几倍甚至几十倍（进度条长期卡在低百分比、剩余时间虚高）。
+        子样本规模由 sub_* 实测大小给出（见 _stage_subsample 的调用点）。
+        """
+        nbytes = int(nbytes or 0)
+        if nbytes <= 0 or nbytes == self.input_bytes:
+            return
+        self.input_bytes = nbytes
+        self.total_est = sum(self.est(s) for s in self.stages) or 1.0
 
     def begin(self, stage):
         self.cur = stage
@@ -290,6 +334,64 @@ def _adopt_qc(C):
             C.cur_r2 = q2 if q2 and os.path.isfile(q2) else None
 
 
+def _subsample_random(r1, r2, out_dir, n_pairs, logger=None, progress=None,
+                      seed=42):
+    """固定 seed 的蓄水池配对抽样（P1-2）：单遍流式、内存只留 n_pairs 对、
+    R1/R2 同步抽取（配对不拆散）、同 seed 完全可复现。"""
+    import random as _random
+    rng = _random.Random(seed)
+    sub1 = os.path.join(out_dir, 'sub_R1.fastq.gz')
+    sub2 = os.path.join(out_dir, 'sub_R2.fastq.gz') if r2 else None
+    res1, res2 = [], []
+    seen = 0
+    if r2:
+        it1, it2 = iter_fastq_records(r1), iter_fastq_records(r2)
+        while True:
+            rec1 = next(it1, None)
+            rec2 = next(it2, None)
+            if rec1 is None and rec2 is None:
+                break
+            if rec1 is None or rec2 is None:
+                raise ValueError(
+                    f'随机子采样输入 R1/R2 条数不一致（已读 {seen} 对后一侧'
+                    '提前结束）——请确认 R1/R2 配对正确')
+            seen += 1
+            if len(res1) < n_pairs:
+                res1.append(''.join(rec1))
+                res2.append(''.join(rec2))
+            else:
+                j = rng.randrange(seen)
+                if j < n_pairs:
+                    res1[j] = ''.join(rec1)
+                    res2[j] = ''.join(rec2)
+            if progress and seen % 200_000 == 0:
+                progress(0.5, f'随机抽样已扫 {seen:,} 对（目标 {n_pairs:,}）')
+    else:
+        for rec1 in iter_fastq_records(r1):
+            seen += 1
+            if len(res1) < n_pairs:
+                res1.append(''.join(rec1))
+            else:
+                j = rng.randrange(seen)
+                if j < n_pairs:
+                    res1[j] = ''.join(rec1)
+            if progress and seen % 200_000 == 0:
+                progress(0.5, f'随机抽样已扫 {seen:,} 条（目标 {n_pairs:,}）')
+    with safe_open(sub1, 'wt') as w1:
+        w1.write(''.join(res1))
+    if sub2:
+        with safe_open(sub2, 'wt') as w2:
+            w2.write(''.join(res2))
+    n_out = len(res1)
+    if logger:
+        logger.log(f"随机子采样完成（seed={seed}）: 从 {seen:,} 对中抽 "
+                   f"{n_out:,} 对（蓄水池，全文件均匀概率）")
+    if n_out < n_pairs and logger:
+        logger.log(f'⚠ 输入仅 {seen:,} 对，少于目标 {n_pairs:,}——子样本'
+                   '即全量', 'WARN')
+    return sub1, sub2
+
+
 def _stage_subsample(C):
     """0. 子采样（确定性：前 N 对 reads → 断点复用，避免使 fq2fa
     转换产物的新鲜度失效）。"""
@@ -302,10 +404,19 @@ def _stage_subsample(C):
     reuse = (not C.force and is_step_done(prep, 'subsample')
              and os.path.isfile(sub1) and (not C.r2 or os.path.isfile(sub2)))
     if reuse:
+        # 复用判据必须覆盖**源输入指纹**（审查 P1-1）：旧实现只比对 n_pairs
+        # 相等 + 产物存在——换源 FASTQ 而采样数不变时，上一轮的子样本会被
+        # 静默沿用，下游全部阶段跑在旧数据上。
         try:
+            from .preprocess import input_fingerprint as _ifp
             with safe_open(os.path.join(prep, 'subsample.json')) as f:
-                prev_n = json.load(f).get('n_pairs')
-            reuse = (prev_n == C.subsample)
+                prev = json.load(f)
+            reuse = (
+                prev.get('n_pairs') == C.subsample
+                and prev.get('mode') == C.subsample_mode
+                and prev.get('seed', 42) == C.subsample_seed
+                and prev.get('inputs') == [
+                    _ifp(p) for p in (C.cur_r1, C.cur_r2) if p])
         except (OSError, ValueError):
             reuse = False
     C.st.begin('subsample')
@@ -313,16 +424,29 @@ def _stage_subsample(C):
         # 复用时必须把下游输入切到 sub_*，否则 ①/②/③ 会偷偷用全量 reads
         # （日志却显示"复用 00_prep/sub_*"）——首次运行与续跑结果不一致。
         C.cur_r1, C.cur_r2 = sub1, sub2
+        # 进度/ETA 分母同步改为子样本实际大小（否则仍按全量估算）
+        C.st.set_input_bytes(_fsize(sub1) + _fsize(sub2))
         if C.logger:
             C.logger.log(f"子采样已完成（{C.subsample:,} 对），复用 00_prep/sub_*")
     else:
-        C.st.prog('subsample', 0.05, f'截取前 {C.subsample:,} 对 reads')
+        C.st.prog('subsample', 0.05,
+                  (f'随机抽样 {C.subsample:,} 对（seed={C.subsample_seed}）'
+                   if C.subsample_mode == 'random'
+                   else f'截取前 {C.subsample:,} 对 reads'))
+        # 源指纹必须在采样前取——调用返回后 C.cur_r1/r2 已指向 sub_*（P1-1）
+        from .preprocess import input_fingerprint as _ifp_sub
+        src_fps = [_ifp_sub(p) for p in (C.cur_r1, C.cur_r2) if p]
         C.cur_r1, C.cur_r2 = subsample_fastq(
             C.cur_r1, C.cur_r2, prep, C.subsample, C.logger,
-            progress=lambda p, m: C.st.prog('subsample', p, m))
+            progress=lambda p, m: C.st.prog('subsample', p, m),
+            mode=C.subsample_mode, seed=C.subsample_seed)
+        C.st.set_input_bytes(_fsize(sub1) + _fsize(C.cur_r2))
         C.st.prog('subsample', 1.0, '子采样完成')
         with safe_open(os.path.join(prep, 'subsample.json'), 'wt') as f:
-            json.dump({'n_pairs': C.subsample}, f)
+            # 复用判据全量记录（P1-1）：采样数 + 模式 + 源输入指纹
+            json.dump({'n_pairs': C.subsample, 'mode': C.subsample_mode,
+                       'seed': C.subsample_seed, 'inputs': src_fps},
+                      f, ensure_ascii=False)
         mark_step_done(prep, 'subsample')
     C.st.end('subsample')
 
@@ -423,8 +547,8 @@ def _assembly_inputs(C):
     if C.assembly_input == 'raw':
         a_in1, a_in2, a_src = C.cur_r1, C.cur_r2, 'raw'
     elif C.assembly_input == 'virus':
-        vp1 = os.path.join(C.sample_dir, '02b_kvsuite', 'viral_R1.fastq.gz')
-        vp2 = os.path.join(C.sample_dir, '02b_kvsuite', 'viral_R2.fastq.gz')
+        vp1 = os.path.join(C.sample_dir, KV_STAGE_DIR, 'viral_R1.fastq.gz')
+        vp2 = os.path.join(C.sample_dir, KV_STAGE_DIR, 'viral_R2.fastq.gz')
         n_viral = (C.vs or {}).get('viral_pairs', 0)
         if os.path.isfile(vp1) and n_viral >= C.min_viral_pairs:
             a_in1, a_in2, a_src = vp1, (vp2 if os.path.isfile(vp2) else None), 'virus'
@@ -438,8 +562,15 @@ def _assembly_inputs(C):
 def _stage_assembly(C):
     """③ 组装 + contig 分类提取。"""
     st, logger = C.st, C.logger
+    # 与其它阶段一致地采纳⓪质控产物：分步运行（只勾选 assembly，或
+    # 续跑时 fastp 未入选）时若不切到 fastp_*，组装会用未质控的 reads，
+    # 与全量运行的口径不一致（同一参数两轮结果不同）。
+    _adopt_qc(C)
     a_in1, a_in2, a_src = _assembly_inputs(C)
     st.begin('assembly')
+    if logger:
+        logger.log(f'③ 组装实际输入（{a_src}）: {a_in1}'
+                   + (f' + {a_in2}' if a_in2 else '（单端）'))
     log_res_plan(logger, '③ SPAdes 组装', threads=C.threads,
                  mem_gb=C.memory_gb,
                  disk_gb=max((_fsize(a_in1) + _fsize(a_in2)) * 5.5 * 4,
@@ -452,11 +583,21 @@ def _stage_assembly(C):
                                   mode=C.assembly_mode, threads=C.threads,
                                   memory_gb=C.memory_gb,
                                   min_contig_len=C.min_contig_len,
+                                  assembly_input=a_src,
                                   logger=logger, force=C.force,
                                   chunk_dir=C.chunk_dir,
                                   progress=lambda p, m:
                                   st.prog('assembly', p, m))
     C.asm['assembly_input'] = a_src
+    # 落盘：assembly_input 原先只改内存（下游/卡片读磁盘 summary.json
+    # 看不到本次实际用的是 virus/kept/raw 哪种输入），这里补写回去。
+    try:
+        _sp = os.path.join(C.sample_dir, '03_assembly', 'summary.json')
+        with safe_open(_sp, 'wt') as f:
+            json.dump(C.asm, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        if logger:
+            logger.log(f'组装摘要补写 assembly_input 失败（不阻断）: {e}', 'WARN')
     st.prog('assembly', 1.0, f"病毒 contigs {len(C.asm['viral_contigs'])} 条")
     st.end('assembly')
 
@@ -465,7 +606,7 @@ def _stage_verify(C):
     """③b 候选序列验证：kunpeng 初筛结果的证据判定。
 
     输入 03_assembly/viral_contigs.fasta + virus_classification.tsv，
-    双路证据（blastx 病毒蛋白库 + CDD 结构域）→ 四档判定。
+    双路证据（blastx 病毒蛋白库 + BFVD 病毒域）→ 四档判定。
     unclassified 保留为新病毒候选池（不删除），但不进下游注释。
     """
     st, logger = C.st, C.logger
@@ -476,7 +617,7 @@ def _stage_verify(C):
         raise RuntimeError('03_assembly 无 viral_contigs.fasta，请先完成 ③组装阶段')
     log_res_plan(logger, '③b 候选序列验证', threads=C.threads, mem_gb=2.0,
                  disk_gb=0.5,
-                 note="DIAMOND blastx vs 病毒蛋白库 + mmseqs2 vs CDD；"
+                 note="DIAMOND blastx vs 病毒蛋白库 + mmseqs2 vs BFVD；"
                       "耗时随候选数线性增长")
     st.prog('verify', 0.05, '宿主筛选 → 长度分流 → 双路证据')
     from .verify import verify as run_verify
@@ -486,6 +627,48 @@ def _stage_verify(C):
                     progress=lambda s_, f_, m: st.prog('verify', f_, m),
                     out_subdir='03b_verify', assembly_dir=a_dir)
     C.verify = vs
+    # 未分类候选池的独立验证（审查 P1-3）：kunpeng 非 C / taxid≤0 的组装
+    # contig 此前在 viral_contigs.fasta 生成时就被排除，根本到不了
+    # blastx/BFVD——"unclassified 候选池"只覆盖分类器已判定的候选，对参考
+    # 分类库差异大的新病毒会系统性漏检。这里对长度合格的未分类 contig 补
+    # 一条**同证据**的独立验证通道（03b_verify_unclassified/），进入/排除
+    # 数量与原因全部落摘要；产物不进下游注释，仅供新病毒候选复核。
+    ufa = os.path.join(a_dir, 'unclassified_contigs.fasta')
+    if os.path.isfile(ufa) and os.path.getsize(ufa) > 0:
+        try:
+            uvs = run_verify(C.sample_dir, ufa, host='all',
+                             methods=C.verify_methods,
+                             combine=C.verify_combine, threads=C.threads,
+                             logger=logger,
+                             out_subdir='03b_verify_unclassified',
+                             assembly_dir=a_dir)
+            vs['unclassified_pool'] = {
+                'n': uvs.get('n_calls', 0),
+                'calls': uvs.get('calls') or {},
+                'dir': '03b_verify_unclassified',
+                'note': 'kunpeng 未分类 contig（≥min_contig_len）的独立'
+                        '双路验证；不进下游注释，供新病毒候选复核',
+            }
+            if logger:
+                uc = uvs.get('calls') or {}
+                logger.log(f"③b 未分类候选池验证: {uvs.get('n_calls', 0)} 条："
+                           + '，'.join(f'{k} {v}' for k, v in uc.items()))
+        except Exception as e:
+            if logger:
+                logger.log(f'未分类候选池验证失败（不阻断主验证）: {e}', 'WARN')
+    elif logger:
+        logger.log(f"③b 未分类候选池为空（未分类 contig "
+                   f"{(C.asm or {}).get('unclassified_pool_n', 0)} 条中无长度"
+                   "合格者）")
+    # 摘要回写：verify() 自己写的 summary.json 不含 unclassified_pool，
+    # 追加后重写（pipeline_overview / 卡片才能看到候选池计数）
+    try:
+        _vsum = os.path.join(C.sample_dir, '03b_verify', 'summary.json')
+        with safe_open(_vsum, 'wt') as f:
+            json.dump(vs, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        if logger:
+            logger.log(f'验证摘要回写失败（不阻断）: {e}', 'WARN')
     calls = vs.get('calls') or {}
     st.prog('verify', 1.0,
             f"验证 {vs.get('n_calls', 0)} 条："
@@ -571,6 +754,8 @@ def _stage_orfa(C):
     from .orf_annot import run_orf_annotation
     oa = run_orf_annotation(C.sample_dir, threads=C.threads, logger=logger,
                             force=C.force,
+                            min_pident=getattr(C, 'min_pident', None),
+                            min_qcov=getattr(C, 'min_qcov', None),
                             progress=lambda p, m: st.prog('orfa', p, m))
     st.prog('orfa', 1.0,
             f"功能注释 {oa['n_annotated']}/{oa['n_orfs']} 个 ORF，"
@@ -617,7 +802,7 @@ def _stage_primer(C):
             raise RuntimeError(
                 '⑧ 引物设计为 conserved 模式，需要 ⑦系统发育产物 '
                 '05_phylo/summary.json（提供组内保守区）；请先完成 ⑦，'
-                '或在参数中改用 specific 模式（按靶序列设计）')
+                '或在参数中改用 plain 模式（按靶序列设计）')
     st.prog('primer', 0.1, f'primer3 引物设计 ({C.primer_mode})')
     from .primer import design_primers
     pr = design_primers(C.sample_dir, mode=C.primer_mode, logger=C.logger,
@@ -732,18 +917,85 @@ def _stage_execution_order(selected, logger=None):
     return order
 
 
+def _broadcast_mod():
+    """AI 主动驱动模块（ai_agent.broadcast）懒加载；不可用返回 None。
+
+    钩子是纯增量：模块缺失/导入失败只损失讲解/播报/闸门三层能力，
+    流水线本体零影响（CLI 老路径照跑）。
+    """
+    try:
+        from .ai_agent import broadcast
+        return broadcast
+    except Exception:
+        return None
+
+
+# 各阶段实际调用的外部工具（config.tool() 能解析的键）；run 开始处据此
+# 探测版本写 tool_versions.json。只登记"会被实际调用"的工具，避免白探。
+_STAGE_TOOLS = {
+    'fastp': ('fastp',),
+    'fq2fa': ('seqkit',),
+    'host': ('kunpeng',),
+    'kvsuite': ('salmon', 'minibwa', 'seqkit'),
+    'assembly': ('spades', 'kunpeng', 'makeblastdb', 'blastn'),
+    'verify': ('diamond', 'mmseqs', 'blastn'),
+    'consensus': ('minibwa',),
+    'orfa': ('diamond', 'mmseqs', 'blastp'),
+    'phylo': ('mafft', 'fasttree', 'trimal', 'seqkit', 'raxml-ng'),
+    'gbdraw': ('gbdraw',),
+}
+
+
+def _write_tool_versions(sample_dir, stages, logger=None):
+    """探测本次将用到的外部工具版本并写 <sample_dir>/tool_versions.json。
+
+    键为工具名，值为版本串（探测失败 'unknown'；未探测到路径的工具不登记）。
+    """
+    from .config import get_config
+    from .utils import probe_tool_versions
+    cfg = get_config()
+    keys = []
+    for s in stages:
+        for k in _STAGE_TOOLS.get(s, ()):
+            if k not in keys:
+                keys.append(k)
+    tools = {}
+    for k in keys:
+        try:
+            p = cfg.tool(k)
+        except Exception:
+            p = None
+        if p and os.path.isfile(p):
+            tools[k] = p
+    vers = probe_tool_versions(tools)
+    path = os.path.join(sample_dir, 'tool_versions.json')
+    with safe_open(path, 'wt') as f:
+        json.dump(vers, f, ensure_ascii=False, indent=1)
+    if logger:
+        if vers:
+            logger.log('外部工具版本记录: '
+                       + '，'.join(f'{k} {v}' for k, v in vers.items())
+                       + '（tool_versions.json）')
+        else:
+            logger.log('外部工具版本记录: 本次将用到的工具均未探测到可执行文件'
+                       '（tool_versions.json 为空）', 'WARN')
+    return vers
+
+
 def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
                  kv_lib=None,
                  threads=None, confidence=0.0, assembly_mode='rnaviral',
                  memory_gb=64, subsample=0, min_contig_len=200, top_n_refs=10,
+                 subsample_mode='prefix', subsample_seed=42,
                  tree_tool='fasttree', tree_sampling='blast', ncbi_refs=None,
                  primer_mode='conserved', do_trim=True,
-                 do_specificity=False, min_orf_aa=100, force=False,
+                 do_specificity=False, min_orf_aa=100,
+                 min_pident=None, min_qcov=None, force=False,
                  assembly_input='virus', min_viral_pairs=500,
                  chunk_dir=None, fastp_dedup=False, do_fq2fa=True,
                  gbdraw_max=12, gbdraw_fasta=None, gbdraw_ann=None,
                  plot_engine='auto',
-                 verify_host='all', verify_methods=('blastx', 'cdd'),
+                 verify_host='all', verify_methods=('blastx', 'bfvd'),
                  verify_combine='union',
                  logger=None, progress=None):
     """全流程编排。progress(stage, pct 0~1, msg[, eta_seconds]) 供 GUI 更新。
@@ -801,32 +1053,62 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
                             must_exist=False, in_platform=True)
     os.makedirs(sample_dir, exist_ok=True)
     st = _RunState(stages, _fsize(r1) + _fsize(r2), progress, logger)
+    # 外部工具版本快照（复现依据）：本次将用到的工具（按已选阶段取）各探一次
+    # 版本，写 <样品>/tool_versions.json + 一条日志。探测失败不阻断运行。
+    try:
+        _write_tool_versions(sample_dir, stages, logger)
+    except Exception as e:
+        if logger:
+            logger.log(f'工具版本探测失败（不阻断本次运行）: {e}', 'WARN')
 
     C = _Ctx()
     C.sample_dir = sample_dir
     C.st = st
     C.logger = logger
     C.force = force
+    # 闸门-线程联动（2026-10-04 审查遗留项）：GUI 任务线程里跑时按
+    # 物理核 ÷ 当前 heavy 占用数 钳制本任务线程——2 个重任务并发时各自
+    # 最多半核数线程，不再 2×19 线程超订 20 核。CLI 直调（无任务上下文）
+    # heavy_active() 恒为 1，行为不变。
+    try:
+        from .web.tasks import tm as _tm
+        _cap = max(1, (os.cpu_count() or 4) // _tm.heavy_active())
+        if threads and threads > _cap:
+            if logger:
+                logger.log(f'线程 {threads} 按重任务并发数钳制为 {_cap}'
+                           f'（heavy 名额占用 {_tm.heavy_active()}）', 'INFO')
+            threads = _cap
+    except Exception:
+        pass
     C.threads = threads
     C.chunk_dir = chunk_dir
     C.r1, C.r2 = r1, r2
     C.db_host, C.db_virus = db_host, db_virus
-    # ②b 鉴定库（平台内库名或库目录绝对路径；空 = 默认 kv_index）
+    # ②b 鉴定库（平台内库名或库目录绝对路径；空 = 默认库（plant_ref，2026-09-29 前为 kv_index））
     C.kv_lib = (str(kv_lib).strip() if kv_lib else '')
     C.confidence, C.assembly_mode = confidence, assembly_mode
     C.memory_gb, C.subsample = memory_gb, subsample
+    # 子采样模式（P1-2）：prefix=前缀快速冒烟（默认）；random=固定
+    # seed 蓄水池抽样（代表性抽检）。复用判据与 subsample.json 同步记录。
+    C.subsample_mode = (subsample_mode if subsample_mode in
+                        ('prefix', 'random') else 'prefix')
+    C.subsample_seed = int(subsample_seed)
     C.min_contig_len, C.top_n_refs = min_contig_len, top_n_refs
     C.tree_tool, C.tree_sampling = tree_tool, tree_sampling
     C.ncbi_refs = ncbi_refs
     C.primer_mode, C.do_trim = primer_mode, do_trim
     C.do_specificity, C.min_orf_aa = do_specificity, min_orf_aa
+    # ⑥b 层1 命中过滤门槛（None=不过滤；百分数口径，见
+    # orf_annot.run_orf_annotation 的 min_pident/min_qcov）
+    C.min_pident, C.min_qcov = min_pident, min_qcov
     C.assembly_input, C.min_viral_pairs = assembly_input, min_viral_pairs
     C.fastp_dedup, C.do_fq2fa = fastp_dedup, do_fq2fa
     C.gbdraw_max, C.gbdraw_fasta = gbdraw_max, gbdraw_fasta
     C.gbdraw_ann, C.plot_engine = gbdraw_ann, plot_engine
     # ③b 候选序列验证参数（宿主类群 / 证据方法 / 并集-交集）
     C.verify_host = verify_host
-    C.verify_methods = tuple(verify_methods or ('blastx', 'cdd'))
+    C.verify_methods = tuple(m for m in (verify_methods or ('blastx', 'bfvd'))
+                             if m in ('blastx', 'bfvd')) or ('blastx', 'bfvd')
     C.verify_combine = verify_combine
     # 跨阶段产物
     C.cur_r1 = check_path(r1, must_exist=True)
@@ -841,13 +1123,29 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
     if 'fastp' not in selected:
         prep = os.path.join(sample_dir, '00_prep')
         if os.path.isfile(os.path.join(prep, 'fastp_R1.fastq.gz')):
-            from .preprocess import _summary as _fastp_summary
-            C.qc = _fastp_summary(prep)
+            from .preprocess import _summary as _fastp_summary, input_fingerprint
+            _qc = _fastp_summary(prep)
+            # 采纳历史质控产物前核对源输入指纹（与 fq2fa 同款防护）：旧产物
+            # 可能来自子采样或换输入的上一轮。本次若声明子采样且 sub_* 已在，
+            # 有效输入是子集本身，与 fastp 实际跑时的口径一致。
+            _eff = (r1, r2)
+            if subsample and subsample > 0:
+                _sub1 = os.path.join(prep, 'sub_R1.fastq.gz')
+                if os.path.isfile(_sub1):
+                    _sub2 = os.path.join(prep, 'sub_R2.fastq.gz')
+                    _eff = (_sub1, _sub2 if r2 and os.path.isfile(_sub2)
+                            else None)
+            if _qc.get('inputs') == [input_fingerprint(p) for p in _eff if p]:
+                C.qc = _qc
+            elif logger:
+                logger.log('忽略历史 fastp 质控产物：其源输入与本次输入不一致'
+                           '（可能来自子采样或换输入后的上一轮），'
+                           '后续阶段按本次原始输入运行', 'WARN')
     if 'host' not in selected:
         C.host_stats = _load_done_summary(sample_dir, '01_host_removal',
                                           'stats.json')
     if 'kvsuite' not in selected:
-        C.vs = _load_done_summary(sample_dir, '02b_kvsuite')
+        C.vs = _load_done_summary(sample_dir, KV_STAGE_DIR)
 
     # 项目清单：开始运行即登记本次输入/参数（复现依据），逐阶段追加进度
     _run_t0 = time.time()
@@ -861,6 +1159,7 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
             'tree_tool': tree_tool, 'tree_sampling': tree_sampling,
             'primer_mode': primer_mode, 'do_trim': do_trim,
             'do_specificity': do_specificity, 'min_orf_aa': min_orf_aa,
+            'min_pident': min_pident, 'min_qcov': min_qcov,
             'min_viral_pairs': min_viral_pairs, 'fastp_dedup': fastp_dedup,
             'do_fq2fa': do_fq2fa, 'gbdraw_max': gbdraw_max,
             'plot_engine': plot_engine, 'db_host': db_host,
@@ -891,17 +1190,46 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
                                 replace_stages=True)
 
     _finished = []
+    _bc = _broadcast_mod()                   # AI 主动驱动钩子（不可用时 None）
     try:
         for key in _stage_execution_order(stages, logger=logger):
+            if _bc:
+                try:
+                    _bc.note_stage_start(sample, key)       # 层1 讲解
+                except Exception:
+                    pass
             STAGE_REGISTRY[key]['fn'](C)
             _finished.append(key)
             _manifest_sync(_finished, 'running')
-    except Exception:
+            if _bc:
+                try:
+                    _bc.note_stage_done(sample, key)        # 层2 解读（异步）
+                except Exception:
+                    pass
+                try:
+                    _bc.gate_point(sample, key, logger=logger)  # 层3 决策
+                except Exception as _ge:
+                    # 闸门"终止"必须穿透（否则用户点终止任务却继续跑）；
+                    # 其余钩子异常照旧吞掉——播报永不影响流水线
+                    if isinstance(_ge, getattr(_bc, 'GateAborted', ())):
+                        raise
+    except Exception as e:
         # 失败也要留下痕迹：记下已跑完的阶段与实际耗时
         _manifest_sync(_finished, 'failed',
                        duration_s=time.time() - _run_t0)
+        # 闸门"终止"是用户主动收场而非阶段失败，不再发失败播报
+        if _bc and not isinstance(e, getattr(_bc, 'GateAborted', ())):
+            try:
+                _bc.note_stage_failed(sample, locals().get('key', ''), e)
+            except Exception:
+                pass
         raise
     _manifest_sync(_finished, 'ok', duration_s=time.time() - _run_t0)
+    if _bc:
+        try:
+            _bc.note_run_done(sample)
+        except Exception:
+            pass
 
     return sample_dir
 
@@ -998,7 +1326,7 @@ PIPELINE_STAGES = [
     ('fastp', '⓪ Fastp 质控', '00_prep', 'fastp_report.json'),
     ('fq2fa', '⓪b 序列转换 (FASTQ→FASTA)', '00_prep', 'fq2fa.json'),
     ('host', '① 宿主去除', '01_host_removal', 'stats.json'),
-    ('kvsuite', '②b 已知病毒识别与定量', '02b_kvsuite', 'summary.json'),
+    ('kvsuite', '②b 已知病毒识别与定量', KV_STAGE_DIR, 'summary.json'),
     ('assembly', '③ 组装·分类·提取', '03_assembly', 'summary.json'),
     ('verify', '③b 候选序列验证', '03b_verify', 'summary.json'),
     # ③c 曾漏在本表之外：它已在 STAGE_ORDER / STAGE_REGISTRY / STAGE_GROUPS /
@@ -1041,8 +1369,8 @@ _MISSING_TOOL_MSG = {
                'dna_features_viewer)'),
     'orfa': ('未检测到 DIAMOND / MMseqs2 / blastp（任一即可）',
              'No DIAMOND / MMseqs2 / blastp found (any one suffices)'),
-    'verify': ('未检测到 DIAMOND / MMseqs2（验证需 blastx 与 CDD）',
-               'No DIAMOND / MMseqs2 found (verify needs blastx + CDD)'),
+    'verify': ('未检测到 DIAMOND / MMseqs2（验证需 blastx 与 BFVD）',
+               'No DIAMOND / MMseqs2 found (verify needs blastx + BFVD)'),
     'consensus': ('未检测到 minibwa（3rd/bin/），无法回贴 reads 生成共识序列',
                   'minibwa not found (3rd/bin/) — cannot align reads for '
                   'consensus calling'),
@@ -1098,6 +1426,7 @@ def _sum_verify(s):
     if not calls:
         return '验证完成，无判定记录'
     order = ['known', 'novel', 'domain_only', 'unclassified', 'viroid']
+    # domain_only 已随 CDD 路移除，仅为旧 run 摘要兼容保留排序位
     parts = [f'{k} {calls[k]}' for k in order if k in calls]
     parts += [f'{k} {v}' for k, v in calls.items() if k not in order]
     return f"共 {s.get('n_calls', 0)} 条：" + '，'.join(parts)
@@ -1108,6 +1437,7 @@ def _sum_verify_en(s):
     if not calls:
         return 'Verification finished, no calls'
     order = ['known', 'novel', 'domain_only', 'unclassified', 'viroid']
+    # domain_only 已随 CDD 路移除，仅为旧 run 摘要兼容保留排序位
     parts = [f'{k} {calls[k]}' for k in order if k in calls]
     parts += [f'{k} {v}' for k, v in calls.items() if k not in order]
     return f"{s.get('n_calls', 0)} total: " + ', '.join(parts)
@@ -1120,9 +1450,9 @@ def _sum_orf(s):
 
 def _sum_orfa(s):
     extra = ''
-    if s.get('n_hmm_only') or s.get('n_cdd_only'):
+    if s.get('n_hmm_only') or s.get('n_bfvd_only'):
         extra = (f"，HMM 兜底 {s.get('n_hmm_only', 0)} / "
-                 f"CDD 兜底 {s.get('n_cdd_only', 0)}")
+                 f"BFVD 兜底 {s.get('n_bfvd_only', 0)}")
     return (f"有效注释 {s.get('n_annotated', 0)}/{s.get('n_orfs', 0)} 个，"
             f"{s.get('n_families', 0)} 病毒科（引擎 {s.get('engine', '?')}）"
             f"{extra}")
@@ -1208,9 +1538,9 @@ def _sum_orf_en(s):
 
 def _sum_orfa_en(s):
     extra = ''
-    if s.get('n_hmm_only') or s.get('n_cdd_only'):
+    if s.get('n_hmm_only') or s.get('n_bfvd_only'):
         extra = (f", HMM fallback {s.get('n_hmm_only', 0)} / "
-                 f"CDD fallback {s.get('n_cdd_only', 0)}")
+                 f"BFVD fallback {s.get('n_bfvd_only', 0)}")
     return (f"{s.get('n_annotated', 0)}/{s.get('n_orfs', 0)} ORFs annotated, "
             f"{s.get('n_families', 0)} viral families "
             f"(engine {s.get('engine', '?')}){extra}")
@@ -1622,10 +1952,14 @@ def backfill_manifest_from_products(sample_dir, r1=None, r2=None, dry_run=False)
         done = [s['stage'] for s in pipeline_overview(sample_dir)['stages']
                 if s['status'] == 'done']
     except Exception:
-        # 抾底：至少标出 .done 标记存在的阶段
+        # 抾底：至少标出 .done 标记存在的阶段。标记文件名不总是 .<key>.done
+        # （host → .host_removal.done、kvsuite → .kvsuite.done、
+        #  hostana → .host_analysis.done），必须过 _DONE_ALIAS，
+        # 否则按 .<key>.done 拼名会漏掉这三个阶段。
         done = [key for key, _n, dirname, _sf in PIPELINE_STAGES
                 if os.path.isfile(os.path.join(
-                    sample_dir, dirname, f'.{key}.done'))]
+                    sample_dir, dirname,
+                    _DONE_ALIAS.get(key) or f'.{key}.done'))]
     if done != (m.get('stages_done') or []):
         m['stages_done'] = [s for s in STAGE_ORDER if s in set(done)]
         changed = True

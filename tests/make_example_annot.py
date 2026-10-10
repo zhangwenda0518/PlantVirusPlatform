@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""为「保守域注释（CDD）」与「同源比对（BLASTN · BLASTX）」生成示例结果。
+"""为「同源比对（BLASTN · BLASTX）」生成示例结果。
 
-默认走**本地引擎**（离线：mmseqs2 vs CDD / blastn vs 病毒参考核酸库 /
+默认走**本地引擎**（离线：blastn vs 病毒参考核酸库 /
 DIAMOND vs RefSeq 病毒蛋白库），秒级完成；`--engine online` 可改用 NCBI 在线
-（分钟级、需联网）。产物固化到 examples/results/{cdd,hom}/，
+（分钟级、需联网）。产物固化到 examples/results/hom/，
 与真实运行结果隔离。
+（原 cdd 模块已随 CDD 下线移除，2026-09-29。）
 
 用法（需平台已在 http://127.0.0.1:8765 运行）：
     python tests/make_example_annot.py [--engine local|online]
@@ -29,7 +30,6 @@ OUT = os.path.join(EX, 'results')
 CONTIG_FA = os.path.join(EX, 'example_contig_1.fasta')
 
 TITLES = {
-    'cdd': '保守域与功能元件注释（CDD）',
     'hom': '同源比对（BLASTN / BLASTX）',
 }
 
@@ -104,7 +104,7 @@ def main() -> int:
     contig, seq = first_record(CONTIG_FA)
     print(f'示例 contig: {contig} ({len(seq)} bp) · 引擎: {args.engine}')
 
-    jobs = [('cdd', 'cdd'), ('blastn', 'hom'), ('blastx', 'hom')]
+    jobs = [('blastn', 'hom'), ('blastx', 'hom')]
     made = {}
     for action, module in jobs:
         try:
@@ -134,10 +134,10 @@ def main() -> int:
             'files': sorted(allf),
             'generated_at': time.strftime('%Y-%m-%d %H:%M:%S'),
             'source': 'examples/example_contig_1.fasta',
-            'note': ('本地引擎（离线）：mmseqs2 vs CDD / blastn vs 病毒参考核酸库 / '
+            'note': ('本地引擎（离线）：blastn vs 病毒参考核酸库 / '
                      'DIAMOND vs RefSeq 病毒蛋白库'
                      if args.engine == 'local' else
-                     'NCBI 在线（CD-Search / BLASTN / BLASTX）'),
+                     'NCBI 在线（BLASTN / BLASTX）'),
         }
     with io.open(mp, 'w', encoding='utf-8') as f:
         json.dump(man, f, ensure_ascii=False, indent=1, sort_keys=True)

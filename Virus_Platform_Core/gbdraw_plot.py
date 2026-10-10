@@ -17,7 +17,7 @@ import shutil
 
 from .config import get_config
 from .utils import (check_path, safe_open, iter_fasta, write_fasta_record,
-                    is_step_done, mark_step_done)
+                    is_step_done, mark_step_done, verify_svg)
 
 _FA_EXT = ('.fasta', '.fa', '.fna', '.fas')
 _ANN_EXT = ('.gff', '.gff3', '.gb', '.gbk', '.gbff', '.genbank')
@@ -152,6 +152,12 @@ def _run_gbdraw(fasta=None, gff=None, gbk=None, out_prefix=None, logger=None,
             if _multi:
                 hit = _multi
                 break
+        # SVG 良构自检（2026-10-07 审查 P1-4）：gbdraw 是外部工具，产物可能
+        # 出现 `</path` 缺 '>' 这类残缺；此前只有 dfv_plot 挂了 verify_svg，
+        # 这类图会被 viz.py 静默读入并内嵌进 report.html（浏览器容错渲染残图）。
+        for _f in hit:
+            if _f.lower().endswith('.svg'):
+                verify_svg(_f, logger=logger)
         made += hit
     return made
 

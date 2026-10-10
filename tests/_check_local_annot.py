@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""本地引擎端到端检查：走 Flask test client 提交 cdd/blastn/blastx（engine=local）。
+"""本地引擎端到端检查：走 Flask test client 提交 blastn/blastx（engine=local）。
 
 不依赖运行中的服务；结果与前端「命中表」同源。
+（原 cdd 分支已随 CDD 下线移除，2026-09-29。）
 """
 import io
 import os
@@ -39,7 +40,7 @@ def main() -> int:
     seq = read_body(FA)
     print(f'示例 contig: {CONTIG} ({len(seq)} bp)')
     fails = []
-    for action in ('cdd', 'blastn', 'blastx'):
+    for action in ('blastn', 'blastx'):
         r = c.post('/api/tool/analyze', json={
             'run': '_seq_input', 'contig': CONTIG, 'action': action,
             'seq': seq, 'engine': 'local'})
@@ -76,18 +77,10 @@ def main() -> int:
             continue
         res = rr.get_json()
         hits = res.get('hits') or []
-        extra = ''
-        if action == 'cdd':
-            extra = (f" · coord={res.get('coord')} query_len={res.get('query_len')}"
-                     f" · 病毒相关 {sum(1 for h in hits if h.get('viral'))}")
-        print(f'  {action}: engine={res.get("engine")} hits={len(hits)}{extra}')
+        print(f'  {action}: engine={res.get("engine")} hits={len(hits)}')
         for h in hits[:3]:
-            if action == 'cdd':
-                print(f"        {h['accession']:14s} {h['short_name'][:28]:28s} "
-                      f"E={h['evalue']} {h['from']}-{h['to']}")
-            else:
-                print(f"        {h['accession']:16s} {h['identity']:6.1f}% "
-                      f"{str(h['title'])[:46]:46s} {h['sciname'][:28]}")
+            print(f"        {h['accession']:16s} {h['identity']:6.1f}% "
+                  f"{str(h['title'])[:46]:46s} {h['sciname'][:28]}")
         if not hits:
             fails.append(f'{action}(无命中)')
     print('ALL OK' if not fails else 'FAILED: ' + ', '.join(fails))

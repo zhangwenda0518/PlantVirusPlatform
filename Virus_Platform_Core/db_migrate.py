@@ -14,6 +14,7 @@
 流程（copy 模式，推荐）：
   1. 校验目标目录：绝对路径、不能在平台根内、磁盘剩余充足（> 源大小 + 10GB）
   2. robocopy /E /MT /Z（断点续传）复制三个目录 → 校验文件数与总字节一致
+     （**不做内容级校验**：同大小不同内容不会被发现）
   3. 通过后才写 platform.json database_root（未通过则配置不变，源目录原样）
   4. move 模式（--mode move）在复制校验通过后删除源（同 move 语义）
 
@@ -102,6 +103,16 @@ def _copy_fallback(src, dst, logger=None):
         return False
 
 
+def _norm_cmp(p):
+    """路径比较用归一化（os.path.normcase：Windows 下统一大小写与分隔符）。
+
+    此前直接比较字符串——Windows 路径大小写不敏感（D:\\Data 与 d:\\data
+    是同一目录），大小写或分隔符写法不同就会被判成"不同目录"，导致
+    「数据库根已是 X，无需迁移」漏判、平台根包含检查漏判（2026-10-03 审计 P3）。
+    """
+    return os.path.normcase(os.path.normpath(p or ''))
+
+
 def migrate(to_dir, mode='copy', logger=None, dry_run=False):
     """迁移数据库根。返回 {'ok': bool, 'error': str, 'detail': str}。"""
     from .config import (PLATFORM_ROOT, get_database_root)
@@ -113,15 +124,15 @@ def migrate(to_dir, mode='copy', logger=None, dry_run=False):
     if not os.path.isabs(to_dir):
         return {'ok': False, 'error': f'目标目录需为绝对路径: {to_dir}'}
     to_dir = os.path.normpath(os.path.abspath(to_dir))
-    if (to_dir == PLATFORM_ROOT
-            or to_dir.startswith(PLATFORM_ROOT + os.sep)):
+    if (_norm_cmp(to_dir) == _norm_cmp(PLATFORM_ROOT)
+            or _norm_cmp(to_dir).startswith(_norm_cmp(PLATFORM_ROOT) + os.sep)):
         return {'ok': False, 'error': '目标目录不能位于平台目录内'
                 f'（{PLATFORM_ROOT}）——分离部署要放到平台目录之外'}
     if mode not in ('copy', 'move'):
         return {'ok': False, 'error': f'模式需为 copy 或 move: {mode!r}'}
 
     cur_root = get_database_root()
-    if cur_root and os.path.normpath(cur_root) == to_dir:
+    if cur_root and _norm_cmp(cur_root) == _norm_cmp(to_dir):
         return {'ok': False, 'error': f'数据库根已是 {to_dir}，无需迁移'}
 
     # 源目录存在性：至少 databases 应存在且有内容
@@ -166,8 +177,9 @@ def migrate(to_dir, mode='copy', logger=None, dry_run=False):
                     '（源目录未动，配置未改，可重试断点续传）'}
         copied += 1
 
-    # 校验：文件数与总字节一致（抽样全比）
-    _log(logger, '  校验复制结果…')
+    # 校验：文件数与总字节一致（**不做内容级校验**——同大小不同内容不会
+    # 被发现，数据完整性要求高时迁移后请再跑 selfcheck / 抽样比对）
+    _log(logger, '  校验复制结果（文件数+字节，不做逐字节比对）…')
     mism = []
     for sub in _DB_SUBDIRS:
         s = os.path.join(PLATFORM_ROOT, sub)
@@ -181,7 +193,7 @@ def migrate(to_dir, mode='copy', logger=None, dry_run=False):
     if mism:
         return {'ok': False, 'error': '校验不一致: ' + '; '.join(mism)
                 + '（配置未改，可用 robocopy 断点续传重跑）'}
-    _log(logger, f'  ✔ 校验一致（{copied} 个目录）')
+    _log(logger, f'  ✔ 校验一致（{copied} 个目录；仅文件数+字节）')
 
     if mode == 'move':
         # 复制校验通过后删源

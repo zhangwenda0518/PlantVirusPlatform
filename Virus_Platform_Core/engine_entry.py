@@ -12,6 +12,10 @@ import sys
 _ENGINES = {
     'search_engine.py': 'Virus_Platform_Core.public_meta.search_engine',
     'info_engine.py': 'Virus_Platform_Core.public_meta.info_engine',
+    'prescreen_engine.py': 'Virus_Platform_Core.public_meta.prescreen_engine',
+    # 病毒谱只有排查用 CLI（Web 侧是直接 import，不走子进程）；
+    # 登记它是为了冻结分发里也能 `--run-engine virome.py <项目>/prescreen` 复查
+    'virome.py': 'Virus_Platform_Core.public_meta.virome',
     'logan_submit.py': 'Virus_Platform_Core.logan_submit',
     'unified_metadata.py': 'Virus_Platform_Core.ncbi_submit.unified_metadata',
     'known_virus_suite.py':

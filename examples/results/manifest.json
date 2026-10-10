@@ -2,10 +2,6 @@
  "align": {
   "files": [
    {
-    "path": "run.log",
-    "size": "812.0B"
-   },
-   {
     "path": "aln.trim.fasta",
     "size": "38.1KB"
    },
@@ -18,18 +14,24 @@
     "size": "40.6KB"
    }
   ],
-  "generated_at": "2026-09-09 23:03:05",
+  "generated_at": "2026-10-06 16:22:44",
   "kind": "tool",
   "module": "align",
-  "run": "align_20260909_230255",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\align_20261006_162238_4469c7",
+  "run": "align_20261006_162238_4469c7",
   "source": "examples/",
   "stats": {
    "aln": "aln.fasta",
    "aln_used": "aln.trim.fasta",
    "n_seqs": 6,
-   "run": "align_20260909_230255",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\align_20261006_162238_4469c7",
+   "run": "align_20261006_162238_4469c7",
    "seqtype": "nt",
    "strategy": "auto",
+   "trim.applied": true,
+   "trim.cols_after": 6272,
+   "trim.cols_before": 6694,
    "trimal": "automated1"
   },
   "title": "序列比对（MAFFT + trimAl）"
@@ -37,100 +39,50 @@
  "assemble": {
   "files": [
    {
-    "path": "run.log",
-    "size": "469.2KB"
-   },
-   {
     "path": "contigs.filtered.fasta",
     "size": "17.7KB"
-   },
-   {
-    "path": "assembly/spades/run_spades.yaml",
-    "size": "4.5KB"
-   },
-   {
-    "path": "assembly/spades/run_spades.sh",
-    "size": "2.7KB"
-   },
-   {
-    "path": "assembly/spades/dataset.info",
-    "size": "88.0B"
-   },
-   {
-    "path": "assembly/spades/before_rr.fasta",
-    "size": "18.0KB"
-   },
-   {
-    "path": "assembly/spades/input_dataset.yaml",
-    "size": "268.0B"
-   },
-   {
-    "path": "assembly/spades/params.txt",
-    "size": "1.3KB"
-   },
-   {
-    "path": "assembly/spades/spades.log",
-    "size": "92.3KB"
-   },
-   {
-    "path": "assembly/spades/assembly_graph_after_simplification.gfa",
-    "size": "17.5KB"
-   },
-   {
-    "path": "assembly/spades/assembly_graph_with_scaffolds.gfa",
-    "size": "17.6KB"
-   },
-   {
-    "path": "assembly/spades/soft_filtered_transcripts.fasta",
-    "size": "18.0KB"
    }
   ],
-  "generated_at": "2026-09-09 23:18:37",
+  "generated_at": "2026-10-06 16:23:54",
   "kind": "tool",
   "module": "assemble",
-  "run": "assemble_20260909_231825",
+  "note": "（11 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\assemble_20261006_162350_5d011a",
+  "run": "assemble_20261006_162350_5d011a",
   "source": "examples/",
   "stats": {
-   "contigs": "D:\\桌面\\植物病毒分析平台\\tool_runs\\assemble_20260909_231825\\contigs.filtered.fasta",
+   "contigs": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\assemble_20261006_162350_5d011a\\contigs.filtered.fasta",
    "n_contigs": 3,
-   "run": "assemble_20260909_231825",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\assemble_20261006_162350_5d011a",
+   "run": "assemble_20261006_162350_5d011a",
    "total_bp": 17738
   },
   "title": "提取序列组装（SPAdes）"
  },
- "cdd": {
-  "files": [
-   "example_contig_1_cdd_local.json"
-  ],
-  "generated_at": "2026-09-10 00:51:42",
-  "note": "本地引擎（离线）：mmseqs2 vs CDD / blastn vs 病毒参考核酸库 / DIAMOND vs RefSeq 病毒蛋白库",
-  "source": "examples/example_contig_1.fasta",
-  "title": "保守域与功能元件注释（CDD）"
- },
  "consensus": {
   "files": [
    {
-    "path": "run.log",
-    "size": "2.0KB"
-   },
-   {
     "path": "consensus/summary.json",
-    "size": "1.2KB"
+    "size": "1.3KB"
    },
    {
     "path": "consensus/variants.tsv",
-    "size": "423.7KB"
+    "size": "1.9KB"
    },
    {
     "path": "consensus/coverage.tsv",
-    "size": "290.0B"
+    "size": "286.0B"
+   },
+   {
+    "path": "consensus/example_contig_2.inscounts.json",
+    "size": "2.0B"
    },
    {
     "path": "consensus/example_contig_2.poscounts.tsv",
     "size": "128.6KB"
    },
    {
-    "path": "consensus/example_contig_2.inscounts.json",
+    "path": "consensus/example_contig_1.inscounts.json",
     "size": "2.0B"
    },
    {
@@ -138,29 +90,42 @@
     "size": "123.5KB"
    },
    {
-    "path": "consensus/example_contig_1.inscounts.json",
-    "size": "2.0B"
-   },
-   {
     "path": "consensus/consensus.fa",
     "size": "13.0KB"
    }
   ],
-  "generated_at": "2026-09-09 23:21:33",
+  "generated_at": "2026-10-06 16:24:51",
   "kind": "tool",
   "module": "consensus",
-  "run": "consensus_20260909_232131",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\consensus_20261006_162449_10fd85",
+  "run": "consensus_20261006_162449_10fd85",
   "source": "examples/",
   "stats": {
+   "low_support_n": 1,
+   "max_read_len_sampled": 150,
    "min_cov_pct": 10.0,
+   "min_qual_effective": true,
    "n_isnv": 0,
    "n_mapped_reads": 1200,
    "n_refs": 2,
    "n_snv": 0,
-   "n_variants": 7235,
-   "out_dir": "D:\\桌面\\植物病毒分析平台\\tool_runs\\consensus_20260909_232131\\consensus",
-   "run": "consensus_20260909_232131",
-   "total_len": 13084
+   "n_variants": 27,
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\consensus_20261006_162449_10fd85",
+   "params.ambig": "N",
+   "params.min_depth": 4,
+   "params.min_freq": 0.5,
+   "params.min_mapq": 10,
+   "params.min_minor_count": 2,
+   "params.min_minor_freq": 0.02,
+   "params.min_qual": 20,
+   "params.preset": "sr",
+   "present_n": 1,
+   "refs_n": 2,
+   "run": "consensus_20261006_162449_10fd85",
+   "total_len": 13084,
+   "unknown_n": 0,
+   "unsupported_short_reads": false
   },
   "title": "共识序列与变异"
  },
@@ -175,90 +140,140 @@
     "size": "580.0B"
    },
    {
-    "path": "run.log",
-    "size": "1.8KB"
-   },
-   {
-    "path": "classify/output_1.txt",
-    "size": "2.8KB"
-   },
-   {
     "path": "classify/output_1.kreport2",
     "size": "899.0B"
    },
    {
     "path": "classify/sample_file.txt",
-    "size": "94.0B"
+    "size": "105.0B"
    },
    {
     "path": "contigs.filtered.fasta",
     "size": "13.0KB"
    }
   ],
-  "generated_at": "2026-09-09 23:19:08",
+  "generated_at": "2026-10-06 16:24:04",
   "kind": "tool",
   "module": "contigs",
-  "run": "contigs_20260909_231853",
+  "note": "（2 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162354_9b6c4e",
+  "run": "contigs_20261006_162354_9b6c4e",
   "source": "examples/",
   "stats": {
-   "classification": "D:\\桌面\\植物病毒分析平台\\tool_runs\\contigs_20260909_231853\\virus_classification.tsv",
-   "kreport": "D:\\桌面\\植物病毒分析平台\\tool_runs\\contigs_20260909_231853\\classify\\output_1.kreport2",
+   "classification": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162354_9b6c4e\\virus_classification.tsv",
+   "kreport": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162354_9b6c4e\\classify\\output_1.kreport2",
    "n_contigs": 2,
    "n_viral": 2,
-   "run": "contigs_20260909_231853",
-   "viral_fasta": "D:\\桌面\\植物病毒分析平台\\tool_runs\\contigs_20260909_231853\\viral_contigs.fasta"
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162354_9b6c4e",
+   "run": "contigs_20261006_162354_9b6c4e",
+   "viral_fasta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\contigs_20261006_162354_9b6c4e\\viral_contigs.fasta"
   },
   "title": "contig 分类（组装结果再鉴定）"
  },
  "convert": {
   "files": [
    {
-    "path": "run.log",
-    "size": "313.0B"
-   },
-   {
     "path": "example_R1.fa.gz",
     "size": "46.4KB"
    }
   ],
-  "generated_at": "2026-09-09 23:02:49",
+  "generated_at": "2026-10-06 16:22:30",
   "kind": "tool",
   "module": "convert",
-  "run": "convert_20260909_230247",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\convert_20261006_162228_083253",
+  "run": "convert_20261006_162228_083253",
   "source": "examples/",
   "stats": {
+   "files_n": 1,
    "n_files": 1,
-   "run": "convert_20260909_230247"
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\convert_20261006_162228_083253",
+   "run": "convert_20261006_162228_083253"
   },
   "title": "格式转换（FASTQ→FASTA）"
  },
  "dsrna": {
   "files": [
-   "amplicons.fa",
-   "arms.fa",
-   "cand_w0_c0.csv",
-   "cand_w0_c1.csv",
-   "cand_w0_c2.csv",
-   "primers.tsv",
-   "report.json",
-   "result.csv",
-   "summary.json",
-   "targets_w0.fa"
+   {
+    "path": "dsrnamax/summary.json",
+    "size": "586.0B"
+   },
+   {
+    "path": "dsrnamax/amplicons.fa",
+    "size": "714.0B"
+   },
+   {
+    "path": "dsrnamax/report.json",
+    "size": "7.6KB"
+   },
+   {
+    "path": "dsrnamax/primers.tsv",
+    "size": "1.1KB"
+   },
+   {
+    "path": "dsrnamax/arms.fa",
+    "size": "312.0B"
+   },
+   {
+    "path": "dsrnamax/result.csv",
+    "size": "540.0B"
+   },
+   {
+    "path": "dsrnamax/cand_w0_c2.csv",
+    "size": "540.0B"
+   },
+   {
+    "path": "dsrnamax/cand_w0_c1.csv",
+    "size": "540.0B"
+   },
+   {
+    "path": "dsrnamax/cand_w0_c0.csv",
+    "size": "540.0B"
+   },
+   {
+    "path": "dsrnamax/targets_w0.fa",
+    "size": "8.6KB"
+   }
   ],
-  "generated_at": "2026-09-19 16:43:58",
-  "note": "dsRNA 设计全链（dsrnamax 选窗 + siRNA 效价 + T7 引物）：CMV 三条 RNA，seed=42 可复现",
-  "source": "examples/example_cmv.fasta",
+  "generated_at": "2026-10-06 16:27:05",
+  "kind": "tool",
+  "module": "dsrna",
+  "note": "dsRNA 设计全链（dsrnamax 选窗 + siRNA 效价 + T7 引物）：CMV 三条 RNA，seed=42 可复现（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\dsrna_20261006_162703_fab169",
+  "run": "dsrna_20261006_162703_fab169",
+  "source": "examples/",
+  "stats": {
+   "arms_fa": "dsrnamax/arms.fa",
+   "construct_len": 300,
+   "csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\dsrna_20261006_162703_fab169\\dsrnamax\\result.csv",
+   "elapsed_s": 1.4,
+   "exe_version": "1.1.15",
+   "iterations": 100,
+   "kmer_len": 21,
+   "n_arms": 1,
+   "n_primer_pairs": 3,
+   "n_targets": 3,
+   "off_targets": "(无)",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\dsrna_20261006_162703_fab169",
+   "panel_species": 0,
+   "primers_tsv": "dsrnamax/primers.tsv",
+   "red_lines_n": 0,
+   "report": "dsrnamax/report.json",
+   "run": "dsrna_20261006_162703_fab169",
+   "seed": 42,
+   "tool": "dsrna"
+  },
   "title": "dsRNA 设计（RNAi 臂序列优化）"
  },
  "fastp": {
   "files": [
    {
-    "path": "run.log",
-    "size": "3.8KB"
-   },
-   {
     "path": "00_prep/.fastp.done",
     "size": "19.0B"
+   },
+   {
+    "path": "00_prep/fastp.json",
+    "size": "302.0B"
    },
    {
     "path": "00_prep/fastp_report.html",
@@ -267,46 +282,38 @@
    {
     "path": "00_prep/fastp_report.json",
     "size": "114.6KB"
-   },
-   {
-    "path": "00_prep/fastp_R2.fastq.gz",
-    "size": "404.9KB"
-   },
-   {
-    "path": "00_prep/fastp_R1.fastq.gz",
-    "size": "406.0KB"
    }
   ],
-  "generated_at": "2026-09-09 23:02:47",
+  "generated_at": "2026-10-06 16:22:28",
   "kind": "tool",
   "module": "fastp",
-  "run": "fastp_20260909_230245",
+  "note": "（3 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\fastp_20261006_162226_b8b93c",
+  "run": "fastp_20261006_162226_b8b93c",
   "source": "examples/",
   "stats": {
    "fastp_r1": "fastp_R1.fastq.gz",
    "fastp_r2": "fastp_R2.fastq.gz",
+   "inputs_n": 2,
    "lowq_removed": 0,
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\fastp_20261006_162226_b8b93c",
    "q30_rate": 55.57,
    "reads_after": 7200,
    "reads_before": 7200,
    "report_html": "fastp_report.html",
-   "run": "fastp_20260909_230245"
+   "run": "fastp_20261006_162226_b8b93c"
   },
   "title": "序列质控（fastp）"
  },
  "genoplot": {
   "files": [
    {
-    "path": "run.log",
-    "size": "2.2KB"
-   },
-   {
     "path": "09_genome_plots/.gbdraw.done",
     "size": "19.0B"
    },
    {
     "path": "09_genome_plots/summary.json",
-    "size": "335.0B"
+    "size": "151.0B"
    },
    {
     "path": "09_genome_plots/genome.linear.svg",
@@ -317,15 +324,19 @@
     "size": "24.5KB"
    }
   ],
-  "generated_at": "2026-09-09 23:02:21",
+  "generated_at": "2026-10-06 16:22:36",
   "kind": "tool",
   "module": "genoplot",
-  "run": "genoplot_20260909_230217",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\genoplot_20261006_162232_a1f014",
+  "run": "genoplot_20261006_162232_a1f014",
   "source": "examples/",
   "stats": {
    "input": "example_genome.gb",
    "n_seqs": 0,
-   "run": "genoplot_20260909_230217",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\genoplot_20261006_162232_a1f014",
+   "plots_n": 2,
+   "run": "genoplot_20261006_162232_a1f014",
    "stage": "gbdraw",
    "standalone": true
   },
@@ -333,8 +344,14 @@
  },
  "hom": {
   "files": [
-   "example_contig_1_blastn_local.json",
-   "example_contig_1_blastx_local.json"
+   {
+    "path": "example_contig_1_blastn_local.json",
+    "size": null
+   },
+   {
+    "path": "example_contig_1_blastx_local.json",
+    "size": null
+   }
   ],
   "generated_at": "2026-09-10 00:51:42",
   "note": "本地引擎（离线）：mmseqs2 vs CDD / blastn vs 病毒参考核酸库 / DIAMOND vs RefSeq 病毒蛋白库",
@@ -344,24 +361,12 @@
  "hostremoval": {
   "files": [
    {
-    "path": "run.log",
-    "size": "4.6KB"
-   },
-   {
     "path": "01_host_removal/.host_removal.done",
     "size": "19.0B"
    },
    {
     "path": "01_host_removal/stats.json",
     "size": "374.0B"
-   },
-   {
-    "path": "01_host_removal/kept_R2.fastq.gz",
-    "size": "374.8KB"
-   },
-   {
-    "path": "01_host_removal/kept_R1.fastq.gz",
-    "size": "374.3KB"
    },
    {
     "path": "01_host_removal/output_1.kreport2",
@@ -379,6 +384,7 @@
   "generated_at": "2026-09-09 23:02:45",
   "kind": "tool",
   "module": "hostremoval",
+  "note": "（3 个声明文件已缺失，从清单剔除）",
   "run": "hostremoval_20260909_230239",
   "source": "examples/",
   "stats": {
@@ -406,10 +412,6 @@
     "size": "112.0KB"
    },
    {
-    "path": "run.log",
-    "size": "3.0KB"
-   },
-   {
     "path": "viral_sequences_2.fasta",
     "size": "608.5KB"
    },
@@ -422,24 +424,23 @@
     "size": "1.1KB"
    },
    {
-    "path": "classify/output_1.txt",
-    "size": "392.0KB"
-   },
-   {
     "path": "classify/sample_file.txt",
-    "size": "230.0B"
+    "size": "252.0B"
    }
   ],
-  "generated_at": "2026-09-09 23:18:53",
+  "generated_at": "2026-10-06 16:22:26",
   "kind": "tool",
   "module": "identify",
-  "run": "identify_20260909_231851",
+  "note": "（2 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\identify_20261006_162218_9e7e68",
+  "run": "identify_20261006_162218_9e7e68",
   "source": "examples/",
   "stats": {
-   "kreport": "D:\\桌面\\植物病毒分析平台\\tool_runs\\identify_20260909_231851\\classify\\output_1.kreport2",
+   "kreport": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\identify_20261006_162218_9e7e68\\classify\\output_1.kreport2",
    "n_classified": 3600,
    "n_extracted": 7200,
-   "run": "identify_20260909_231851"
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\identify_20261006_162218_9e7e68",
+   "run": "identify_20261006_162218_9e7e68"
   },
   "title": "病毒识别分类与提取"
  },
@@ -447,53 +448,51 @@
   "files": [
    {
     "path": "identity.json",
-    "size": "2.7KB"
+    "size": "3.0KB"
    },
    {
     "path": "nt_heatmap.pdf",
-    "size": "45.0KB"
+    "size": "45.5KB"
    },
    {
     "path": "nt_heatmap.png",
-    "size": "347.9KB"
+    "size": "399.6KB"
    },
    {
     "path": "identity_composite.pdf",
-    "size": "46.9KB"
+    "size": "47.7KB"
    },
    {
     "path": "identity_composite.png",
-    "size": "368.2KB"
+    "size": "445.0KB"
    },
    {
     "path": "identity_table.csv",
-    "size": "1.4KB"
+    "size": "1.6KB"
    },
    {
     "path": "aa_matrix.csv",
-    "size": "645.0B"
+    "size": "695.0B"
    },
    {
     "path": "nt_matrix.csv",
-    "size": "645.0B"
+    "size": "695.0B"
    },
    {
-    "path": ".resume_cache/idaa_6_da3025754616.npy",
+    "path": ".resume_cache/idaa_6_9d2386c29642.npy",
     "size": "416.0B"
-   },
-   {
-    "path": "run.log",
-    "size": "352.0B"
    },
    {
     "path": ".resume_cache/idnt_6_dec67048ade5.npy",
     "size": "416.0B"
    }
   ],
-  "generated_at": "2026-09-09 23:04:44",
+  "generated_at": "2026-10-06 16:23:50",
   "kind": "tool",
   "module": "identity",
-  "run": "identity_20260909_230408",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\identity_20261006_162312_6800cc",
+  "run": "identity_20261006_162312_6800cc",
   "source": "examples/",
   "stats": {
    "aa_csv": "aa_matrix.csv",
@@ -504,8 +503,9 @@
    "n_aa": 6,
    "nt_csv": "nt_matrix.csv",
    "nt_heatmap": "nt_heatmap.png",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\identity_20261006_162312_6800cc",
    "pairs": 15,
-   "run": "identity_20260909_230408",
+   "run": "identity_20261006_162312_6800cc",
    "table": "identity_table.csv"
   },
   "title": "NT+AA 同一性表"
@@ -514,52 +514,52 @@
   "files": [
    {
     "path": "_chain.json",
-    "size": "748.0B"
+    "size": "796.0B"
    }
   ],
-  "generated_at": "2026-09-09 23:28:11",
+  "generated_at": "2026-10-06 16:26:35",
   "kind": "tool",
   "module": "kvchain",
-  "run": "kvchain_20260909_232729",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvchain_20261006_162559_c17ad4",
+  "run": "kvchain_20261006_162559_c17ad4",
   "source": "examples/",
   "stats": {
-   "chain": "kvchain_20260909_232729",
-   "chain_json": "D:\\桌面\\植物病毒分析平台\\tool_runs\\kvchain_20260909_232729\\_chain.json",
-   "kvsuite_run": "kvsuite_20260909_232729",
+   "chain": "kvchain_20261006_162559_c17ad4",
+   "chain_json": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvchain_20261006_162559_c17ad4\\_chain.json",
+   "kvsuite_run": "kvsuite_20261006_162559_6a6f",
    "n_steps": 1,
-   "run": "kvchain_20260909_232729"
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvchain_20261006_162559_c17ad4",
+   "run": "kvchain_20261006_162559_c17ad4",
+   "steps_n": 1
   },
   "title": "病毒定量与共识·一键（全流程）"
  },
  "kvsuite": {
   "files": [
    {
-    "path": "run.log",
-    "size": "7.2KB"
-   },
-   {
-    "path": "kvsuite/logs/known_virus_suite_20260909_232325.log",
-    "size": "4.7KB"
+    "path": "kvsuite/logs/known_virus_suite_20261006_164442.log",
+    "size": "5.9KB"
    },
    {
     "path": "kvsuite/logs/bcftools.log",
-    "size": "2.0KB"
+    "size": "2.2KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.vcf.filtered",
-    "size": "4.3KB"
+    "size": "4.5KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.soft.vcf",
-    "size": "4.1KB"
+    "size": "4.2KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.vcf",
-    "size": "3.5KB"
+    "size": "3.6KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.raw.vcf",
-    "size": "3.5KB"
+    "size": "3.6KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.call.bcf",
@@ -570,41 +570,59 @@
     "size": "364.3KB"
    },
    {
-    "path": "kvsuite/plots/EXAMPLE/EXAMPLE_Pepper_yellows_virus_NC_077216.1_depth.png",
-    "size": "350.2KB"
-   },
-   {
-    "path": "kvsuite/plots/EXAMPLE/EXAMPLE_Pepper_yellows_virus_NC_077216.1_depth.pdf",
-    "size": "148.6KB"
-   },
-   {
     "path": "kvsuite/plots/EXAMPLE/EXAMPLE_Cassava_Colombian_symptomless_virus_NC_076132.1_depth.png",
-    "size": "333.4KB"
+    "size": "215.0KB"
+   },
+   {
+    "path": "kvsuite/plots/EXAMPLE/EXAMPLE_Cassava_Colombian_symptomless_virus_NC_076132.1_depth.pdf",
+    "size": "131.5KB"
+   },
+   {
+    "path": "kvsuite/plots/EXAMPLE/EXAMPLE_Pepper_yellows_virus_NC_077216.1_depth.png",
+    "size": "222.3KB"
    }
   ],
-  "generated_at": "2026-09-09 23:24:06",
+  "generated_at": "2026-10-06 16:45:21",
   "kind": "tool",
   "module": "kvsuite",
-  "run": "kvsuite_20260909_232324",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_164441_6ad429",
+  "run": "kvsuite_20261006_164441_6ad429",
   "source": "examples/",
   "stats": {
-   "engine": "minibwa",
-   "filtered_tsv": "D:\\桌面\\植物病毒分析平台\\tool_runs\\kvsuite_20260909_232324\\kvsuite\\filter\\filtered.tsv",
+   "engine": "salmon",
+   "filtered_tsv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_164441_6ad429\\kvsuite\\filter\\filtered.tsv",
    "n_confirmed": 3,
-   "out": "D:\\桌面\\植物病毒分析平台\\tool_runs\\kvsuite_20260909_232324\\kvsuite",
-   "reference": "D:\\桌面\\植物病毒分析平台\\virus-db\\final.cluster.ref.fasta",
-   "run": "kvsuite_20260909_232324",
+   "out": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_164441_6ad429\\kvsuite",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_164441_6ad429",
+   "reference": "D:\\桌面\\植物病毒分析平台\\databases\\virusref_db\\plant_ref\\reference.fasta",
+   "run": "kvsuite_20261006_164441_6ad429",
    "stage": "all"
   },
   "title": "已知病毒识别与定量"
  },
  "logan": {
   "files": [
-   "result_s1.tsv",
-   "result_s1_parsed.json",
-   "result_s2.tsv",
-   "result_s2_parsed.json",
-   "trace_report.html"
+   {
+    "path": "result_s1.tsv",
+    "size": null
+   },
+   {
+    "path": "result_s1_parsed.json",
+    "size": null
+   },
+   {
+    "path": "result_s2.tsv",
+    "size": null
+   },
+   {
+    "path": "result_s2_parsed.json",
+    "size": null
+   },
+   {
+    "path": "trace_report.html",
+    "size": null
+   }
   ],
   "generated_at": "2026-09-09 23:41:55",
   "note": "示例任务已建在 logan/EXAMPLE_TMV/，可直接在 /logan 页面查看；结果表为演示数据，列名与 Logan-Search 导出表一致",
@@ -613,11 +631,26 @@
  },
  "mirna": {
   "files": [
-   "mirna_report.html",
-   "mirna_targets_merged.csv",
-   "results.json",
-   "results.tsv",
-   "summary.json"
+   {
+    "path": "mirna_report.html",
+    "size": null
+   },
+   {
+    "path": "mirna_targets_merged.csv",
+    "size": null
+   },
+   {
+    "path": "results.json",
+    "size": null
+   },
+   {
+    "path": "results.tsv",
+    "size": null
+   },
+   {
+    "path": "summary.json",
+    "size": null
+   }
   ],
   "generated_at": "2026-09-20 01:19:07",
   "note": "准确引擎重写版：psRNATarget=MiRNATarget 官方口径 / RNA22=参考实现 / TAPIR=erbon7 口径 / psRobot=v1.2 C 口径移植；含官方 miRanda/RNAhybrid/PITA 二进制交叉验证层与 sRNA 风格合并报告",
@@ -627,40 +660,36 @@
  "orf": {
   "files": [
    {
-    "path": "run.log",
-    "size": "369.0B"
-   },
-   {
     "path": "04_orf/.orf.done",
     "size": "19.0B"
    },
    {
     "path": "04_orf/summary.json",
-    "size": "326.0B"
+    "size": "391.0B"
    },
    {
     "path": "04_orf/pyrodigal_rv.gff",
-    "size": "660.0B"
+    "size": "516.0B"
    },
    {
     "path": "04_orf/pyrodigal_rv.ffn",
-    "size": "11.7KB"
+    "size": "11.3KB"
    },
    {
     "path": "04_orf/pyrodigal_rv.faa",
-    "size": "4.1KB"
+    "size": "4.0KB"
    },
    {
     "path": "04_orf/pyrodigal.gff",
-    "size": "564.0B"
+    "size": "495.0B"
    },
    {
     "path": "04_orf/pyrodigal.ffn",
-    "size": "11.7KB"
+    "size": "11.4KB"
    },
    {
     "path": "04_orf/pyrodigal.faa",
-    "size": "4.1KB"
+    "size": "4.0KB"
    },
    {
     "path": "03_assembly/viral_contigs.fasta",
@@ -675,15 +704,29 @@
     "size": "13.0KB"
    }
   ],
-  "generated_at": "2026-09-09 23:02:17",
+  "generated_at": "2026-10-06 16:22:32",
   "kind": "tool",
   "module": "orf",
-  "run": "orf_20260909_230215",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\orf_20261006_162230_4064cd",
+  "run": "orf_20261006_162230_4064cd",
   "source": "examples/",
   "stats": {
    "input": "viral_contigs.fasta",
+   "min_aa": 100,
    "n_contigs": 2,
-   "run": "orf_20260909_230215",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\orf_20261006_162230_4064cd",
+   "pyrodigal.dropped_short": 1,
+   "pyrodigal.faa": "pyrodigal.faa",
+   "pyrodigal.ffn": "pyrodigal.ffn",
+   "pyrodigal.genes": 7,
+   "pyrodigal.gff": "pyrodigal.gff",
+   "pyrodigal_rv.dropped_short": 1,
+   "pyrodigal_rv.faa": "pyrodigal_rv.faa",
+   "pyrodigal_rv.ffn": "pyrodigal_rv.ffn",
+   "pyrodigal_rv.genes": 7,
+   "pyrodigal_rv.gff": "pyrodigal_rv.gff",
+   "run": "orf_20261006_162230_4064cd",
    "stage": "orf"
   },
   "title": "ORF 预测"
@@ -691,63 +734,117 @@
  "orfa": {
   "files": [
    {
-    "path": "run.log",
-    "size": "23.2KB"
-   },
-   {
     "path": "04b_orf_annot/.orfa.done",
     "size": "19.0B"
    },
    {
     "path": "04b_orf_annot/summary.json",
-    "size": "2.5KB"
+    "size": "4.4KB"
    },
    {
     "path": "04b_orf_annot/genome_diagrams/example_contig_2.svg",
-    "size": "3.9KB"
+    "size": "4.0KB"
    },
    {
     "path": "04b_orf_annot/genome_diagrams/example_contig_1.svg",
-    "size": "4.2KB"
+    "size": "4.5KB"
    },
    {
     "path": "04b_orf_annot/orf_annotation.gff3",
-    "size": "2.4KB"
+    "size": "2.3KB"
    },
    {
     "path": "04b_orf_annot/contig_function_profile.tsv",
     "size": "266.0B"
    },
    {
-    "path": "04b_orf_annot/orf_function_summary.tsv",
-    "size": "68.0B"
-   },
-   {
     "path": "04b_orf_annot/orf_family_summary.tsv",
     "size": "114.0B"
+   },
+   {
+    "path": "04b_orf_annot/orf_function_summary.tsv",
+    "size": "68.0B"
    },
    {
     "path": "04b_orf_annot/orf_annotation.tsv",
     "size": "2.5KB"
    },
    {
-    "path": "04b_orf_annot/cdd_hits.raw.tsv",
-    "size": "672.0B"
+    "path": "04b_orf_annot/bfvd_hits.raw.tsv",
+    "size": "3.7KB"
    },
    {
     "path": "04_orf/.orf.done",
     "size": "19.0B"
    }
   ],
-  "generated_at": "2026-09-09 23:16:20",
+  "generated_at": "2026-10-06 16:24:31",
   "kind": "tool",
   "module": "orfa",
-  "run": "orfa_20260909_231215",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\orfa_20261006_162404_949cf1",
+  "run": "orfa_20261006_162404_949cf1",
   "source": "examples/",
   "stats": {
    "input": "viral_contigs.fasta",
+   "min_aa": 100,
    "n_contigs": 2,
-   "run": "orfa_20260909_231215",
+   "orfa.categories.假想蛋白（功能未定）": 2,
+   "orfa.categories.其他功能蛋白": 5,
+   "orfa.db_files.Pfam-A-Viruses.hmm.h3f_n": 2,
+   "orfa.db_files.Pfam-A-Viruses.hmm.h3i_n": 2,
+   "orfa.db_files.Pfam-A-Viruses.hmm.h3m_n": 2,
+   "orfa.db_files.Pfam-A-Viruses.hmm.h3p_n": 2,
+   "orfa.db_files.bfvd.dbtype_n": 2,
+   "orfa.db_files.bfvd.index_n": 2,
+   "orfa.db_files.bfvd.lookup_n": 2,
+   "orfa.db_files.bfvd.source_n": 2,
+   "orfa.db_files.bfvd.version_n": 2,
+   "orfa.db_files.bfvd_h.dbtype_n": 2,
+   "orfa.db_files.bfvd_h.index_n": 2,
+   "orfa.db_files.bfvd_h_n": 2,
+   "orfa.db_files.bfvd_metadata.tsv_n": 2,
+   "orfa.db_files.bfvd_n": 2,
+   "orfa.db_files.bfvd_uniprot_names.tsv_n": 2,
+   "orfa.db_files.organism_tax.tsv_n": 2,
+   "orfa.db_files.viral_prot.dmnd_n": 2,
+   "orfa.db_files.viral_prot.faa_n": 2,
+   "orfa.db_versions.bfvd.version": "2023_02",
+   "orfa.diagrams_n": 2,
+   "orfa.engine": "diamond",
+   "orfa.evidence.bfvd": 1,
+   "orfa.evidence.hmm": 1,
+   "orfa.evidence.seq": 5,
+   "orfa.families.Caulimoviridae": 3,
+   "orfa.families.Solemoviridae": 4,
+   "orfa.filters.min_pident": null,
+   "orfa.filters.min_qcov": null,
+   "orfa.filters.n_hits_filtered": 0,
+   "orfa.gff_annotated": 7,
+   "orfa.libs_labels_n": 3,
+   "orfa.libs_n": 3,
+   "orfa.model": "pyrodigal_rv",
+   "orfa.n_annotated": 7,
+   "orfa.n_bfvd_only": 1,
+   "orfa.n_families": 2,
+   "orfa.n_hmm_only": 1,
+   "orfa.n_orfs": 7,
+   "orfa.pfam_libs_n": 1,
+   "orfa.rows_preview_n": 7,
+   "orfa.stage": "orfa",
+   "orfa.tsv": "orf_annotation.tsv",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\orfa_20261006_162404_949cf1",
+   "pyrodigal.dropped_short": 1,
+   "pyrodigal.faa": "pyrodigal.faa",
+   "pyrodigal.ffn": "pyrodigal.ffn",
+   "pyrodigal.genes": 7,
+   "pyrodigal.gff": "pyrodigal.gff",
+   "pyrodigal_rv.dropped_short": 1,
+   "pyrodigal_rv.faa": "pyrodigal_rv.faa",
+   "pyrodigal_rv.ffn": "pyrodigal_rv.ffn",
+   "pyrodigal_rv.genes": 7,
+   "pyrodigal_rv.gff": "pyrodigal_rv.gff",
+   "run": "orfa_20261006_162404_949cf1",
    "stage": "orf"
   },
   "title": "ORF 功能注释"
@@ -759,10 +856,6 @@
     "size": "2.4KB"
    },
    {
-    "path": "run.log",
-    "size": "220.0B"
-   },
-   {
     "path": "pdprep/metadata.csv",
     "size": "627.0B"
    },
@@ -771,16 +864,17 @@
     "size": "18.2KB"
    }
   ],
-  "generated_at": "2026-09-21 03:56:17",
+  "generated_at": "2026-10-06 16:28:35",
   "kind": "tool",
   "module": "pdprep",
-  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20260921_035615_f9c226",
-  "run": "pdprep_20260921_035615_f9c226",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20261006_162833_aa4d46",
+  "run": "pdprep_20261006_162833_aa4d46",
   "source": "examples/",
   "stats": {
    "abs.coords": null,
-   "abs.meta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20260921_035615_f9c226\\pdprep\\metadata.csv",
-   "abs.seq": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20260921_035615_f9c226\\pdprep\\sequences.fasta",
+   "abs.meta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20261006_162833_aa4d46\\pdprep\\metadata.csv",
+   "abs.seq": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20261006_162833_aa4d46\\pdprep\\sequences.fasta",
    "abs.sub_meta": null,
    "abs.sub_seq": null,
    "align_qc": null,
@@ -794,6 +888,7 @@
    "govern.n_date_ambiguous_frac": 0,
    "govern.n_date_ok": 15,
    "govern.n_rows": 15,
+   "govern.n_unknown_level_all": 0,
    "govern.warnings_n": 1,
    "issues_n": 0,
    "meta_pick.govern.mode": "mid",
@@ -801,6 +896,7 @@
    "meta_pick.govern.n_date_ambiguous_frac": 0,
    "meta_pick.govern.n_date_ok": 15,
    "meta_pick.govern.n_rows": 15,
+   "meta_pick.govern.n_unknown_level_all": 0,
    "meta_pick.govern.warnings_n": 1,
    "meta_pick.n_rows": 15,
    "meta_pick.release_date_rows": 0,
@@ -809,8 +905,8 @@
    "n_issues": 0,
    "n_kept": 15,
    "n_rows_input": 15,
-   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20260921_035615_f9c226",
-   "run": "pdprep_20260921_035615_f9c226",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\pdprep_20261006_162833_aa4d46",
+   "run": "pdprep_20261006_162833_aa4d46",
    "source": "files",
    "subsample": null,
    "summary.has_coords": false,
@@ -832,24 +928,20 @@
  "phylodyn": {
   "files": [
    {
-    "path": "run.log",
-    "size": "11.4KB"
-   },
-   {
     "path": "phylodyn_summary.json",
     "size": "21.2KB"
    },
    {
     "path": "report/RUN_REPORT.md",
-    "size": "4.5KB"
-   },
-   {
-    "path": "report/config.resolved.json",
-    "size": "760.0B"
+    "size": "4.7KB"
    },
    {
     "path": "report/run_summary.json",
     "size": "6.9KB"
+   },
+   {
+    "path": "report/config.resolved.json",
+    "size": "760.0B"
    },
    {
     "path": "phylogeo/phylogeo_report.json",
@@ -880,11 +972,12 @@
     "size": "1.7KB"
    }
   ],
-  "generated_at": "2026-09-21 03:56:54",
+  "generated_at": "2026-10-06 16:27:03",
   "kind": "tool",
   "module": "phylodyn",
-  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6",
-  "run": "phylodyn_20260921_035638_83ccc6",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e",
+  "run": "phylodyn_20261006_162647_b60b2e",
   "source": "examples/",
   "stats": {
    "ancestral.n_mutations": null,
@@ -951,7 +1044,7 @@
    "meta_pick.release_date_rows": 0,
    "mode": "pipeline",
    "n_files": 22,
-   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e",
    "params.ancestral": false,
    "params.clock_rate": null,
    "params.coord_table": null,
@@ -989,7 +1082,7 @@
    "phylogeo.align.aligned_by": "leafset",
    "phylogeo.align.delta": 0,
    "phylogeo.align.divergent": false,
-   "phylogeo.align.mu": 36.033338,
+   "phylogeo.align.mu": 36.028983,
    "phylogeo.align.n_changes": 4,
    "phylogeo.align.n_skipped_missing": 0,
    "phylogeo.align.n_unmatched": 0,
@@ -1001,8 +1094,8 @@
    "phylogeo.confidence_summary.confidence_labels_raw_n": 3,
    "phylogeo.confidence_summary.confidence_labels_unmapped_n": 0,
    "phylogeo.confidence_summary.frac_below_0_7": 0.1429,
-   "phylogeo.confidence_summary.median_max_p_internal": 0.9995153476155009,
-   "phylogeo.confidence_summary.min_max_p": 0.4296896863913765,
+   "phylogeo.confidence_summary.median_max_p_internal": 0.9995152581707699,
+   "phylogeo.confidence_summary.min_max_p": 0.42969143555784006,
    "phylogeo.confidence_summary.n_below_0_5": 1,
    "phylogeo.confidence_summary.n_below_0_7": 2,
    "phylogeo.confidence_summary.n_internal": 14,
@@ -1029,7 +1122,7 @@
    "phylogeo.n_events_ml": 4,
    "phylogeo.rssp": null,
    "phylogeo.sampling_bias.corrected": true,
-   "phylogeo.sampling_bias.factor": 0.992887,
+   "phylogeo.sampling_bias.factor": 0.992767,
    "phylogeo.sampling_bias.max_share": 0.4,
    "phylogeo.sampling_bias.min_share": 0.2667,
    "phylogeo.trait": "region",
@@ -1051,8 +1144,8 @@
    "prune.skipped": false,
    "prune.tree_pruned": null,
    "resumed_from": null,
-   "run": "phylodyn_20260921_035638_83ccc6",
-   "seconds": 14.67,
+   "run": "phylodyn_20261006_162647_b60b2e",
+   "seconds": 15.59,
    "stages_n": 4,
    "tool": "phylodyn",
    "warnings_n": 2
@@ -1064,10 +1157,6 @@
    {
     "path": "phylogeo/summary.json",
     "size": "4.4KB"
-   },
-   {
-    "path": "run.log",
-    "size": "447.0B"
    },
    {
     "path": "phylogeo/transition_classes.json",
@@ -1094,23 +1183,24 @@
     "size": "484.0B"
    },
    {
-    "path": "phylogeo/migration_matrix.tsv",
-    "size": "78.0B"
-   },
-   {
     "path": "phylogeo/tree_annotated.nwk",
     "size": "834.0B"
+   },
+   {
+    "path": "phylogeo/migration_matrix.tsv",
+    "size": "78.0B"
    },
    {
     "path": "phylogeo/tree.nwk",
     "size": "653.0B"
    }
   ],
-  "generated_at": "2026-09-21 11:11:45",
+  "generated_at": "2026-10-06 16:26:47",
   "kind": "tool",
   "module": "phylogeo",
-  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylogeo_20260921_111143_3233ea",
-  "run": "phylogeo_20260921_111143_3233ea",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylogeo_20261006_162645_c916c8",
+  "run": "phylogeo_20261006_162645_c916c8",
   "source": "examples/",
   "stats": {
    "coord_missing_n": 0,
@@ -1133,7 +1223,7 @@
    "n_seqs": 15,
    "n_transitions": 4,
    "n_years": 15,
-   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylogeo_20260921_111143_3233ea",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylogeo_20261006_162645_c916c8",
    "regions.Americas": 4,
    "regions.Asia": 5,
    "regions.Europe": 6,
@@ -1141,7 +1231,7 @@
    "rrt_perm": 0,
    "rssp": null,
    "rssp_bs": 0,
-   "run": "phylogeo_20260921_111143_3233ea",
+   "run": "phylogeo_20261006_162645_c916c8",
    "sample_points_n": 0,
    "sample_points_truncated": 0,
    "seed": 0,
@@ -1173,45 +1263,48 @@
  "primer": {
   "files": [
    {
-    "path": "06_primer/summary.json",
-    "size": "111.0B"
-   },
-   {
     "path": "06_primer/.primer.done",
     "size": "19.0B"
    },
    {
-    "path": "run.log",
-    "size": "137.0B"
+    "path": "06_primer/summary.json",
+    "size": "185.0B"
+   },
+   {
+    "path": "06_primer/primers.tsv",
+    "size": "1.5KB"
    },
    {
     "path": "05_phylo/summary.json",
-    "size": "42.0B"
+    "size": "231.0B"
    },
    {
     "path": "05_phylo/G1/aln.fasta",
-    "size": "33.1KB"
+    "size": "33.3KB"
    }
   ],
-  "generated_at": "2026-09-09 23:02:55",
+  "generated_at": "2026-10-06 22:33:06",
   "kind": "tool",
   "module": "primer",
-  "run": "primer_20260909_230253",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\primer_20261006_223304_7b4dd2",
+  "run": "primer_20261006_223304_7b4dd2",
   "source": "examples/",
   "stats": {
-   "n_primers": 0,
-   "reason": "未设计出引物（保守区不足或序列问题）",
-   "run": "primer_20260909_230253",
-   "stage": "primer"
+   "groups_n": 1,
+   "mode": "conserved",
+   "n_primers": 9,
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\primer_20261006_223304_7b4dd2",
+   "run": "primer_20261006_223304_7b4dd2",
+   "specificity_amplicon": "skipped",
+   "specificity_checked": false,
+   "stage": "primer",
+   "tsv": "primers.tsv"
   },
   "title": "引物设计（保守区）"
  },
  "quicktree": {
   "files": [
-   {
-    "path": "run.log",
-    "size": "3.0KB"
-   },
    {
     "path": "tree.nwk",
     "size": "169.0B"
@@ -1225,15 +1318,19 @@
     "size": "40.6KB"
    }
   ],
-  "generated_at": "2026-09-09 23:03:13",
+  "generated_at": "2026-10-06 16:22:52",
   "kind": "tool",
   "module": "quicktree",
-  "run": "quicktree_20260909_230305",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\quicktree_20261006_162244_33b57e",
+  "run": "quicktree_20261006_162244_33b57e",
   "source": "examples/",
   "stats": {
+   "aligned": false,
    "method": "fasttree",
    "n_seqs": 6,
-   "run": "quicktree_20260909_230305",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\quicktree_20261006_162244_33b57e",
+   "run": "quicktree_20261006_162244_33b57e",
    "tree": "tree.nwk"
   },
   "title": "进化树构建（快速）"
@@ -1245,12 +1342,12 @@
     "size": "1.2KB"
    },
    {
-    "path": "rdp/events.tsv",
-    "size": "208.0B"
-   },
-   {
     "path": "rdp/events.json",
     "size": "805.0B"
+   },
+   {
+    "path": "rdp/events.tsv",
+    "size": "208.0B"
    },
    {
     "path": "rdp/rdp5RecombIdentifyStats.csv",
@@ -1289,21 +1386,21 @@
     "size": "34.0B"
    }
   ],
-  "generated_at": "2026-09-21 04:21:53",
+  "generated_at": "2026-10-06 16:26:43",
   "kind": "tool",
   "module": "rdp",
-  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20260921_042147_478491",
-  "run": "rdp_20260921_042147_478491",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20261006_162637_bd6aea",
+  "run": "rdp_20261006_162637_bd6aea",
   "source": "examples/",
   "stats": {
    "aln_len": 1200,
-   "csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20260921_042147_478491\\rdp\\rdp5.csv",
+   "csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20261006_162637_bd6aea\\rdp\\rdp5.csv",
    "engine": "rdp5",
    "events_n": 1,
    "input": "D:\\桌面\\植物病毒分析平台\\examples\\example_rdp.fasta",
    "n_events": 1,
    "n_seqs": 5,
-   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20260921_042147_478491",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rdp_20261006_162637_bd6aea",
    "qc.clean": "clean.fasta",
    "qc.n_in": 5,
    "qc.n_keep": 5,
@@ -1315,7 +1412,7 @@
    "qc.thresholds.max_identity_drop": 0.02,
    "qc.thresholds.max_n": 0.05,
    "qc.thresholds.min_length": 0.9,
-   "run": "rdp_20260921_042147_478491",
+   "run": "rdp_20261006_162637_bd6aea",
    "source_input": "D:\\桌面\\植物病毒分析平台\\examples\\example_rdp.fasta",
    "tool": "rdp",
    "variable": 158
@@ -1326,7 +1423,7 @@
   "files": [
    {
     "path": "rtt/summary.json",
-    "size": "1.9KB"
+    "size": "2.1KB"
    },
    {
     "path": "rtt/tree.date.nexus",
@@ -1345,27 +1442,29 @@
     "size": "653.0B"
    }
   ],
-  "generated_at": "2026-09-21 03:56:35",
+  "generated_at": "2026-10-06 16:26:45",
   "kind": "tool",
   "module": "rtt",
-  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20260921_035633_923ac0",
-  "run": "rtt_20260921_035633_923ac0",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20261006_162643_d8b980",
+  "run": "rtt_20261006_162643_d8b980",
   "source": "examples/",
   "stats": {
    "aln": "D:\\桌面\\植物病毒分析平台\\examples\\example_phylogeo.fasta",
-   "dated_nexus": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20260921_035633_923ac0\\rtt\\tree.date.nexus",
+   "dated_nexus": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20261006_162643_d8b980\\rtt\\tree.date.nexus",
    "intercept": -15.954519839175259,
    "meta": "D:\\桌面\\植物病毒分析平台\\examples\\example_phylogeo.meta.csv",
    "method": "nj",
    "n": 15,
-   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20260921_035633_923ac0",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\rtt_20261006_162643_d8b980",
    "points_n": 15,
    "r2": 0.6185,
-   "run": "rtt_20260921_035633_923ac0",
+   "run": "rtt_20261006_162643_d8b980",
    "slope": 0.007978427835051547,
    "strong_signal": true,
    "tool": "rtt",
-   "trait": "year"
+   "trait": "year",
+   "warnings_n": 1
   },
   "title": "⏱ 时间信号与定年"
  },
@@ -1373,41 +1472,39 @@
   "files": [
    {
     "path": "sdt_matrix.json",
-    "size": "648.0B"
+    "size": "795.0B"
    },
    {
     "path": "sdt_distribution.pdf",
-    "size": "34.2KB"
+    "size": "34.3KB"
    },
    {
     "path": "sdt_distribution.png",
-    "size": "149.6KB"
+    "size": "145.0KB"
    },
    {
     "path": "sdt_heatmap.pdf",
-    "size": "46.1KB"
+    "size": "46.6KB"
    },
    {
     "path": "sdt_heatmap.png",
-    "size": "352.7KB"
+    "size": "405.9KB"
    },
    {
     "path": "sdt_matrix.csv",
-    "size": "645.0B"
+    "size": "695.0B"
    },
    {
     "path": ".resume_cache/sdt_6_dec67048ade5.npy",
     "size": "416.0B"
-   },
-   {
-    "path": "run.log",
-    "size": "272.0B"
    }
   ],
-  "generated_at": "2026-09-09 23:03:41",
+  "generated_at": "2026-10-06 16:23:06",
   "kind": "tool",
   "module": "sdt",
-  "run": "sdt_20260909_230313",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\sdt_20261006_162252_61bb10",
+  "run": "sdt_20261006_162252_61bb10",
   "source": "examples/",
   "stats": {
    "csv": "sdt_matrix.csv",
@@ -1417,18 +1514,32 @@
    "heatmap_pdf": "sdt_heatmap.pdf",
    "json": "sdt_matrix.json",
    "n": 6,
+   "names_n": 6,
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\sdt_20261006_162252_61bb10",
    "pairs": 15,
-   "run": "sdt_20260909_230313",
+   "run": "sdt_20261006_162252_61bb10",
    "seqtype": "nt"
   },
   "title": "SDT 同一性分析"
  },
  "seqprep": {
   "files": [
-   "AF226160.1.gb",
-   "AF226161.1.gb",
-   "AF226162.1.gb",
-   "AF235033.1.gb"
+   {
+    "path": "AF226160.1.gb",
+    "size": null
+   },
+   {
+    "path": "AF226161.1.gb",
+    "size": null
+   },
+   {
+    "path": "AF226162.1.gb",
+    "size": null
+   },
+   {
+    "path": "AF235033.1.gb",
+    "size": null
+   }
   ],
   "generated_at": "2026-09-19 20:22:40",
   "note": "参考序列获取（ICTV 属检索 → GenBank 下载）：Ilarvirus 属 4 条记录示例（真实检索产物）",
@@ -1450,37 +1561,54 @@
     "size": "38.4KB"
    },
    {
-    "path": "run.log",
-    "size": "330.0B"
-   },
-   {
     "path": "aln.fasta",
     "size": "40.6KB"
    }
   ],
-  "generated_at": "2026-09-09 23:03:49",
+  "generated_at": "2026-10-06 16:23:12",
   "kind": "tool",
   "module": "structcmp",
-  "run": "structcmp_20260909_230341",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\structcmp_20261006_162306_7afb98",
+  "run": "structcmp_20261006_162306_7afb98",
   "source": "examples/",
   "stats": {
-   "aln": "D:\\桌面\\植物病毒分析平台\\tool_runs\\structcmp_20260909_230341\\aln.fasta",
+   "aln": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\structcmp_20261006_162306_7afb98\\aln.fasta",
    "aln_cols": 6694,
-   "matrix_json": "D:\\桌面\\植物病毒分析平台\\tool_runs\\structcmp_20260909_230341\\identity_matrix.json",
-   "matrix_tsv": "D:\\桌面\\植物病毒分析平台\\tool_runs\\structcmp_20260909_230341\\identity_matrix.tsv",
+   "matrix_json": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\structcmp_20261006_162306_7afb98\\identity_matrix.json",
+   "matrix_tsv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\structcmp_20261006_162306_7afb98\\identity_matrix.tsv",
    "n_seqs": 6,
-   "run": "structcmp_20260909_230341"
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\structcmp_20261006_162306_7afb98",
+   "run": "structcmp_20261006_162306_7afb98"
   },
   "title": "结构比较"
  },
  "synteny": {
   "files": [
-   "compare.html",
-   "compare.png",
-   "compare.svg",
-   "gene_clusters.tsv",
-   "genome_similarity.tsv",
-   "summary.json"
+   {
+    "path": "compare.html",
+    "size": null
+   },
+   {
+    "path": "compare.png",
+    "size": null
+   },
+   {
+    "path": "compare.svg",
+    "size": null
+   },
+   {
+    "path": "gene_clusters.tsv",
+    "size": null
+   },
+   {
+    "path": "genome_similarity.tsv",
+    "size": null
+   },
+   {
+    "path": "summary.json",
+    "size": null
+   }
   ],
   "generated_at": "2026-09-10 03:36:11",
   "note": "示例 3 个同属 GenBank：18 基因 → 6 个家族",
@@ -1490,32 +1618,28 @@
  "variant": {
   "files": [
    {
-    "path": "run.log",
-    "size": "3.5KB"
-   },
-   {
-    "path": "kvsuite/logs/known_virus_suite_20260909_232425.log",
-    "size": "982.0B"
+    "path": "kvsuite/logs/known_virus_suite_20261006_162539.log",
+    "size": "1.2KB"
    },
    {
     "path": "kvsuite/logs/bcftools.log",
-    "size": "2.0KB"
+    "size": "2.2KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.vcf.filtered",
-    "size": "4.3KB"
+    "size": "4.5KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.soft.vcf",
-    "size": "4.1KB"
+    "size": "4.2KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.vcf",
-    "size": "3.5KB"
+    "size": "3.6KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.raw.vcf",
-    "size": "3.5KB"
+    "size": "3.6KB"
    },
    {
     "path": "kvsuite/vcf/all.variants.call.bcf",
@@ -1526,16 +1650,19 @@
     "size": "364.3KB"
    }
   ],
-  "generated_at": "2026-09-09 23:24:27",
+  "generated_at": "2026-10-06 16:25:41",
   "kind": "tool",
   "module": "variant",
-  "run": "kvsuite_20260909_232425",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_162539_dbf859",
+  "run": "kvsuite_20261006_162539_dbf859",
   "source": "examples/",
   "stats": {
-   "engine": "minibwa",
-   "out": "D:\\桌面\\植物病毒分析平台\\tool_runs\\kvsuite_20260909_232425\\kvsuite",
-   "reference": "D:\\桌面\\植物病毒分析平台\\virus-db\\final.cluster.ref.fasta",
-   "run": "kvsuite_20260909_232425",
+   "engine": "salmon",
+   "out": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_162539_dbf859\\kvsuite",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\kvsuite_20261006_162539_dbf859",
+   "reference": "D:\\桌面\\植物病毒分析平台\\databases\\virusref_db\\plant_ref\\reference.fasta",
+   "run": "kvsuite_20261006_162539_dbf859",
    "stage": "variant"
   },
   "title": "病毒变异分析"
@@ -1543,41 +1670,41 @@
  "verify": {
   "files": [
    {
-    "path": "run.log",
-    "size": "32.4KB"
-   },
-   {
     "path": "verify/summary.json",
-    "size": "280.0B"
+    "size": "293.0B"
    },
    {
     "path": "verify/calls.tsv",
-    "size": "810.0B"
+    "size": "2.1KB"
    },
    {
-    "path": "verify/cdd_hits.tsv",
-    "size": "801.0B"
+    "path": "verify/bfvd_hits.tsv",
+    "size": "5.4KB"
    },
    {
     "path": "verify/blastx.tsv",
-    "size": "2.3KB"
+    "size": "2.4KB"
    },
    {
     "path": "verify/virus_input.fasta",
-    "size": "13.2KB"
+    "size": "13.0KB"
    }
   ],
-  "generated_at": "2026-09-09 23:18:20",
+  "generated_at": "2026-10-06 16:24:49",
   "kind": "tool",
   "module": "verify",
-  "run": "verify_20260909_231620",
+  "note": "（1 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\verify_20261006_162431_6f5783",
+  "run": "verify_20261006_162431_6f5783",
   "source": "examples/",
   "stats": {
+   "calls.known": 2,
    "combine": "union",
    "host_filter": "all",
+   "methods_n": 2,
    "n_calls": 2,
-   "out_dir": "D:\\桌面\\植物病毒分析平台\\tool_runs\\verify_20260909_231620\\verify",
-   "run": "verify_20260909_231620",
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\verify_20261006_162431_6f5783",
+   "run": "verify_20261006_162431_6f5783",
    "skipped": 0,
    "viroid": 0,
    "virus": 2
@@ -1588,47 +1715,23 @@
   "files": [
    {
     "path": "_chain.json",
-    "size": "1.9KB"
-   },
-   {
-    "path": "run.log",
-    "size": "552.2KB"
-   },
-   {
-    "path": "contigs__viral_contigs.fasta",
-    "size": "18.2KB"
-   },
-   {
-    "path": "contigs__virus_classification.tsv",
-    "size": "832.0B"
-   },
-   {
-    "path": "assembly__contigs.filtered.fasta",
-    "size": "17.7KB"
-   },
-   {
-    "path": "identify__viral_ids.tsv",
-    "size": "112.0KB"
-   },
-   {
-    "path": "identify__viral_sequences_2.fasta",
-    "size": "608.5KB"
-   },
-   {
-    "path": "identify__viral_sequences_1.fasta",
-    "size": "608.5KB"
+    "size": "2.0KB"
    }
   ],
-  "generated_at": "2026-09-09 23:27:29",
+  "generated_at": "2026-10-06 16:25:59",
   "kind": "tool",
   "module": "virchain",
-  "run": "virchain_20260909_232453",
+  "note": "（7 个声明文件已缺失，从清单剔除）",
+  "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\virchain_20261006_162541_1b8f59",
+  "run": "virchain_20261006_162541_1b8f59",
   "source": "examples/",
   "stats": {
-   "chain": "virchain_20260909_232453",
-   "chain_json": "D:\\桌面\\植物病毒分析平台\\tool_runs\\virchain_20260909_232453\\_chain.json",
+   "chain": "virchain_20261006_162541_1b8f59",
+   "chain_json": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\virchain_20261006_162541_1b8f59\\_chain.json",
    "n_steps": 4,
-   "run": "virchain_20260909_232453"
+   "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\virchain_20261006_162541_1b8f59",
+   "run": "virchain_20261006_162541_1b8f59",
+   "steps_n": 4
   },
   "title": "病毒识别分类·一键（②→③→④）"
  }

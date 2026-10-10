@@ -41,7 +41,13 @@ def rnahybrid_scan(mirna_id: str, mirna_seq: str,
                    max_energy: float = -20.0,
                    min_seed_match: int = 7,
                    ) -> Optional[RNAhybridResult]:
-    """Fast MFE-based target validation."""
+    """Fast MFE-based target validation.
+
+    ⚠️ 2026-10-03 标注 deprecated（死函数）：返回对象的 passes 恒为 False
+    （见函数末尾），调用方拿到的永远是「永不通过」的结果；平台实际使用的
+    是 consensus._validate_rnahybrid（对 miRanda 比对列做 MFE 复核）。
+    保留仅为兼容旧调用名，请勿在新代码中使用。
+    """
     mirna = mirna_seq.upper().replace('T', 'U')
     target = target_seq.upper().replace('T', 'U')
     

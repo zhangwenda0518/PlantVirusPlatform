@@ -289,6 +289,92 @@ def parse_virus_info(info_tsv):
     return acc2taxid, fields
 
 
+VIRUS_DOMAIN_TAXID = 10239        # NCBI「Viruses」域根 taxid
+
+
+def vet_info_table(info_tsv, logger=None):
+    """建库准入校验（**只告警、不阻断**）：info / ref_info 表脏行体检。
+
+    为什么需要：reference.ref_info.tsv 由源表整合而来，偶有脏行——
+    Taxid 为空/非数字的行会被 parse_virus_info **静默丢弃**（参考序列进不了
+    库，表现为分类召回偏低且看不出原因）；Category 为空、Taxid 指向非病毒域
+    （串表/串行）则让分类库元数据不完整。在建库入口扫一遍并打印 WARN 计数，
+    把问题暴露在构建日志里，而不是静默入库。
+
+    扫三类：① Taxid 缺失/非法；② Category 为空（表无该列则跳过）；
+    ③ Taxid 不在病毒域（10239 谱系；含本地 taxonomy 未收录者）。
+    ③ 需 TaxonomyGraph 整表加载一次，taxonomy 不可用时跳过并说明。
+    返回计数 dict；任何异常都在函数内兜底（本地表脏不该让建库失败）。
+    """
+    rows = []
+    cat_col = None
+    try:
+        with safe_open(check_path(info_tsv, must_exist=True)) as f:
+            reader = csv.DictReader(f, delimiter='\t')
+            cols = reader.fieldnames or []
+            cat_col = next((c for c in cols
+                            if (c or '').strip().lower() == 'category'), None)
+            for row in reader:
+                acc = (row.get('Accession') or '').strip()
+                tax = (row.get('Taxid') or '').strip()
+                cat = (row.get(cat_col) or '').strip() if cat_col else ''
+                rows.append((acc, tax, cat))
+    except Exception as e:
+        if logger:
+            logger.log(f"准入校验跳过（info 表不可读: {e}）", "WARN")
+        return {}
+
+    bad_taxid = [a for a, t, _ in rows if a and not t.isdigit()]
+    blank_cat = [a for a, _, c in rows if a and cat_col is not None and not c]
+
+    domain_checked = False
+    non_n = 0
+    non_samples = []
+    try:
+        from .taxonomy import TaxonomyGraph, taxonomy_ready
+        if taxonomy_ready():
+            g = TaxonomyGraph()
+            g.load()
+            domain_checked = True
+            _cache = {}
+            for acc, tax, _cat in rows:
+                if not tax.isdigit():
+                    continue
+                tid = int(tax)
+                if tid not in _cache:
+                    _r = g.resolve(tid)     # 已合并 taxid 归一到现行值
+                    _lin = g.lineage(_r) if _r in g.parent else []
+                    _cache[tid] = any(_t == VIRUS_DOMAIN_TAXID
+                                      for _t, _rk, _nm in _lin)
+                if not _cache[tid]:
+                    non_n += 1
+                    if len(non_samples) < 10:
+                        non_samples.append(f'{acc}(taxid={tax})')
+    except Exception as e:
+        if logger:
+            logger.log(f"  准入校验：病毒域校验跳过（taxonomy 不可用: {e}）", "WARN")
+
+    if logger:
+        logger.log(f"准入校验（{len(rows)} 行）: Taxid 缺失/非法 {len(bad_taxid)}，"
+                   f"Category 为空 {len(blank_cat) if cat_col else '表无该列'}，"
+                   f"非病毒域 {non_n if domain_checked else '未校验（无 taxonomy）'}")
+        for _label, _items in (('Taxid 缺失/非法', bad_taxid),
+                               ('Category 为空', blank_cat)):
+            if _items:
+                logger.log(f"  ⚠ {_label}: {_items[:10]}"
+                           f"{' …' if len(_items) > 10 else ''}", "WARN")
+        if non_n:
+            logger.log(f"  ⚠ 非病毒域/无法归入病毒域: {non_samples}"
+                       f"{' …' if non_n > 10 else ''}", "WARN")
+        if bad_taxid or blank_cat or non_n:
+            logger.log("  以上为告警不阻断：建库继续，建议核对 ref_info 源表",
+                       "WARN")
+    return {'rows': len(rows), 'bad_taxid': len(bad_taxid),
+            'blank_cat': len(blank_cat) if cat_col else None,
+            'non_virus': non_n if domain_checked else None,
+            'domain_checked': domain_checked}
+
+
 def build_virus_db(virus_fasta, info_tsv, db_dir=None, hash_capacity='64M',
                    threads=None, logger=None, rebuild=False, clean_mid=False):
     """病毒库：按 info 表 accession→taxid 逐条注入。"""
@@ -300,6 +386,9 @@ def build_virus_db(virus_fasta, info_tsv, db_dir=None, hash_capacity='64M',
     acc2taxid, _ = parse_virus_info(info_tsv)
     if logger:
         logger.log(f"info 表解析: {len(acc2taxid)} 条 accession→taxid 映射")
+    # 建库准入校验：脏行（Taxid 缺失/Category 空/非病毒域）只告警不阻断，
+    # 避免"参考没进库、分类召回偏低"这类问题被静默带进产物。
+    vet_info_table(info_tsv, logger=logger)
     n, missing = inject_taxid_map(virus_fasta, tagged, acc2taxid,
                                   logger=logger, missing_fatal=False)
     if missing:
@@ -611,20 +700,28 @@ def classify(db_dir, inputs, out_dir, paired=False, threads=None,
                     os.makedirs(chunk_j, exist_ok=True)
                     _chunk_dirs.append(chunk_j)
 
-                    def _watch(chunk_j=chunk_j, j=j):
-                        """看门狗：kunpeng 无进度输出，用 chunk 中间盘增长近似。"""
+                    def _watch(chunk_j=chunk_j, j=j,
+                               n_parts=len(part_inputs_list),
+                               attempt_now=attempt):
+                        """看门狗：kunpeng 无进度输出，用 chunk 中间盘增长近似。
+
+                        n_parts / attempt_now 用默认参数显式绑定：本函数会被
+                        run_cmd 的监控线程异步调用，若直接闭包读外层
+                        part_inputs_list / attempt，下一轮重试（分片数变化）
+                        时线程可能读到新值，进度分片序号错位（B023）。
+                        """
                         if progress is None:
                             return
                         used = dir_size(chunk_j)
                         frac = min(used / need, 0.95) if need else 0
-                        base = j / max(len(part_inputs_list), 1)
-                        span = 1 / max(len(part_inputs_list), 1)
+                        base = j / max(n_parts, 1)
+                        span = 1 / max(n_parts, 1)
                         if progress:
                             progress(base + frac * span,
                                      f"分类中间数据已写 {used / 1e9:.1f} / "
                                      f"预估 {need / 1e9:.0f} GB"
-                                     + (f"（分片 {j + 1}/{attempt}）"
-                                        if attempt > 1 else ''))
+                                     + (f"（分片 {j + 1}/{attempt_now}）"
+                                        if attempt_now > 1 else ''))
 
                     cmd = [kunpeng, 'classify', '--db', d, '--chunk-dir', chunk_j,
                            '--output-dir', out] + common + \
@@ -905,23 +1002,28 @@ def convert_kraken2(k2_source, db_dir, hash_capacity='1G', logger=None):
                  '--hash-capacity', hash_capacity], logger=logger)
 
         # hashshard 输出在 k2 目录内（hash_*.k2d / hash_config.k2d），
-        # 把 kunpeng 运行所需文件搬到目标 db_dir
+        # 复制（不是搬移）kunpeng 运行所需文件到目标 db_dir：源目录可能是
+        # 用户的 Kraken2 官方库（opts/taxo.k2d 是它的原件），move 会把源库
+        # 拆掉（下次还要用它做别的分析就没了）。复制后源库保持完整，
+        # 多花的只是索引文件的磁盘副本（hash 分片与源库同量级）。
         import shutil
         need = [('hash_*.k2d', 'glob'), ('hash_config.k2d', 'file'),
                 ('opts.k2d', 'file'), ('taxo.k2d', 'file')]
-        moved = 0
+        copied = 0
         for pat, kind in need:
             if kind == 'glob':
                 for f in glob.glob(os.path.join(k2_dir, pat)):
-                    shutil.move(f, os.path.join(db_dir, os.path.basename(f)))
-                    moved += 1
+                    shutil.copyfile(f, os.path.join(db_dir,
+                                                    os.path.basename(f)))
+                    copied += 1
             else:
                 f = os.path.join(k2_dir, pat)
                 if os.path.isfile(f):
-                    shutil.move(f, os.path.join(db_dir, pat))
-                    moved += 1
+                    shutil.copyfile(f, os.path.join(db_dir, pat))
+                    copied += 1
         if logger:
-            logger.log(f"移动 kunpeng 库文件 {moved} 个 → {db_dir}")
+            logger.log(f"复制 kunpeng 库文件 {copied} 个 → {db_dir}"
+                       f"（源库保持不变，确认不再需要后可手动清理）")
 
         # taxonomy dmp 也复制（classify 的 LCA 用，部分流程需要）
         for dmp in ('nodes.dmp', 'names.dmp'):

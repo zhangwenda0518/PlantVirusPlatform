@@ -5,7 +5,7 @@ Character to attribute mapping:
   C: Europe
 
 
-Substitution rate (mu): 36.033338
+Substitution rate (mu): 36.028983
 
 Equilibrium frequencies (pi_i):
   A: 0.2505

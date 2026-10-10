@@ -45,7 +45,8 @@ def engine_cmd(script_abspath, *args):
 # 病毒参考库根 = databases/virusref_db（2026-09-11 从顶层 virus-db/ 迁入，
 # 并按 <name>_db 惯例定名）。里面是运行期要用的病毒参考与派生索引：
 #   <库名>/  —— 自包含鉴定库：reference.fasta + reference.ref_info.tsv +
-#               salmon_k31/（定量唯一引擎 salmon；默认库目录名 kv_index）
+#               salmon_k31/（定量唯一引擎 salmon；默认库目录名 plant_ref，
+#               2026-09-29 前为 kv_index）
 #   blast/   —— 本地检索用的预置 BLAST 库
 # 2026-09-12 重构：根目录散置的 final.cluster.ref.* 已归档进 kv_index/
 # （config.ref_annotation_path / kv_stage.default_reference 兼容回退旧布局）。
@@ -68,6 +69,7 @@ DIRS = {
     'meta_search': os.path.join(PLATFORM_ROOT, 'run', 'meta_search'),  # 公共数据检索
     'tasks':     os.path.join(PLATFORM_ROOT, 'run', 'tasks'),     # GUI 任务状态
     'logs':      os.path.join(PLATFORM_ROOT, 'run', 'logs'),      # 全局日志
+    'ai_audit':  os.path.join(PLATFORM_ROOT, 'run', 'ai_audit'),  # AI 代理审计留痕
     'uploads':   os.path.join(PLATFORM_ROOT, 'run', 'uploads'),   # 粘贴/上传中转
     'fastq':     os.path.join(PLATFORM_ROOT, 'run', 'fastq'),     # 流程 FASTQ 中转
     # ---- 用户在平台内产生的「集合」类数据（不是分发的库）----
@@ -136,7 +138,8 @@ DB_LAYOUT = {
         'classify': ('host/classify', 'host_src'),
     },
     'annot': {
-        'cdd':  'annot_db/cdd',
+        # cdd 槽位已移除：本地 CDD 库 prefilter 索引 ~5GB 反复 OOM，
+        # 2026-09-29 随功能一并下线
         'hmm':  'annot_db/hmm',
         'prot': 'annot_db/prot',
     },
@@ -177,7 +180,7 @@ def _resolve_host_db():
 
 
 def db_path(category, name):
-    """按分类取数据库路径（kunpeng_db/plant、annot_db/cdd 等）。
+    """按分类取数据库路径（kunpeng_db/plant、annot_db/hmm 等）。
 
     单一路径解析：注册表已是当前布局，不做旧目录兜底（目录不存在时也返回
     该路径，供建库落盘用）。
@@ -202,18 +205,19 @@ DIRS['taxonomy'] = db_path('tax', 'core')
 def ref_annotation_path():
     """参考病毒注释 TSV 的当前路径（accession → 物种/taxid/科/属）。
 
-    2026-09-12 参考病毒目录重构后注释随参考归档进默认鉴定库目录
-    （virusref_db/kv_index/reference.ref_info.tsv）；旧布局在
-    virusref_db 根下的 final.cluster.ref_info.tsv 作为兼容回退。
+    注释随参考归档进默认鉴定库目录（2026-09-29 起为
+    virusref_db/plant_ref/reference.ref_info.tsv，此前为 kv_index/）；
+    旧布局在 virusref_db 根下的 final.cluster.ref_info.tsv 作为兼容回退。
     找不到时返回新布局期望路径，由调用方判存在。
     """
     base = DIRS['virus_src']
-    for name in (os.path.join('kv_index', 'reference.ref_info.tsv'),
+    for name in (os.path.join('plant_ref', 'reference.ref_info.tsv'),
+                 os.path.join('kv_index', 'reference.ref_info.tsv'),
                  'final.cluster.ref_info.tsv'):
         p = os.path.join(base, name)
         if os.path.isfile(p):
             return p
-    return os.path.join(base, 'kv_index', 'reference.ref_info.tsv')
+    return os.path.join(base, 'plant_ref', 'reference.ref_info.tsv')
 
 
 def host_source_dirs():
@@ -355,18 +359,32 @@ def legacy_host_db_dir():
 
 
 def host_db_dirs():
-    """host-db 下所有已建成的宿主库目录（含 hash_*.k2d），按名排序。"""
-    base = DIRS['host_src']
-    out = []
-    if not os.path.isdir(base):
-        return out
-    for n in sorted(os.listdir(base)):
-        p = os.path.join(base, n)
-        if n == 'host':            # 旧槽位单独处理，不混进列表
+    """host-db 与已登记外部库根下所有已建成的宿主库目录（含 hash_*.k2d）。
+
+    外部库根（extra_db_roots，"加载已构建宿主库"登记平台外库时自动登记
+    其父目录）也参与扫描：否则库在平台外时本函数返回空，建库页会一边
+    显示"当前宿主库 ✓"（那走 databases.host 的 db_ready）一边又提示
+    "还没有宿主库"（2026-09-30 实测）。外部根可能是病毒库的父目录，
+    只认 *_host_db 命名的目录，免得 kunpeng 病毒库混进宿主列表。"""
+    bases = [(DIRS['host_src'], False)]
+    bases += [(r, True) for r in _EXTRA_DB_ROOTS]
+    out, seen = [], set()
+    for base, external in bases:
+        if not base or not os.path.isdir(base):
             continue
-        if os.path.isdir(p) and glob.glob(os.path.join(p, 'hash_*.k2d')):
-            out.append(p)
-    return out
+        key = os.path.normcase(os.path.abspath(base))
+        if key in seen:                       # 外部根与 host-db 同目录时去重
+            continue
+        seen.add(key)
+        for n in sorted(os.listdir(base)):
+            p = os.path.join(base, n)
+            if n == 'host':            # 旧槽位单独处理，不混进列表
+                continue
+            if external and not n.endswith(_HOST_DB_SUFFIX):
+                continue
+            if os.path.isdir(p) and glob.glob(os.path.join(p, 'hash_*.k2d')):
+                out.append(p)
+    return sorted(out)
 
 
 def detect_active_host_db():
@@ -516,7 +534,7 @@ def _rel_if_under(path):
 # ------------------------------------------------------------------
 OUTPUT_SUBDIRS = ('results', 'tool_runs', 'downloads', 'meta_search',
                   'logan', 'submissions', 'logs', 'gb_collections',
-                  'ncbi_refs')
+                  'ncbi_refs', 'ai_audit')
 
 _OUTPUT_ROOT = ''          # 模块级当前自定义输出根（'' = 默认平台目录）
 
@@ -738,7 +756,8 @@ def _refresh_module_paths():
     用延迟导入避免 config ↔ 这些模块的循环依赖。
     """
     for name in ('ictv_db', 'virus_ref', 'universal_ref', 'local_search',
-                 'verify', 'hmm_annot', 'orf_annot', 'suvtk_submit'):
+                 'verify', 'hmm_annot', 'orf_annot', 'suvtk_submit',
+                 'bfvd_search'):
         try:
             mod = __import__(f'Virus_Platform_Core.{name}', fromlist=['refresh_paths'])
             fn = getattr(mod, 'refresh_paths', None)
@@ -767,7 +786,10 @@ def _ensure_not_system_dir(path):
     norm = os.path.normcase(os.path.normpath(os.path.abspath(path)))
     for seg in ('Windows', 'Program Files', 'Program Files (x86)',
                 'ProgramData'):
-        base = os.path.normcase(os.path.normpath(os.path.join(drv, seg)))
+        # 不能用 os.path.join(drv, seg)：drv='C:' 时 join 产出 'C:Windows'
+        # （盘符相对路径），normpath 后与 'c:\\windows' 永不相等 → 整个
+        # 守卫恒放行（实测过）。必须显式补上盘符后的分隔符。
+        base = os.path.normcase(os.path.normpath(drv + os.sep + seg))
         if norm == base or norm.startswith(base + os.sep):
             raise ValueError(f'不允许把系统目录设为数据根: {path}')
 
@@ -823,13 +845,18 @@ def detect_tools():
                         _glob_first(os.path.join(R, 'Blast', 'bin', 'blastp.exe')),      which('blastp')],
         'blastx':      [_glob_first(os.path.join(T, 'Blast', 'bin', 'blastx.exe')),
                         _glob_first(os.path.join(R, 'Blast', 'bin', 'blastx.exe')),      which('blastx')],
-        'mafft':   [which('mafft'), os.path.join(T, 'mafft-win', 'mafft.bat'),
+        # mafft/fasttree/trimal/seqkit 统一「捆绑优先、PATH 兜底」——与
+        # spades/blast 同款口径：随包副本存在就用它，版本不随对方机器已装
+        # 的版本漂移；_first_exist 逐项做 os.path.isfile 判断，无 3rd 的
+        # 源码环境自然回退 which()。
+        'mafft':   [os.path.join(T, 'mafft-win', 'mafft.bat'),
                     _glob_first(os.path.join(T, 'mafft-win', 'mafft*.bat')),
                     os.path.join(R, 'mafft-win', 'mafft.bat'),
-                    _glob_first(os.path.join(R, 'mafft-win', 'mafft*.bat'))],
-        'fasttree': [which('fasttree'), which('FastTree'),
-                     _glob_first(os.path.join(T, 'FastTree', 'FastTree*.exe')),
-                     _glob_first(os.path.join(R, 'FastTree', 'FastTree*.exe'))],
+                    _glob_first(os.path.join(R, 'mafft-win', 'mafft*.bat')),
+                    which('mafft')],
+        'fasttree': [_glob_first(os.path.join(T, 'FastTree', 'FastTree*.exe')),
+                     _glob_first(os.path.join(R, 'FastTree', 'FastTree*.exe')),
+                     which('fasttree'), which('FastTree')],
         # RAxML-NG：exe 必须与 3 个 msys DLL 同目录（捆绑副本按此布局打包）
         'raxml-ng': [which('raxml-ng'), which('raxml-ng.exe'),
                      _glob_first(os.path.join(T, 'raxml-ng*', 'raxml-ng*.exe')),
@@ -843,17 +870,18 @@ def detect_tools():
                     _glob_first(os.path.join(T, 'iQtree', '*', 'iqtree3*.exe')),
                     _glob_first(os.path.join(R, 'iQtree', '*', 'bin', 'iqtree3.exe')),
                     _glob_first(os.path.join(R, 'iQtree', '*', 'iqtree3*.exe'))],
-        'trimal':  [which('trimal'), which('trimal.exe'),
-                    os.path.join(T, 'trimAl', 'trimal.exe'),
+        'trimal':  [os.path.join(T, 'trimAl', 'trimal.exe'),
                     _glob_first(os.path.join(T, 'trimAl*', 'bin', 'trimal*.exe')),
                     os.path.join(R, 'trimAl', 'trimal.exe'),
-                    _glob_first(os.path.join(R, 'trimAl*', 'bin', 'trimal*.exe'))],
+                    _glob_first(os.path.join(R, 'trimAl*', 'bin', 'trimal*.exe')),
+                    which('trimal'), which('trimal.exe')],
         # clustalw / gblocks / muscle 不再探测（2026-09-19）：全平台无任何模块
         # 调用它们（比对走 mafft、修剪走 trimAl；RDP5 用的是 3rd/tools/rdp5
         # 自带的 clustalw2，不经过本表）。列在这里只会让自检长期红着
         # 「外部工具 31/34」误导用户，与上方退役 iqtree2 同理。
-        'seqkit':   [which('seqkit'), _glob_first(os.path.join(BIN, 'seqkit*.exe')),
-                     _glob_first(os.path.join(R, 'seqkit*.exe'))],
+        'seqkit':   [_glob_first(os.path.join(BIN, 'seqkit*.exe')),
+                     _glob_first(os.path.join(R, 'seqkit*.exe')),
+                     which('seqkit')],
         'crabz':    [which('crabz'), which('crabz.exe'),
                      _glob_first(os.path.join(BIN, 'crabz*.exe')),
                      _glob_first(os.path.join(R, 'crabz*.exe'))],
@@ -923,6 +951,7 @@ def detect_tools():
                      os.path.join(R, 'lsd2.exe')],
         # RDP5CL（重组检测命令行）与 dsRNAmax（dsRNA 判定）原先只靠代码内的
         # 目录扫描兜底：设置页/自检看不到、platform.json 路径覆盖无效。
+        # （dsRNAmax 条目 2026-09-29 随 dsRNA 迁出删除，2026-10-03 恢复。）
         'RDP5CL':   [os.path.join(T, 'rdp5', 'RDP5CL.exe'),
                      os.path.join(R, 'RDP5CL.exe'), which('RDP5CL')],
         'dsRNAmax': [os.path.join(T, 'dsrnamax', 'dsRNAmax_det.exe'),
@@ -937,6 +966,19 @@ def detect_tools():
     if getattr(sys, 'frozen', False) and not out.get('gbdraw'):
         out['gbdraw'] = 'bundled:gbdraw'     # 随包 Python 引擎，进程内调用
     return out
+
+
+def _ai_local_path():
+    """AI API Key 的落盘位置：<平台根>/run/ai_local.json（固定，不随输出根迁移）。
+
+    为什么不放 platform.json：那是要进 git 的配置文件，密钥进去就是事故。
+    run/ 整体被 .gitignore 覆盖（.gitignore 第 25 行）。
+    为什么不随自定义输出根迁移：Key 是机器本地的密钥，不是分析数据——
+    配置的 _load 发生在 apply_output_root 重映射 DIRS **之前**，若跟随
+    输出根会造成"存 A 读 B"；固定在平台根下则存读永远一致（platform.json
+    就写在平台根，可写性有同样的保证）。
+    """
+    return os.path.join(PLATFORM_ROOT, 'run', 'ai_local.json')
 
 
 class Config:
@@ -992,6 +1034,24 @@ class Config:
         self.tools = detect_tools()
         self.email = ''            # NCBI EUtils 联系邮箱（可选，礼貌性参数）
         self.language = 'zh'       # 界面语言: zh | en
+        # AI 助手（对话驱动智能代理）：OpenAI 兼容端点配置。键结构与预设
+        # 清单见 ai_agent/provider.py（PROVIDER_PRESETS）；api_key 只存本地
+        # run/ai_local.json（密钥分离，见 save()），platform.json 永不落 Key。
+        # explain/broadcast/gate = 主动驱动三层开关（讲解/解读/决策闸门），
+        # 详见 ai_agent/broadcast.py；gate 默认关——它会改变流水线行为
+        # （关键阶段收尾后阻塞等确认），必须用户显式开启。
+        self.ai = {'enabled': False, 'provider': 'deepseek', 'base_url': '',
+                   'api_key': '', 'model': '', 'temperature': 0.3,
+                   'max_tokens': 2048,
+                   'explain': True, 'broadcast': True, 'gate': False,
+                   'gate_timeout_min': 15,
+                   'broadcast_stages': ['kvsuite', 'assembly', 'report'],
+                   'gate_stages': ['kvsuite', 'assembly'],
+                   # 执行权分级（见 ai_agent/executors.py）：
+                   # exec_auto     = 第二级：阶段失败后原参数自动重试（限1次）
+                   # exec_auto_tune= 第三级：AI 提参自动重跑闭环（限1次，
+                   #                 调参失败回落第二级）。两者默认关。
+                   'exec_auto': False, 'exec_auto_tune': False}
         # 分析默认参数（预填硬编码缺省，platform.json 的已存值在 _load_extras 覆盖）
         self.defaults = {k: v for k, _t, v, *_r in self.DEFAULT_FIELDS}
         self.databases = {
@@ -1069,7 +1129,7 @@ class Config:
                 continue
             self.databases[k] = pv
         for d in ('databases', 'taxonomy', 'results', 'downloads', 'logan',
-                  'submissions', 'meta_search', 'tasks', 'logs'):
+                  'submissions', 'meta_search', 'tasks', 'logs', 'ai_audit'):
             os.makedirs(DIRS[d], exist_ok=True)
 
     # ---- 持久化 -------------------------------------------------
@@ -1146,6 +1206,22 @@ class Config:
                              f'已回退默认配置: {type(e).__name__}: {e}\n')
 
     def save(self):
+        # AI API Key 分离落盘：真身写 run/ai_local.json（run/ 整体 gitignore，
+        # 见 .gitignore），platform.json 里**永远写空串**——本文件进 git，
+        # 密钥进了就是事故。密钥文件写失败时只报 stderr、平台内存态仍可用，
+        # 绝不退回"写进 platform.json"的旧路。
+        ai_out = dict(getattr(self, 'ai', {}) or {})
+        try:
+            lp = _ai_local_path()
+            os.makedirs(os.path.dirname(lp), exist_ok=True)
+            with open(lp, 'w', encoding='utf-8') as f:
+                json.dump({'api_key': ai_out.get('api_key', '')}, f,
+                          ensure_ascii=False, indent=1)
+        except OSError as e:
+            if ai_out.get('api_key'):
+                sys.stderr.write(f'[config] 警告：密钥文件写入失败（{e}），'
+                                 f'API Key 本次不落盘，重启后需重新填写\n')
+        ai_out['api_key'] = ''
         # 平台根之下的路径一律转相对再落盘：platform.json 搬目录/换电脑/换
         # 盘符仍可用（_load 侧按 PLATFORM_ROOT 解析回来）；平台外的路径
         # （外置库等）保持绝对，属用户显式登记的外部资源。
@@ -1154,6 +1230,7 @@ class Config:
                 'databases': {k: _rel_if_under(v)
                               for k, v in self.databases.items()},
                 'defaults': self.defaults, 'language': self.language,
+                'ai': ai_out,
                 'output_root': self.output_root,
                 'input_root': self.input_root,
                 'database_root': self.database_root,
@@ -1302,10 +1379,62 @@ class Config:
         return en if self.lang == 'en' else zh
 
     def _load_extras(self, data):
-        """非路径类配置：界面语言与分析默认参数（值均为标量，逐项校验类型）。"""
+        """非路径类配置：界面语言/AI 助手与分析默认参数（值均为标量，逐项校验类型）。"""
         try:
             if data.get('language') in ('zh', 'en'):
                 self.language = data['language']
+            # AI 助手段：缺省值已在 __init__ 预填，这里只合并合法项。
+            ai = data.get('ai')
+            if isinstance(ai, dict):
+                merged = dict(self.ai)
+                merged['enabled'] = bool(ai.get('enabled'))
+                for k in ('provider', 'base_url', 'api_key', 'model'):
+                    if k in ai:
+                        merged[k] = str(ai.get(k) or '').strip()
+                try:
+                    merged['temperature'] = min(2.0, max(
+                        0.0, float(ai.get('temperature', merged['temperature']))))
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    merged['max_tokens'] = max(64, min(
+                        32768, int(ai.get('max_tokens', merged['max_tokens']))))
+                except (TypeError, ValueError):
+                    pass
+                # 主动驱动三层开关与闸门超时
+                for _bk in ('explain', 'broadcast', 'gate',
+                            'exec_auto', 'exec_auto_tune'):
+                    if _bk in ai:
+                        merged[_bk] = bool(ai.get(_bk))
+                if 'gate_timeout_min' in ai:
+                    try:
+                        merged['gate_timeout_min'] = max(1, min(
+                            120, int(ai.get('gate_timeout_min'))))
+                    except (TypeError, ValueError):
+                        pass
+                # 阶段清单：只留字符串、限长；合法性（是否真有该阶段）由
+                # broadcast 在使用时按 STAGE_ORDER 过滤——config 不能反向
+                # import pipeline（会成环），这里不做阶段名校验。
+                for _lk in ('broadcast_stages', 'gate_stages'):
+                    if _lk in ai and isinstance(ai.get(_lk), list):
+                        vals = [str(x).strip() for x in ai[_lk]
+                                if str(x).strip()][:15]
+                        merged[_lk] = vals
+                # API Key 与代码库分离存储：platform.json 进 git，密钥**绝不**
+                # 落进它——真身在 run/ai_local.json（run/ 整体 gitignore），
+                # 这里读回合并。platform.json 里即便残留历史 api_key（旧版
+                # 直接落盘的），也以密钥文件为准，避免"两处真身"漂移。
+                try:
+                    lp = _ai_local_path()
+                    if os.path.isfile(lp):
+                        with open(lp, encoding='utf-8') as _f:
+                            _local = json.load(_f)
+                        if isinstance(_local, dict):
+                            merged['api_key'] = str(_local.get('api_key')
+                                                    or '').strip()
+                except (OSError, ValueError):
+                    pass
+                self.ai = merged
             known = {kk: t for kk, t, *_r in self.DEFAULT_FIELDS}
             for k, v in (data.get('defaults') or {}).items():
                 if k not in known or v is None:

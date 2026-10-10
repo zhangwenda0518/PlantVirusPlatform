@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""本地（离线）序列比对引擎：BLASTN / DIAMOND BLASTX / mmseqs2 CDD。
+"""本地（离线）序列比对引擎：BLASTN / DIAMOND BLASTX。
 
 与 Virus_Platform_Core/contig_annot.py 的在线 NCBI 版本输出**同一套命中结构**，前端「命中表」和
 结构域图无需区分数据来源。差别只在：
 
-  - 在线：NCBI nt / nr / CDD 全库，需联网，分钟级；
+  - 在线：NCBI nt / nr 全库，需联网，分钟级；
   - 本地：平台内置库，完全离线、秒级，可批量。
 
 使用的库：
@@ -13,58 +13,39 @@
           在含中文的路径下也能用 —— v5 的 LMDB 后端不行。见
           Virus_Platform_Core/assembly.py:ensure_virus_blast_db）
   - 蛋白：databases/annot/prot/viral_prot.dmnd（DIAMOND，RefSeq 病毒蛋白）
-  - 保守域：databases/annot/cdd/cdd_db（mmseqs2，translated search 等价 RPS-BLAST）
   - 元数据：databases/virusref_db/final.cluster.ref_info.tsv（accession → 物种/科/属/宿主/GenBank 标题）
-            databases/annot/cdd/cddid_all.tbl（CDD-ID → ShortName / Description）
+
+> 历史：曾有 mmseqs2 CDD 保守域搜索（本地库 databases/annot/cdd/cdd_db，
+> translated search 等价 RPS-BLAST）。因 CDD prefilter 索引一次性分配
+> ~5GB、小内存机器反复 OOM，2026-09-29 随库一并移除。
 """
 from __future__ import annotations
 
 import csv
 import os
 
-from .config import get_config, DIRS, db_path, ref_annotation_path
+from .config import get_config, db_path, ref_annotation_path
 from .utils import check_path, run_cmd, safe_open
 
-CDD_EVALUE_MAX = 1e-3
 BLAST_EVALUE_MAX = 1e-5
 MAX_HITS = 50
 
 REF_INFO_TSV = ref_annotation_path()
-CDD_TBL = os.path.join(db_path('annot', 'cdd'), 'cddid_all.tbl')
-VIRAL_CDD_LIST = os.path.join(db_path('annot', 'cdd'),
-                              'viral_cdds_and_pfams_191028.txt')
 PROT_DMND = os.path.join(db_path('annot', 'prot'), 'viral_prot.dmnd')
-CDD_DB = None
-for _name in ('cdd_virus_db', 'cdd_db'):
-    _p = os.path.join(db_path('annot', 'cdd'), _name)
-    if os.path.isfile(_p):
-        CDD_DB = _p
 
 
 def refresh_paths():
     """重算模块级路径常量（切换「设置 → 数据库目录」后由 config 回调）。"""
-    global REF_INFO_TSV, CDD_TBL, VIRAL_CDD_LIST, PROT_DMND, CDD_DB
-    global _REF_INFO_CACHE, _CDD_NAMES_CACHE, _VIRAL_CDD_CACHE
+    global REF_INFO_TSV, PROT_DMND
+    global _REF_INFO_CACHE
     REF_INFO_TSV = ref_annotation_path()
-    CDD_TBL = os.path.join(db_path('annot', 'cdd'), 'cddid_all.tbl')
-    VIRAL_CDD_LIST = os.path.join(db_path('annot', 'cdd'),
-                                  'viral_cdds_and_pfams_191028.txt')
     PROT_DMND = os.path.join(db_path('annot', 'prot'), 'viral_prot.dmnd')
-    CDD_DB = None
-    for _n in ('cdd_virus_db', 'cdd_db'):
-        _p = os.path.join(db_path('annot', 'cdd'), _n)
-        if os.path.isfile(_p):
-            CDD_DB = _p
     # 缓存也要失效：它们按旧库内容构建
     _REF_INFO_CACHE = None
-    _CDD_NAMES_CACHE = None
-    _VIRAL_CDD_CACHE = None
     return REF_INFO_TSV
 
 
 _REF_INFO_CACHE = None
-_CDD_NAMES_CACHE = None
-_VIRAL_CDD_CACHE = None
 
 
 # ------------------------------------------------------------------ 元数据
@@ -93,39 +74,6 @@ def ref_info() -> dict:
     return out
 
 
-def cdd_names() -> dict:
-    """{CDD-ID: (ShortName, Description)}（cddid_all.tbl）。"""
-    global _CDD_NAMES_CACHE
-    if _CDD_NAMES_CACHE is not None:
-        return _CDD_NAMES_CACHE
-    names = {}
-    if os.path.isfile(CDD_TBL):
-        with safe_open(CDD_TBL) as f:
-            for line in f:
-                p = line.rstrip('\n').split('\t')
-                # 列序: PSSM-Id  CDD-ID  ShortName  Description  Length
-                if len(p) >= 4:
-                    names[p[1].strip()] = (p[2].strip(), p[3].strip())
-    _CDD_NAMES_CACHE = names
-    return names
-
-
-def viral_cdd_ids() -> set:
-    """病毒相关 CDD/Pfam 白名单（viral_cdds_and_pfams_*.txt）。"""
-    global _VIRAL_CDD_CACHE
-    if _VIRAL_CDD_CACHE is not None:
-        return _VIRAL_CDD_CACHE
-    ids = set()
-    if os.path.isfile(VIRAL_CDD_LIST):
-        with safe_open(VIRAL_CDD_LIST) as f:
-            for line in f:
-                v = line.strip()
-                if v:
-                    ids.add(v)
-    _VIRAL_CDD_CACHE = ids
-    return ids
-
-
 def _short_desc(text, limit=160):
     text = ' '.join((text or '').split())
     return text if len(text) <= limit else text[:limit - 1] + '…'
@@ -136,9 +84,9 @@ def engine_status() -> dict:
     """本地引擎可用性（供设置页/接口自检）。"""
     cfg = get_config()
     out = {'nuc_db': None, 'nuc_db_built': False, 'prot_db': PROT_DMND,
-           'cdd_db': CDD_DB, 'ref_info': REF_INFO_TSV}
+           'ref_info': REF_INFO_TSV}
     for key, tool in (('blastn', 'blastn'), ('blastx', 'diamond'),
-                      ('cdd', 'mmseqs'), ('makeblastdb', 'makeblastdb')):
+                      ('makeblastdb', 'makeblastdb')):
         try:
             out[key] = cfg.tool(tool)
         except FileNotFoundError:
@@ -150,7 +98,17 @@ def engine_status() -> dict:
         out['nuc_src'] = None
     out['ok'] = bool(out.get('blastn') and out.get('nuc_src'))
     out['ok_blastx'] = bool(out.get('blastx') and os.path.isfile(PROT_DMND))
-    out['ok_cdd'] = bool(out.get('cdd') and CDD_DB)
+    # BFVD 域库（③b 验证 B 路与 ⑥b 注释层共用，与 SUVTK 提交链同库）
+    try:
+        from .bfvd_search import bfvd_db
+        out['bfvd_db'] = bfvd_db()
+    except Exception:
+        out['bfvd_db'] = None
+    try:
+        out['mmseqs'] = cfg.tool('mmseqs')
+    except FileNotFoundError:
+        out['mmseqs'] = None
+    out['ok_bfvd'] = bool(out.get('mmseqs') and out.get('bfvd_db'))
     return out
 
 
@@ -164,16 +122,18 @@ def _run(cmd, env=None, logger=None):
     run_cmd(cmd, env=env, logger=logger)
 
 
-def _mmseqs_env(mmseqs):
-    env = os.environ.copy()
-    env['PATH'] = os.path.dirname(mmseqs) + os.pathsep + env.get('PATH', '')
-    return env
-
-
 # ------------------------------------------------------------------ BLASTN
 def blastn_local(query_fa, out_dir, max_hits=MAX_HITS, evalue=BLAST_EVALUE_MAX,
-                 threads=None, logger=None) -> list:
-    """本地 blastn：核酸 query vs 病毒参考核酸库。返回命中列表。"""
+                 threads=None, logger=None, per_query_top1=False) -> list:
+    """本地 blastn：核酸 query vs 病毒参考核酸库。返回命中列表。
+
+    per_query_top1=True 时先按 query 分组取各自 bitscore 最高的 top1，再
+    全局排序截断到 max_hits——批量"每 contig 一条最近参考"场景（见
+    contig_blast_table）必须这样：直接全局截断时，命中密集的前几个 contig
+    会吃满 max_hits，后面的 contig 一条命中都拿不到（2026-10-03 审计 P2）。
+    默认 False 保留每 query 的多条命中（交互式单序列的本地命中表需要
+    展示多个参考命中）。
+    """
     cfg = get_config()
     blastn = cfg.tool('blastn')
     db = _nuc_db(logger)
@@ -215,10 +175,28 @@ def blastn_local(query_fa, out_dir, max_hits=MAX_HITS, evalue=BLAST_EVALUE_MAX,
                     'slen': int(p[5]) if p[5] else 0,
                     'evalue': p[6], 'bit_score': bs,
                 }
-    hits = sorted(best.values(), key=lambda h: -h['bit_score'])[:max_hits]
+    hits = _truncate_hits(best.values(), max_hits, per_query_top1)
     if logger:
         logger.log(f'  [blastn·本地] {len(hits)} 条命中（库 {os.path.basename(db)}）')
     return hits
+
+
+def _truncate_hits(hits, max_hits, per_query_top1):
+    """全局截断前的汇总步骤。
+
+    per_query_top1=True：按 query 分组取各自 bitscore 最高的一条，再全局
+    排序截断——保证 max_hits ≥ query 数时每个 query 都有命中（批量
+    contig 场景）；False：原样全局排序截断（保留每 query 多命中）。
+    """
+    if per_query_top1:
+        top1 = {}
+        for h in hits:
+            q = h.get('query') or ''
+            cur = top1.get(q)
+            if cur is None or h['bit_score'] > cur['bit_score']:
+                top1[q] = h
+        hits = top1.values()
+    return sorted(hits, key=lambda h: -h['bit_score'])[:max_hits]
 
 
 def contig_blast_table(contigs_fa, out_dir, threads=None, logger=None,
@@ -229,6 +207,11 @@ def contig_blast_table(contigs_fa, out_dir, threads=None, logger=None,
     只有列名、没有任何生产写入方（host_analysis 的「BLAST 最后回退」
     因此从未真正生效；实测 212 条 host_prediction 里 class_source=blast 为 0）。
     同时落盘 `<out_dir>/contig_blast.tsv`，供报告与排查。
+
+    注意：每个 contig 只取自己的 top1 命中（per_query_top1=True），因此
+    max_hits 传 max(contig 数, 默认值) 才保证覆盖全部 contig；若只传默认
+    50，第 51 个之后的 contig 仍会零命中（此前 docstring 误以为"max_hits
+    覆盖 contig 数"就够——旧的全局截断下并不够，2026-10-03 审计 P2）。
 
     返回 (table, tsv_path|None)；引擎或参考库缺失时返回 ({}, None) 优雅降级。
     """
@@ -243,10 +226,11 @@ def contig_blast_table(contigs_fa, out_dir, threads=None, logger=None,
     if n_ctg <= 0:
         return table, None
     try:
-        # max_hits 至少要覆盖 contig 数：blastn_local 会按 bitscore 全局截断，
-        # 传默认 50 会让第 51 条之后的 contig 一条命中都拿不到。
+        # 每个 contig 只留自己的 top1（per_query_top1=True），max_hits 至少
+        # 覆盖 contig 数即保证无 contig 零命中
         hits = blastn_local(contigs_fa, out_dir, max_hits=max(n_ctg, MAX_HITS),
-                            evalue=evalue, threads=threads, logger=logger)
+                            evalue=evalue, threads=threads, logger=logger,
+                            per_query_top1=True)
     except FileNotFoundError as e:
         if logger:
             logger.log(f'  本地 BLASTN 不可用（跳过 blast 列）: {e}', 'WARN')
@@ -312,8 +296,11 @@ def _split_stitle(stitle: str, acc: str):
 
 
 def blastx_local(query_fa, out_dir, max_hits=MAX_HITS, evalue=BLAST_EVALUE_MAX,
-                 threads=None, logger=None) -> list:
-    """本地 DIAMOND blastx：核酸 query → 蛋白命中 vs RefSeq 病毒蛋白库。"""
+                 threads=None, logger=None, per_query_top1=False) -> list:
+    """本地 DIAMOND blastx：核酸 query → 蛋白命中 vs RefSeq 病毒蛋白库。
+
+    per_query_top1 语义同 blastn_local（按 query 取 top1 再全局截断）。
+    """
     cfg = get_config()
     diamond = cfg.tool('diamond')
     if not os.path.isfile(PROT_DMND):
@@ -349,67 +336,7 @@ def blastx_local(query_fa, out_dir, max_hits=MAX_HITS, evalue=BLAST_EVALUE_MAX,
                     'slen': int(p[5]) if p[5] else 0,
                     'evalue': p[6], 'bit_score': bs,
                 }
-    hits = sorted(best.values(), key=lambda h: -h['bit_score'])[:max_hits]
+    hits = _truncate_hits(best.values(), max_hits, per_query_top1)
     if logger:
         logger.log(f'  [blastx·本地] {len(hits)} 条命中（DIAMOND vs viral_prot）')
     return hits
-
-
-# ------------------------------------------------------------------ CDD
-def cdd_local(query_fa, out_dir, max_hits=MAX_HITS, evalue=CDD_EVALUE_MAX,
-              threads=None, logger=None) -> dict:
-    """本地 mmseqs2 CDD 保守域搜索（核酸 query，自动 translated search）。
-
-    返回 {'hits': [...], 'query_len': nt, 'coord': 'nt'}；命中坐标是 query 的
-    核酸位置（与在线版「最长 ORF 的 aa 坐标」不同，前端按 coord 切换比例尺）。
-    """
-    cfg = get_config()
-    mmseqs = cfg.tool('mmseqs')
-    if not CDD_DB:
-        raise FileNotFoundError('缺少 mmseqs 格式 CDD 库（databases/annot/cdd/cdd_db）')
-    out6 = os.path.join(out_dir, 'cdd_local.m8')
-    # CDD prefilter 索引要一次性 ~5GB；小内存机器整库必死 → 统一走
-    # cdd_search.easy_search_cdd（整库失败自动 8 分片重试，结果等价）。
-    from .cdd_search import easy_search_cdd
-    easy_search_cdd(mmseqs, query_fa, CDD_DB, out6, out6 + '.tmp',
-                    format_output='query,target,evalue,pident,qlen,qstart,'
-                                  'qend,tstart,tend,theader',
-                    evalue=evalue, max_seqs=max_hits,
-                    extra=['-s', '4'],
-                    threads=threads or cfg.threads,
-                    env=_mmseqs_env(mmseqs), logger=logger)
-    names = cdd_names()
-    viral_ids = viral_cdd_ids()
-    hits, qlen = [], 0
-    if os.path.isfile(out6):
-        for line in safe_open(out6):
-            p = line.rstrip('\n').split('\t')
-            if len(p) < 7:
-                continue
-            acc = p[1].split()[0]
-            try:
-                qlen = int(p[4])
-                qs, qe = int(p[5]), int(p[6])
-            except ValueError:
-                continue
-            short, desc = names.get(acc, ('', ''))
-            hits.append({
-                'query': p[0].split()[0],
-                'hit_type': 'specific',
-                'accession': acc,
-                'short_name': short or acc,
-                'description': _short_desc(desc),
-                'evalue': p[2],
-                'identity': float(p[3]) if p[3] else 0,
-                'from': qs, 'to': qe,
-                'coverage': round((qe - qs + 1) / qlen, 3) if qlen else 0,
-                'superfamily': '',
-                'viral': acc in viral_ids,
-                'bit_score': '',
-            })
-    hits.sort(key=lambda h: float(h['evalue']) if h['evalue'] else 1)
-    if logger:
-        n_v = sum(1 for h in hits if h['viral'])
-        logger.log(f'  [cdd·本地] {len(hits)} 个保守域（其中 {n_v} 个病毒相关）')
-    return {'hits': hits, 'query_len': qlen, 'coord': 'nt',
-            'orf_len_aa': None, 'db': os.path.basename(CDD_DB)}

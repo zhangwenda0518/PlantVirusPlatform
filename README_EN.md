@@ -22,11 +22,12 @@ Host removal → known-virus identification & quantification → assembly → OR
 
 ## ✨ At a Glance
 
-- **One pipeline, end to end** — a 14-step cascaded analysis (⓪–⑩) where each step's output feeds the next, with resume-from-checkpoint, forced reruns, and automatic graceful degradation of optional steps.
+- **One pipeline, end to end** — a 15-stage cascade (⓪–⑩; 13 stages in the default analysis order, with QC and subsampling optional) where each step's output feeds the next, with resume-from-checkpoint, forced reruns, and automatic graceful degradation of optional steps.
 - **Local-first, offline-friendly** — all external tools (kunpeng / SPAdes / MAFFT / RAxML-NG / DIAMOND / salmon / primer3 …) ship with the platform or are auto-detected; databases are built and searched locally; downloads hit only an NCBI/ENA/NGDC official-domain whitelist.
 - **Dual entry: GUI + CLI** — a pywebview desktop window or browser UI (bilingual CN/EN one-click switch), backed by the same engine that powers the full `main.py` CLI for scripted batch runs.
 - **Phylogenetics beyond tree building** — built-in TreeTime ML molecular clock, discrete-trait geographic reconstruction (mugration), skyline plots, RTT/DRT regression, BSP, BEAST hand-off with Markov-jump parsing, and phylogeographic migration animations (GIF) — plant-virus epidemiology in one place.
 - **It gets smarter with use** — per-stage runtimes feed a self-learning model that drives real-time progress and ETA on every task card; plus concurrency gates for heavy jobs, a disk-watermark banner, and resource-estimate logging.
+- **AI assistant (chat-driven agent)** — an always-available chat dock on the home page interprets results, answers task-status questions and suggests next steps. The assistant only reads on-disk products (advisory layer, read-only); key numbers are computed from result files in code and injected as context, never invented by the model. One OpenAI-compatible client covers DeepSeek / GLM / Qwen / Kimi / OpenAI, with local Ollama for fully offline use; only statistical digests and table rows are sent — never raw sequences. It also ships a three-layer proactive driver: **stage explanations** (static knowledge base, zero cost) → **result broadcasts** (auto interpretation at key milestones) → **decision gates** (AI assessment with your confirm/stop at key stages, off by default). The AI can also **drive data discovery**: say "find transcriptome data for species X" and it searches SRA+GSA via the built-in public-data search engine (auto-broadcast when done), then drafts an action order to download selected runs into the platform — capability awareness comes from the platform's own module map, so it never deflects you to external databases. Execution power is graded: **action orders** (AI drafts, you approve, parameter diffs visible) → **auto-retry** (one same-parameter rerun on failure, off by default) → **auto-tuning loop** (bounded-key parameter proposals with auto re-run, manual opt-in); destructive/global-reset actions are never in the whitelist.
 - **A closed research loop** — public-data search (NCBI SRA + NGDC GSA) → bulk download → analysis → LOGAN tracing across all of SRA → NCBI GenBank/BioSample submission prep, without ever leaving the platform.
 
 ## 🧭 Analysis Workflow
@@ -39,7 +40,7 @@ flowchart LR
     D --> D2["③b/③c Verify<br/>consensus & variants"]
     D2 --> E["④ Host prediction<br/>ICTV cascade"]
     E --> F["⑥ ORF calls<br/>pyrodigal"]
-    F --> G["⑥b Annotation<br/>DIAMOND · Pfam · CDD"]
+    F --> G["⑥b Annotation<br/>DIAMOND · Pfam HMM · BFVD"]
     G --> H["⑦ Tree/SDT<br/>MAFFT · FastTree/RAxML"]
     H --> I["⑧ Primers<br/>primer3"]
     I --> J["⑨ Genome plots<br/>gbdraw / DFV"]
@@ -60,11 +61,11 @@ flowchart LR
 | ① Host removal | same page | kunpeng (host DB) | kept_R1/R2, host fraction |
 | ②b Known-virus ID & quant | [Kvsuite](https://github.com/zhangwenda0518/VirusPlatform/wiki/Kvsuite) | salmon (EM quant) / minibwa | ID table, filtered quant table, BAM+depth, viral reads |
 | ③ Assembly & classification | [Assembly](https://github.com/zhangwenda0518/VirusPlatform/wiki/Assembly) | SPAdes metaviral/rna + BLAST | contigs, viral-contig annotation table |
-| ③b Candidate verification | same page | host filter → length split → blastx/CDD/viroid | verified candidate set |
+| ③b Candidate verification | same page | host filter → length split → blastx/BFVD/viroid | verified candidate set |
 | ③c Consensus & variants | same page | reads re-mapped to reference → per-position counts | consensus sequences, variant table |
 | ④ Host prediction | [Host-Prediction](https://github.com/zhangwenda0518/VirusPlatform/wiki/Host-Prediction) | kunpeng + ICTV host-probability cascade | host_prediction.tsv, sankey/sunburst |
 | ⑥ ORF calling | [ORF](https://github.com/zhangwenda0518/VirusPlatform/wiki/ORF) | pyrodigal + pyrodigal-rv | faa/ffn/gff |
-| ⑥b ORF annotation | same page | DIAMOND/MMseqs2/blastp × RefSeq viral proteins + Pfam HMM + CDD | orf_annotation.tsv, GFF3, feature diagrams |
+| ⑥b ORF annotation | same page | DIAMOND/MMseqs2/blastp × RefSeq viral proteins + Pfam HMM + BFVD domains | orf_annotation.tsv, GFF3, feature diagrams |
 | ⑦ Phylogeny & SDT | [Phylo](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylo) | MAFFT + trimAl + FastTree/RAxML-NG/NJ; exact SDT engine | tree.nwk, identity matrix + heatmap |
 | ⑧ Primer design | [Primer](https://github.com/zhangwenda0518/VirusPlatform/wiki/Primer) | primer3 (conserved/full-length) + thermodynamic scoring | primers.tsv |
 | ⑨ Genome plots | [Genome-Plots](https://github.com/zhangwenda0518/VirusPlatform/wiki/Genome-Plots) | gbdraw / dna_features_viewer | circular + linear SVG |
@@ -77,7 +78,7 @@ flowchart LR
 | Phylodynamics toolkit | [Phylodynamics](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylodynamics) | TreeTime ML clock / mugration / skyline / ancestral sequences, RTT·DRT regression, BSP, MCC-tree parsing, spatiotemporal downsampling, metadata governance, alignment QC |
 | BEAST interface | [BEAST](https://github.com/zhangwenda0518/VirusPlatform/wiki/BEAST) | server job package generation/read-back verification, Markov-jump (MJRM) XML injection & log parsing, MCC state parsing |
 | Phylogeography | [Phylogeography](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylogeography) | metadata-driven migration reconstruction + migration-arc GIF animation; RDP5 recombination; pre-recombination sequence pre-filtering |
-| Public data search & download | [Public-Data](https://github.com/zhangwenda0518/VirusPlatform/wiki/Public-Data) | SRA+GSA dual-engine search, unified metadata (Core14/Full), publication-grade metadata figures, aria2c bulk download + built-in sracha for GSA .sra, host-genome download |
+| Public data search & download | [Public-Data](https://github.com/zhangwenda0518/VirusPlatform/wiki/Public-Data) | SRA+GSA dual-engine search, unified metadata (Core14/Full), publication-grade metadata figures, aria2c bulk download + built-in sracha for GSA .sra, host-genome download via NCBI taxon / accession (chromosome filter) / gget (Ensembl Plants), full NCBI datasets CLI wrapper (genome/gene/taxonomy/virus with host filter, virus feeds DB building directly) |
 | Toolbox | [Toolbox](https://github.com/zhangwenda0518/VirusPlatform/wiki/Toolbox) | end-to-end dsRNA design (windowing → efficacy → off-target → primers), miRNA target prediction (5 engines), NCBI reference download, GenBank collections & CDS/PEP export, MSA viewer, contig depth annotation, one-step tools |
 | NCBI submission prep | [Submission](https://github.com/zhangwenda0518/VirusPlatform/wiki/NCBI-Submission) | one unified_metadata.csv table drives it all: online editing → validation → source.src / miuvig / assembly / BioSample / template.sbt |
 | LOGAN tracing | [Logan](https://github.com/zhangwenda0518/VirusPlatform/wiki/Logan) | submit viral contigs to Logan-Search (~23.4M public SRA samples), batch submission + SSE live progress + tracing report |
@@ -86,10 +87,10 @@ flowchart LR
 
 | Module | Wiki | Description |
 |---|---|---|
-| Databases & references | [Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases) | Taxonomy, kunpeng DBs, virus reference/ID DB, annotation DBs (RefSeq proteins / Pfam / CDD), tree DBs (plant_tree.db / ICTV VMR), host-probability tables, host-DB building |
+| Databases & references | [Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases) | Taxonomy, kunpeng DBs, virus reference/ID DB, annotation DBs (RefSeq proteins / Pfam), tree DBs (plant_tree.db / ICTV VMR), host-probability tables, host-DB building |
 | Pipeline orchestration | [Pipeline-Overview](https://github.com/zhangwenda0518/VirusPlatform/wiki/Pipeline-Overview) | dependency scheduling, checkpoint resume, weighted progress with self-learning ETA, resource estimates, concurrency gates |
-| Settings · tasks · ops | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | bilingual UI, 17 default parameters, disk watermark, environment self-check, tool_runs archiving/cleanup, database migration, packaging |
-| Full CLI reference | [CLI-Reference](https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference) | all 30+ subcommands with per-parameter quick reference |
+| Settings · tasks · ops | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | bilingual UI, 19 default parameters, disk watermark, environment self-check, tool_runs archiving/cleanup, database migration, packaging |
+| Full CLI reference | [CLI-Reference](https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference) | all 40 subcommands with per-parameter quick reference |
 | FAQ & known issues | [FAQ](https://github.com/zhangwenda0518/VirusPlatform/wiki/FAQ) | common questions, non-ASCII path handling, large-genome DB building, SDT semantics, ML tree building… |
 
 ## 🚀 Quick Start
@@ -102,8 +103,7 @@ cd VirusPlatform
 python -m pip install -r requirements.txt
 ```
 
-- Requires **Windows 10+ and Python 3.12+**. **All external tools ship with the repository** (`3rd/`, ~2GB: single-file tools + tool suites + a bundled Python runtime) — clone and go.
-- **SPAdes** must be installed separately (`SPAdes-Windows-4.3.0-dev-Setup.exe`; put `spades.bat` on PATH).
+- Requires **Windows 10+ and Python 3.12+**. **All external tools ship with the repository** (`3rd/`, ~2GB: single-file tools + tool suites + a bundled Python runtime; all 30 tools present) — clone and go.
 - gbdraw is the preferred genome-plot engine: `pip install git+https://github.com/satoshikawato/gbdraw.git` (falls back automatically to the pure-Python dna_features_viewer).
 - Only two files exceed GitHub's 100MB per-file hard limit and are served from the [Release (external-tools)](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) instead — download and put them back in place:
   `3rd/tools/rdp5/3seqTable` (105MB) and `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd` (168MB).
@@ -123,7 +123,7 @@ Port probing starts at **8765** and increments automatically — **use the URL p
 
 1. **Databases page** → download NCBI Taxonomy (~57MB);
 2. **Databases page** → pick a host genome FASTA + the host TaxID (e.g. 4081 for tomato) → build the host DB (the virus DB ships prebuilt — nothing to do);
-3. **Settings page** → threads, e-mail, and 17 analysis defaults as needed (defaults work out of the box).
+3. **Settings page** → threads, e-mail, and 19 analysis defaults as needed (defaults work out of the box).
 
 ### 4. Run your first sample
 
@@ -209,8 +209,8 @@ Highlights:
 ```
 VirusPlatform/
 ├─ app.py                    Web GUI service (localhost only)
-├─ main.py                   CLI entry (30+ subcommands)
-├─ Virus_Platform_Core/      Core pipeline package (shared by GUI & CLI, 70+ modules)
+├─ main.py                   CLI entry (40 subcommands)
+├─ Virus_Platform_Core/      Core pipeline package (shared by GUI & CLI, 130+ modules)
 │  ├─ web/                   Flask blueprints (pages/API/tasks)
 │  ├─ known_virus_suite/     ②b known-virus ID & quant engine
 │  ├─ ncbi_submit/           NCBI submission-prep engine
@@ -221,7 +221,7 @@ VirusPlatform/
 ├─ dev_tools/                packaging & DB-build scripts (package.py etc.)
 ├─ docs/                     development docs & module inventories
 ├─ wiki/                     source Markdown of this repo's Wiki (kept in sync)
-├─ examples/                 built-in example data (✨Example buttons, ~8MB)
+├─ examples/                 built-in example data (✨Example buttons, ~9MB)
 ├─ 3rd/                      external dependencies (bin/ tools/ python/ open-virome/,
 │                            all tracked in git; only the two >100MB files come from
 │                            the Release)
@@ -285,7 +285,7 @@ The platform integrates many excellent open-source tools and data resources, inc
 - **kunpeng** — ultra-low-memory metagenomic classifier (host removal / virus classification core)
 - **SPAdes** (metaviral/rna), **salmon**, **minibwa**, **fastp**, **seqkit**, **crabz**
 - **pyrodigal / pyrodigal-rv / orfipy** (ORF calling), **DIAMOND / MMseqs2 / BLAST+** (homology search)
-- **pyhmmer × Pfam**, NCBI **CDD** (domain annotation), NCBI **RefSeq Viral** (protein DB)
+- **pyhmmer × Pfam**, NCBI **RefSeq Viral** (protein DB), **BFVD** viral domain DB (same library and naming as the NCBI submission chain suvtk). (The NCBI CDD domain-annotation layer was removed on 2026-09-29: its local library prefilter index allocates ~5 GB at once and repeatedly OOMed on low-memory machines; replaced by BFVD.)
 - **MAFFT / trimAl / Gblocks / FastTree / RAxML-NG / IQ-TREE 3** (phylogenetics), **TreeTime** (molecular clock)
 - **BEAST 1.x** (Markov-jump counting semantics; no local MCMC), **Logan-Search** (Chikhi et al. 2025, bioRxiv 10.1101/2024.07.30.605881)
 - **ICTV VMR / MSL** (taxonomy metadata), NCBI **Taxonomy / SRA / GenBank / BioSample**, NGDC **GSA**

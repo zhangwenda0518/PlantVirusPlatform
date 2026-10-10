@@ -27,7 +27,9 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 
-ROOT = r'D:\桌面\植物病毒分析平台'
+# 平台根：默认自动推导（本文件上溯 2 层 = 平台根），可用 VP_ROOT 覆盖
+ROOT = (os.environ.get('VP_ROOT')
+        or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
 EX = 'examples/'
@@ -111,7 +113,23 @@ JOBS = [
     ('phylodyn', 'phylodyn', '⚡ 一键分析（定年 → 地理迁移 → 汇总溯源）', {
         'input': EX + 'example_phylogeo.fasta',
         'meta': EX + 'example_phylogeo.meta.csv'}),
+    # dsRNA 设计全链路（2026-09-19 入编；2026-10-03 随功能恢复重新挂回）。
+    # panel='' = 显式跳过脱靶扫描：示例不依赖 databases/dsrna/panel/ 的物种
+    # 面板数据（GB 级、按需自带），其余链路（选窗→效价→T7 引物→成品 QC）
+    # 全部真跑；seed=42 结果可复现，约 3 秒。
+    ('dsrna', 'dsrna', 'dsRNA 设计（RNAi 臂序列优化）', {
+        'input': EX + 'example_cmv.fasta',
+        'construct_len': 300, 'kmer_len': 21, 'iterations': 100, 'seed': 42,
+        'candidates': 3, 'n_windows': 1, 'max_mm': 1, 'panel': '',
+        'primer_scope': 'best_window',
+        'primer_product_min': 200, 'primer_product_max': 300}),
 ]
+
+# 示例 manifest 条目的补充说明（键 = 模块名；collect() 不含此字段）
+MANIFEST_NOTES = {
+    'dsrna': 'dsRNA 设计全链（dsrnamax 选窗 + siRNA 效价 + T7 引物）：'
+             'CMV 三条 RNA，seed=42 可复现',
+}
 
 # 复制产物时排除的中间目录/大文件（体积大且对示例无价值）
 # mmseqs_tmp 里含 Windows 无法 stat 的 latest 符号链接（遍历会抛 WinError 1920）
@@ -238,12 +256,37 @@ def main():
             run, result, dt = run_one(client, tool, params)
             meta = result if isinstance(result, dict) else {}
             manifest[module] = collect(run, module, title, meta)
+            if module in MANIFEST_NOTES:
+                manifest[module]['note'] = MANIFEST_NOTES[module]
             n = len(manifest[module]['files'])
             print(f'         ✓ {dt:.0f}s  产物 {n} 个 -> {run}', flush=True)
             ok.append(module)
         except Exception as e:
             print(f'         ✗ 失败: {e}', flush=True)
             fail.append((module, str(e)[:160]))
+
+    # manifest 收尾归一（2026-10-04 审查 E2）：
+    # ① 旧条目 files 曾是字符串数组、新条目是 {path,size}——schema 混用，
+    #    统一为对象数组（size 未知置 null）；
+    # ② 过滤「声明了但磁盘不存在」的文件（快照与源脱节时避免误导前端）。
+    for mod, ent in manifest.items():
+        if not isinstance(ent, dict) or not isinstance(ent.get('files'), list):
+            continue
+        norm, kept = [], 0
+        for item in ent['files']:
+            if isinstance(item, str):
+                item = {'path': item, 'size': None}
+            p = item.get('path')
+            if p and os.path.isfile(os.path.join(EXR, mod, p)):
+                norm.append(item)
+                kept += 1
+            elif not p:
+                norm.append(item)
+        dropped = len(ent['files']) - kept
+        if dropped:
+            ent['note'] = ((ent.get('note') or '') +
+                           f'（{dropped} 个声明文件已缺失，从清单剔除）').strip()
+        ent['files'] = norm
 
     with io.open(manifest_path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(manifest, f, ensure_ascii=False, indent=1, sort_keys=True)

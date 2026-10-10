@@ -49,9 +49,20 @@ def arc_curve(a, b, seg=_ARC_SEG, sag=_ARC_SAG):
 
     与前端 `_pgArc` 同一几何：控制点在两端中点、沿连线法向偏移 sag 比例。
     网页/GIF/后续导出共用一套弧线，避免同一个迁移在两张图里走不同路线。
+
+    ⚠️ 2026-10-03 修：经度插值走**最短方向** —— 两端经度差 >180° 时把西端
+    +360（差 <−180° 时把东端 −360）再插值。原来直接用原始经度插值，
+    178 → −179.5 这种跨 ±180° 日界线的锚点会沿"绕地球一圈"的方向穿过经度 0，
+    弧线横穿整张地图（而两端其实只隔 2.5°）。插值后落在 [−180, 180] 外、
+    等价于绕回另一侧的点由 plotly 按等价经度绘制，落点不变。
     """
     alat, alon = float(a[0]), float(a[1])
     blat, blon = float(b[0]), float(b[1])
+    dlon = blon - alon
+    if dlon > 180.0:            # 最短方向：把 b 挪到 a 的西侧
+        blon -= 360.0
+    elif dlon < -180.0:         # 最短方向：把 b 挪到 a 的东侧
+        blon += 360.0
     mlat, mlon = (alat + blat) / 2.0, (alon + blon) / 2.0
     clat = mlat - sag * (blon - alon)
     clon = mlon + sag * (blat - alat)
@@ -348,25 +359,36 @@ def build_migration_gif(summary, out_path, width=960, height=520, fps=2,
     if not frames:
         raise ValueError('没有可渲染的帧（MOTP 分箱为空）')
     # 先写 .part 再原子替换：旧 GIF 在导出完成前始终可下载，中途失败/取消
-    # 也不会留下半截文件被当成品供应
+    # 也不会留下半截文件被当成品供应。
+    # ⚠️ 2026-10-03：整段包 try/finally —— 渲染/保存/替换任一步抛错（含
+    # 取消）都**不留 .part 残留**。原来失败时 .part 会一直躺在输出目录里，
+    # 下次导出看不到"上次是怎么坏的"，还占磁盘。
     tmp_path = out_path + '.part'
     os.makedirs(os.path.dirname(os.path.abspath(out_path)) or '.',
                 exist_ok=True)
-    frames[0].save(tmp_path, format='GIF', save_all=True,
-                   append_images=frames[1:],
-                   duration=max(40, int(round(1000.0 / max(0.5, fps)))),
-                   loop=0, optimize=True)
-    # Windows 上 os.replace 会被「另一个进程正打开着目标文件」挡下
-    # （PermissionError）—— 典型场景：上一次导出的 GIF 正在被浏览器下载。
-    # 短暂重试足够跨过下载尾段；持续被占则把错误如实抛出（别吞）。
-    for _try in range(5):
-        try:
-            os.replace(tmp_path, out_path)
-            break
-        except PermissionError:
-            if _try == 4:
-                raise
-            time.sleep(0.4)
+    try:
+        frames[0].save(tmp_path, format='GIF', save_all=True,
+                       append_images=frames[1:],
+                       duration=max(40, int(round(1000.0 / max(0.5, fps)))),
+                       loop=0, optimize=True)
+        # Windows 上 os.replace 会被「另一个进程正打开着目标文件」挡下
+        # （PermissionError）—— 典型场景：上一次导出的 GIF 正在被浏览器下载。
+        # 短暂重试足够跨过下载尾段；持续被占则把错误如实抛出（别吞）。
+        for _try in range(5):
+            try:
+                os.replace(tmp_path, out_path)
+                break
+            except PermissionError:
+                if _try == 4:
+                    raise
+                time.sleep(0.4)
+    finally:
+        # 成功时 os.replace 已把 .part 移走（此处不存在）；失败/取消时清掉残留
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
     return {
         'path': out_path,
         'file': os.path.basename(out_path),

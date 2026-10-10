@@ -222,7 +222,9 @@ ORIGIN
                               f'（已重试 3 次）')
             return 0
         drv.set_page_load_timeout(40)
-        wait = WebDriverWait(drv, 40)
+        # 批量回归满载时元素等待偶发不够（2026-10-06 实测 40s 超时翻车、
+        # 单跑 67s 全过）；批量运行器注入 VP_TEST_WAIT 放宽，单跑不变
+        wait = WebDriverWait(drv, int(os.environ.get('VP_TEST_WAIT', 40)))
         from Virus_Platform_Core.web.tasks import tm
 
         def running_tasks():

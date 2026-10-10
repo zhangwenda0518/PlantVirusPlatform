@@ -168,6 +168,110 @@
     </div>
   </section>
 
+  <!-- AI 助手（对话驱动智能代理）：OpenAI 兼容端点配置。
+       配置走独立的 /api/ai/config（自带保存/测试按钮，不占用底部保存栏）。 -->
+  <section class="card" id="aiCard" style="margin-top:18px">
+    <h2 data-i18n="ai.se.title">🤖 AI 助手（对话驱动智能代理）</h2>
+    <p class="hint" data-i18n="ai.se.hint">在总览页提供对话式结果解读与全过程指导。AI 只读取平台落盘的分析产物做解读（顾问层，只读）；关键数字全部由代码从结果文件算出后注入，不由模型编造。隐私口径：默认只发送统计摘要与表格行，不发送任何序列本体；选本地 Ollama 可完全离线。</p>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.enable">启用 AI 助手</span></div>
+      <div class="s-ctrl"><select id="aiEnabled">
+        <option value="false" data-i18n="se.off">关</option>
+        <option value="true" data-i18n="se.on">开</option>
+      </select></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.provider">提供方预设</span></div>
+      <div class="s-ctrl"><select id="aiProvider" onchange="aiFillPreset()"></select></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.baseurl">API Base URL</span>
+        <small>OpenAI 兼容端点，通常以 /v1 结尾</small></div>
+      <div class="s-ctrl"><input id="aiBaseUrl" placeholder="https://api.deepseek.com/v1"></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.key">API Key</span>
+        <small data-i18n="ai.se.keyKeep">留空 = 保持已保存的 Key 不变；仅存本机 platform.json</small></div>
+      <div class="s-ctrl" style="display:flex;gap:6px">
+        <input id="aiKey" type="password" style="flex:1">
+        <a id="aiKeyUrl" class="btn small" href="#" target="_blank" rel="noopener"
+           data-i18n="ai.se.keyUrl"
+           style="display:none;white-space:nowrap">获取 Key</a>
+      </div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.model">模型</span></div>
+      <div class="s-ctrl"><input id="aiModel" placeholder="deepseek-chat"></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.temp">温度（0~2，越低越严谨）</span></div>
+      <div class="s-ctrl"><input id="aiTemp" type="number" min="0" max="2" step="0.1" value="0.3"></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.maxtok">最大生成长度（tokens）</span></div>
+      <div class="s-ctrl"><input id="aiMaxTok" type="number" min="64" max="32768" step="64" value="2048"></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.explain">第一层 · 主动讲解</span>
+        <small data-i18n="ai.se.explainHint">每个阶段开始时在对话坞推"这一步在做什么"卡片；静态知识库，零 AI 消耗</small></div>
+      <div class="s-ctrl"><select id="aiExplain">
+        <option value="false" data-i18n="se.off">关</option>
+        <option value="true" data-i18n="se.on">开</option>
+      </select></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.broadcast">第二层 · 结果播报</span>
+        <small data-i18n="ai.se.broadcastHint">②b 检出 / ③ 组装 / ⑩ 报告完成或阶段失败时，AI 自动生成解读推到对话坞（少量 token，失败静默不影响分析）</small></div>
+      <div class="s-ctrl"><select id="aiBroadcast">
+        <option value="false" data-i18n="se.off">关</option>
+        <option value="true" data-i18n="se.on">开</option>
+      </select></div>
+    </div>
+    <div class="set-row stack">
+      <div class="s-label"><span data-i18n="ai.se.bcastStages">播报触发阶段</span>
+        <small data-i18n="ai.se.bcastStagesHint">勾选哪些阶段，完成时就自动生成 AI 解读；阶段失败时无论勾选与否都会播报</small></div>
+      <div class="s-ctrl"><div id="aiBcastStages" class="ai-stagegrid"></div></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.gate">第三层 · 决策闸门</span>
+        <small data-i18n="ai.se.gateHint">关键阶段收尾后 AI 给出"继续/先检查"评估并暂停流水线，等你在对话坞点继续或终止；超时自动继续。⚠ 会改变流水线行为，按需开启</small></div>
+      <div class="s-ctrl" style="display:flex;gap:8px;align-items:center">
+        <select id="aiGate">
+          <option value="false" data-i18n="se.off">关</option>
+          <option value="true" data-i18n="se.on">开</option>
+        </select>
+        <input id="aiGateMin" type="number" min="1" max="120" style="width:80px">
+        <span class="hint" data-i18n="ai.se.gateMin" style="white-space:nowrap">分钟超时</span>
+      </div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.execAuto">第二级 · 自动重试（执行权）</span>
+        <small data-i18n="ai.se.execAutoHint">阶段失败后 AI 自动按**原参数**重跑一次（限 1 次，杜绝循环）；无需确认。默认关</small></div>
+      <div class="s-ctrl"><select id="aiExecAuto">
+        <option value="false" data-i18n="se.off">关</option>
+        <option value="true" data-i18n="se.on">开</option>
+      </select></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.se.execTune">第三级 · 自动调参闭环（需手动开启）</span>
+        <small data-i18n="ai.se.execTuneHint">阶段失败后 AI 在限定键与边界内提参并**自动重跑**（每样品限 1 次，失败回落第二级）。⚠ 最高权限，仅在理解其行为后开启</small></div>
+      <div class="s-ctrl"><select id="aiExecTune">
+        <option value="false" data-i18n="se.off">关</option>
+        <option value="true" data-i18n="se.on">开</option>
+      </select></div>
+    </div>
+    <div class="set-row stack">
+      <div class="s-label"><span data-i18n="ai.se.gateStages">闸门触发阶段</span>
+        <small data-i18n="ai.se.gateStagesHint">勾选哪些阶段，完成后就暂停等待你在对话坞确认（仅闸门开启时生效）</small></div>
+      <div class="s-ctrl"><div id="aiGateStages" class="ai-stagegrid"></div></div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+      <button class="btn primary" onclick="aiSave()">💾 <span data-i18n="ai.se.save">保存 AI 设置</span></button>
+      <button class="btn" onclick="aiTest()">🔌 <span data-i18n="ai.se.test">测试连接</span></button>
+      <span id="aiMsg" class="hint"></span>
+    </div>
+  </section>
+
   <div class="savebar">
     <span class="hint" id="saveHint"></span>
     <button class="btn primary" onclick="saveSettings()" data-i18n="se.save">💾 保存设置</button>
@@ -400,6 +504,120 @@ async function runSelfcheck(force) {
 loadSettings();
 loadTools();
 runSelfcheck(false);   // 进页展示缓存结果；强制重跑点按钮
+
+/* ---- AI 助手配置 ----
+ * Key 输入框留空 = 不修改已保存的 Key（后端把掩码回传识别为"未变"）。
+ * 测试连接支持"先测再存"：把表单当前值作为临时配置发给 /api/ai/test。 */
+let AI_PRESETS = [];
+let AI_STAGE_OPTS = [];
+
+function aiRenderStages(box, opts, checked) {
+  const on = new Set(checked || []);
+  box.innerHTML = (opts || []).map(o =>
+    `<label class="ai-stagechk"><input type="checkbox" value="${o.key}"
+      ${on.has(o.key) ? 'checked' : ''}>${esc(o.name)}</label>`).join('')
+    || '<span class="hint">—</span>';
+}
+
+function aiCollectStages(box) {
+  return [...box.querySelectorAll('input:checked')].map(i => i.value);
+}
+
+async function loadAiConfig() {
+  try {
+    const d = await (await fetch('/api/ai/config')).json();
+    AI_PRESETS = d.presets || [];
+    const c = d.config || {};
+    const sel = $('aiProvider');
+    sel.innerHTML = AI_PRESETS.map(p =>
+      `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    sel.value = c.provider || 'deepseek';
+    $('aiEnabled').value = c.enabled ? 'true' : 'false';
+    $('aiBaseUrl').value = c.base_url || '';
+    $('aiModel').value = c.model || '';
+    $('aiKey').value = '';
+    $('aiKey').placeholder = c.api_key_set ? (c.api_key || '') : '';
+    $('aiTemp').value = c.temperature ?? 0.3;
+    $('aiMaxTok').value = c.max_tokens ?? 2048;
+    AI_STAGE_OPTS = d.stage_options || [];
+    aiRenderStages($('aiBcastStages'), AI_STAGE_OPTS,
+                   c.broadcast_stages || ['kvsuite', 'assembly', 'report']);
+    aiRenderStages($('aiGateStages'), AI_STAGE_OPTS,
+                   c.gate_stages || ['kvsuite', 'assembly']);
+    $('aiExplain').value = (c.explain ?? true) ? 'true' : 'false';
+    $('aiBroadcast').value = (c.broadcast ?? true) ? 'true' : 'false';
+    $('aiGate').value = (c.gate ?? false) ? 'true' : 'false';
+    $('aiExecAuto').value = (c.exec_auto ?? false) ? 'true' : 'false';
+    $('aiExecTune').value = (c.exec_auto_tune ?? false) ? 'true' : 'false';
+    $('aiGateMin').value = c.gate_timeout_min ?? 15;
+    aiFillPreset(false);
+  } catch (e) { $('aiMsg').textContent = t('c.loadFail', '读取失败') + ': ' + e; }
+}
+
+function aiPreset() {
+  return AI_PRESETS.find(p => p.id === $('aiProvider').value) || {};
+}
+
+function aiFillPreset(overwrite) {
+  const p = aiPreset();
+  const link = $('aiKeyUrl');
+  if (p.key_url) { link.href = p.key_url; link.style.display = ''; }
+  else link.style.display = 'none';
+  if (overwrite === false) return;   // 仅刷新链接（加载时），不覆盖用户已填值
+  if (p.base_url) $('aiBaseUrl').value = p.base_url;
+  if (p.model) $('aiModel').value = p.model;
+}
+
+function aiBody(includeKey) {
+  return {
+    enabled: $('aiEnabled').value === 'true',
+    provider: $('aiProvider').value,
+    base_url: $('aiBaseUrl').value.trim(),
+    model: $('aiModel').value.trim(),
+    temperature: parseFloat($('aiTemp').value) || 0,
+    max_tokens: parseInt($('aiMaxTok').value, 10) || 2048,
+    explain: $('aiExplain').value === 'true',
+    broadcast: $('aiBroadcast').value === 'true',
+    gate: $('aiGate').value === 'true',
+    exec_auto: $('aiExecAuto').value === 'true',
+    exec_auto_tune: $('aiExecTune').value === 'true',
+    gate_timeout_min: parseInt($('aiGateMin').value, 10) || 15,
+    broadcast_stages: aiCollectStages($('aiBcastStages')),
+    gate_stages: aiCollectStages($('aiGateStages')),
+    ...(includeKey && $('aiKey').value.trim()
+        ? { api_key: $('aiKey').value.trim() } : {}),
+  };
+}
+
+async function aiSave() {
+  try {
+    const r = await fetch('/api/ai/config', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(aiBody(true))});
+    if (!r.ok) { $('aiMsg').textContent = '✘ ' + ((await r.json()).error || t('se.applyFail', '失败')); return; }
+    const d = await r.json();
+    $('aiMsg').textContent = t('ai.se.saved', '✔ AI 设置已保存并生效');
+    $('aiKey').value = '';
+    $('aiKey').placeholder = d.config && d.config.api_key_set
+      ? (d.config.api_key || '') : '';
+    toast(t('ai.se.saved', '✔ AI 设置已保存并生效'), '', {ttl: 3000});
+  } catch (e) { $('aiMsg').textContent = String(e); }
+}
+
+async function aiTest() {
+  $('aiMsg').textContent = t('ai.se.testing', '测试中…（首次连接可能需数秒）');
+  try {
+    const r = await fetch('/api/ai/test', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(aiBody(true))});
+    const d = await r.json();
+    $('aiMsg').textContent = r.ok && d.ok
+      ? `${t('ai.se.testOk', '✔ 连接正常')} · ${d.latency_ms}ms · ${esc(d.reply || '')}`
+      : `${t('ai.se.testFail', '✘ 连接失败')} ${esc(d.error || '')}`;
+  } catch (e) { $('aiMsg').textContent = String(e); }
+}
+
+loadAiConfig();
 </script>
 </body>
 </html>

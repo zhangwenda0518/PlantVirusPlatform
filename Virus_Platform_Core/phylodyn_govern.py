@@ -83,16 +83,17 @@ _MONTHS = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
            'jul': 7, 'aug': 8, 'sep': 9, 'sept': 9, 'oct': 10, 'nov': 11,
            'dec': 12}
 
-# 显式白名单：认了哪些格式、归一后精度是什么（报告里直接引用这张表）
-DATE_FORMAT_TABLE = [
-    ('iso_day', 'YYYY-MM-DD', 'day'),
-    ('iso_month', 'YYYY-MM', 'month'),
-    ('iso_year', 'YYYY', 'year'),
-    ('genbank', 'DD-Mon-YYYY', 'day'),
-    ('euro_day', 'DD/MM/YYYY 或 DD.MM.YYYY', 'day'),
-    ('mon_year', 'Mon-YYYY', 'month'),
-    ('decimal_year', '已转好的小数年（小数位 ≥4，如 2007.569473）', 'day'),
-]
+# 认了哪些格式、归一后精度是什么（`DateInfo.fmt` 的取值表，报告 `date_format`
+# 直方图里的键就出自这里 —— 逐个对应着读报告）。
+# ⚠️ 2026-10-03：原为模块常量 `DATE_FORMAT_TABLE`，但全仓无代码引用（只被
+#    注释/文档提到）→ 降级成注释表：文档信息保留，不再是一个没人用的死常量。
+#     iso_day      YYYY-MM-DD                                day
+#     iso_month    YYYY-MM                                  month
+#     iso_year     YYYY                                     year
+#     genbank      DD-Mon-YYYY                              day
+#     euro_day     DD/MM/YYYY 或 DD.MM.YYYY                 day
+#     mon_year     Mon-YYYY                                 month
+#     decimal_year 已转好的小数年（小数位 ≥4，如 2007.569473） day
 
 
 @dataclass
@@ -102,7 +103,7 @@ class DateInfo:
     iso: Optional[str] = None            # 归一后的 ISO（YYYY / YYYY-MM / YYYY-MM-DD）
     decimal: Optional[float] = None      # 小数年（按 mode）
     precision: str = 'none'              # day / month / year / none
-    fmt: str = ''                        # DATE_FORMAT_TABLE 的名字
+    fmt: str = ''                        # 格式名（取值见上方注释表）
     issue: str = ''                      # placeholder / unparsable / out_of_range / ''
     ambiguous_frac: bool = False         # 形如 2019.5 / 2014.11 的"小数年 vs 年.月"二义写法
     mode: str = 'mid'
@@ -134,7 +135,7 @@ def decimal_year(raw, *, mode: str = 'mid') -> Optional[float]:
 
 
 def parse_date(raw, *, mode: str = 'mid') -> DateInfo:
-    """解析日期字符串 → `DateInfo`。认 7 种格式，见 `DATE_FORMAT_TABLE`。
+    """解析日期字符串 → `DateInfo`。认 7 种格式，见上方格式注释表。
 
     · 占位符（字面量 `YYYY-MM-DD` / `YYYY` / `XX`…）→ `issue='placeholder'`
     · 小数年与「年.月」的**消歧判据**：小数位 **≥4** 才算小数年
@@ -420,6 +421,7 @@ def govern_rows(rows, *, date_key: str = 'date', loc_key: str = 'location',
     date_issue, loc_issue, prec = Counter(), Counter(), Counter()
     fmt_hist, dropped_hist = Counter(), Counter()
     n_country_only = 0
+    n_unknown_level_all = 0    # 层级全是 Unknown（清空该字段）的行数
     n_ambig = 0          # 形如 `2019.5`/`2014.11` 的"小数年 vs 年.月"二义写法计数
     for r in rows:
         r2 = dict(r)
@@ -454,11 +456,19 @@ def govern_rows(rows, *, date_key: str = 'date', loc_key: str = 'location',
             gov['dropped_levels'] = gi.dropped_levels
         if gi.issue == 'country_only':
             n_country_only += 1
+        if gi.issue == 'unknown_level' and not gi.usable:
+            # 层级**全是** Unknown（`Unknown:Unknown` / `unknown_region`）：删完
+            # 什么都不剩，等同于"没有地点"
+            n_unknown_level_all += 1
         if gi.usable:
             r2[loc_key] = gi.normalized        # 归一：删掉 Unknown 层级
             gov['loc_level'] = gi.level
         elif blank_placeholders:
-            if gi.issue in ('placeholder', 'country_only'):
+            # ⚠️ 清空名单补 `unknown_level`（2026-10-03 修）：`Unknown:Unknown`
+            #    这类全 Unknown 层级的地点 normalized=None、usable=False，但原实现
+            #    只清 placeholder/country_only —— 字面量 "Unknown" 会原样留下，
+            #    继续参与等量降采样 / 迁移统计（等于把一个不存在的区划当数据用）。
+            if gi.issue in ('placeholder', 'country_only', 'unknown_level'):
                 r2[loc_key] = ''               # 没分辨率 → 清空，但不丢行
         # 保底：把原始值留在旁边，便于回溯（下游只读规范列）
         if gov:
@@ -474,6 +484,7 @@ def govern_rows(rows, *, date_key: str = 'date', loc_key: str = 'location',
         'date_format': dict(fmt_hist.most_common(8)),
         'dropped_unknown_levels': dict(dropped_hist.most_common(8)),
         'n_country_only': n_country_only,
+        'n_unknown_level_all': n_unknown_level_all,
         'n_date_ambiguous_frac': n_ambig,
         'n_date_ok': sum(prec.values()),
     }
@@ -490,6 +501,10 @@ def govern_rows(rows, *, date_key: str = 'date', loc_key: str = 'location',
         warns.append('%d 行的地点是占位符/Unknown —— 已**清空该字段**（行保留）：'
                      '下游会把它当"没有地点"，这比拿 Unknown 当区划去参与'
                      '时空调度/降采样可靠' % loc_issue['placeholder'])
+    if n_unknown_level_all:
+        warns.append('%d 行的地点层级**全是 Unknown**（如 `Unknown:Unknown`、'
+                     '`unknown_region`）—— 已就地清空，不赋任何坐标、也不再'
+                     '参与等量降采样/迁移统计' % n_unknown_level_all)
     if dropped_hist:
         warns.append('删除过 Unknown 地理层级的行 %d 条（例：%s）'
                      % (sum(dropped_hist.values()),

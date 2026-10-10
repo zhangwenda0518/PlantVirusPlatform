@@ -193,15 +193,24 @@ function setConnBanner(down) {
   }
 }
 
-// 断连横幅自愈探针：每 5s 探测一次，服务恢复即自动摘掉横幅
+// 仅真网络失败（fetch 抛 TypeError）才算断连：服务端 500/JSON 解析失败
+// 属局部接口问题，不应谎报"与平台服务的连接已断开"
+function netFail(e) { return e instanceof TypeError; }
+
+// 断连横幅自愈探针：每 5s 探测一次，服务恢复即自动摘掉横幅。
+// 探测必须带超时：fetch 默认永不超时，第一轮若挂死在半断开的
+// keep-alive 连接上，await 永不返回 → 横幅永远无法自愈。
 let _connProbe = null;
 function startConnProbe() {
   if (_connProbe) return;
   _connProbe = setInterval(async () => {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 4000);
     try {
-      const r = await fetch('/api/tasks');
+      const r = await fetch('/api/tasks', { signal: ac.signal, cache: 'no-store' });
       if (r.ok) { clearInterval(_connProbe); _connProbe = null; setConnBanner(false); }
-    } catch (e) { /* 仍未恢复，继续探测 */ }
+    } catch (e) { /* 仍未恢复（或本次探测超时），继续下一轮 */ }
+    finally { clearTimeout(timer); }
   }, 5000);
 }
 
@@ -218,7 +227,7 @@ function autoscrollLogs() {
    宽屏大文本框（约 1040px 宽 / 22 行高，可拖拽放大、窗口矮时自动收缩）：长序列/多记录 FASTA
    粘贴时不再挤压在窄框里；实时显示字符数与记录数，Ctrl+Enter 确认、Esc 取消。 */
 /* 输入框旁的 📋：在**文件输入行下方**展开/收起一个独立的大文本框
-   （尺寸对齐 CDD / BLAST 卡：rows=10 / min-height 220px），与文件选择彻底分开。
+   （尺寸对齐 BLAST 卡：rows=10 / min-height 220px），与文件选择彻底分开。
    粘贴内容自动写入临时文件（防抖 700ms + 失焦）并回填路径，各卡原有运行逻辑
    无需改动；实时显示字符数/记录数，Ctrl+Enter 立即写入并收起，Esc 收起，
    再点一次 📋 也收起。 */
@@ -229,14 +238,14 @@ function _pasteWrite(inputId, ext, ta, onDone) {
   var text = (ta.value || '').trim();
   if (!text) return;
   if (text.length > _PASTE_MAX_CHARS) {
-    alert('粘贴内容过大（>20MB）。请把内容保存为文件后，用文件选择/拖拽方式输入。');
+    alert(t('ui.app.pasteTooBig'));
     return;
   }
   fetch('/api/paste_input', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: text, ext: ext })
   }).then(function (r) { return r.json(); }).then(function (d) {
-    if (!d.path) { alert(d.error || '写入失败'); return; }
+    if (!d.path) { alert(d.error || t('ui.app.writeFail')); return; }
     var inp = $(inputId);
     if (inp) {
       inp.value = d.path;
@@ -245,7 +254,7 @@ function _pasteWrite(inputId, ext, ta, onDone) {
       inp.dispatchEvent(new Event('change', { bubbles: true }));
     }
     if (typeof onDone === 'function') onDone(d.path);
-  }).catch(function (e) { alert('无法连接: ' + e); });
+  }).catch(function (e) { alert(t('ui.common.connShort') + ': ' + e); });
 }
 function pasteSeq(inputId, ext) {
   ext = ext || '.fasta';
@@ -441,7 +450,7 @@ function ictvSelectedLevels() {
 
 async function ictvPreview() {
   const levels = ictvSelectedLevels();
-  if (!Object.keys(levels).length) { alert('请至少选择一个分类等级'); return; }
+  if (!Object.keys(levels).length) { alert(t('ui.app.needRank')); return; }
   const box = $('spPreview');
   box.innerHTML = '<p class="hint">选参中…</p>';
   try {
@@ -499,7 +508,7 @@ function collName() {
 async function ictvDownload(btn) {
   const levels = ictvSelectedLevels();
   const coll = collName();
-  if (!Object.keys(levels).length) { alert('请至少选择一个分类等级'); return; }
+  if (!Object.keys(levels).length) { alert(t('ui.app.needRank')); return; }
   try {
     const r = await fetch('/api/ictv/download', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -509,17 +518,20 @@ async function ictvDownload(btn) {
         limit: +_v('sp_limit') || 200,
         per_genus: +(_v('sp_per_genus') || 0),
         per_species: +(_v('sp_per_species') || 0) }))});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     _watchTask(d.task, () => { loadGbCollections(); loadNcbiCollections(); loadTbColls(); },
                btn, '⏳ ICTV 序列下载中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
-/* ================= 序列比对模块：运行 / 彩色查看器 / 编辑保存 ================= */
-let alData = null, alPageNo = 0, alEditing = false;
+/* ================= 序列比对模块：运行 / 彩色查看器 / 拖拽修剪 / 编辑保存 ================= */
+let alData = null, alEditing = false;
+let alSelA = -1, alSelB = -1;   // 拖拽选中的列范围（0-based 含端点）
+let alUndoStack = [];           // 修剪前快照（撤销用，最多 20 步）
+let _alDragA = null;            // 拖拽进行中的锚点列
 
 const AL_NT_COLORS = { A: '#2e7d32', T: '#c62828', U: '#c62828', G: '#e65100',
                        C: '#1565c0', N: '#78909c', '-': '#eceff1', '?': '#eceff1' };
@@ -545,7 +557,7 @@ async function alignRun(btn) {
   const seqs = _v('al_fa');
   const extra = _v('al_fa_extra');
   if (!seqs && !extra) {
-    alert('请选择或粘贴 FASTA（≥2 条序列）'); return;
+    alert(t('ui.common.needFasta2')); return;
   }
   try {
     const r = await fetch('/api/tool/run', {
@@ -556,7 +568,7 @@ async function alignRun(btn) {
                                        strategy: _v('al_strategy') || 'auto',
                                        trimal: _v('al_trimal') || 'automated1',
                                        max_n: +_v('al_maxn') || 100 } })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
@@ -568,7 +580,7 @@ async function alignRun(btn) {
       $('alPath').value = p;
       alignLoad();
     }, btn, '⏳ 比对中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 function TMlastResult(tid) {
   // 任务面板轮询的数据不在 JS 侧持久化：退化为直接请求比对文件即可
@@ -577,45 +589,74 @@ function TMlastResult(tid) {
 
 async function alignLoad() {
   const p = _v('alPath');
-  if (!p) { alert('请填比对 FASTA 路径'); return; }
+  if (!p) { alert(t('ui.app.needAlnPath')); return; }
   const box = $('alBox');
   box.innerHTML = '<p class="hint">加载中…</p>';
   try {
     const r = await fetch('/api/align/file?path=' + encodeURIComponent(p));
     if (!r.ok) { box.innerHTML = '<p class="hint" style="color:#b91c1c">' + esc((await r.json()).error || '加载失败') + '</p>'; return; }
     alData = await r.json();
-    alPageNo = 0;
+    alSelA = alSelB = -1; alUndoStack = [];
     alignRender();
   } catch (e) { box.innerHTML = '<p class="hint" style="color:#b91c1c">无法连接: ' + esc(e) + '</p>'; }
 }
 
+function _alWrapW() { return +($('alCols') && $('alCols').value) || 100; }
+
+function _alLineHtml(seq, b) {
+  // [b*W, b*W+W) 区间渲染：相邻同色且同选中态的字符合并为一个 span（RLE）。
+  // 长 gap 段 / 同色连续段被大幅压缩，万列比对也能整条渲染不卡。
+  const W = _alWrapW();
+  const start = b * W, end = Math.min(seq.length, start + W);
+  const a = Math.min(alSelA, alSelB), z = Math.max(alSelA, alSelB);
+  let html = '', i = start;
+  while (i < end) {
+    const ch = seq[i];
+    const sel = alSelA >= 0 && i >= a && i <= z;
+    let j = i + 1;
+    while (j < end && seq[j] === ch && (alSelA >= 0 && j >= a && j <= z) === sel) j++;
+    html += `<span style="color:${alColor(ch, alData.type)};font-weight:700;${sel ? 'background:#fbbf24;color:#111;' : ''}">${esc(seq.slice(i, j))}</span>`;
+    i = j;
+  }
+  return html;
+}
+
+function _alBlockHtml(b) {
+  // 一个"块" = 全部序列的第 [b*W, b*W+W) 列；整条比对 = 块序列横向滚动。
+  const W = _alWrapW(), cols = alData.cols, nameW = alData._nameW;
+  const start = b * W, end = Math.min(cols, start + W);
+  let h = `<div class="al-block" data-b="${b}" style="margin-bottom:8px">`;
+  h += `<div style="color:#94a3b8;white-space:pre">${' '.repeat(nameW)} `
+    + `${String(start + 1).padStart(6)} ──── ${String(end).padEnd(6)}</div>`;
+  alData.names.forEach((name, i) => {
+    const s = (alData.seqs[i] + '-'.repeat(cols)).slice(0, cols);
+    h += `<div style="white-space:pre">`
+       + `<span style="color:#334155;font-weight:600;display:inline-block;width:${nameW}ch;vertical-align:top;overflow:hidden">${esc(name)}</span> `
+       + `<span class="al-seq" data-b="${b}">${_alLineHtml(s, b)}</span></div>`;
+  });
+  return h + '</div>';
+}
+
 function alignRender() {
-  const box = $('alBox');
-  if (!alData) { box.innerHTML = '<p class="hint">暂无数据</p>'; $('alNav').style.display = 'none'; return; }
+  const box = $('alBox'), nav = $('alNav');
+  if (!alData) { box.innerHTML = '<p class="hint">暂无数据</p>'; nav.style.display = 'none'; return; }
   if (!alData.aligned)
     $('alMeta').textContent = '⚠ 序列长度不一致（未比对或 FASTA）：彩色视图按最长序列展示，建议先运行比对';
   else
     $('alMeta').textContent = '';
-  const cols = +($('alCols') && $('alCols').value) || 100;
-  const total = Math.max(1, Math.ceil(alData.cols / cols));
-  alPageNo = Math.min(Math.max(0, alPageNo), total - 1);
-  const start = alPageNo * cols;
-  const shown = alData.seqs.map(s => (s + '-'.repeat(alData.cols)).slice(start, start + cols));
-  const nameW = Math.max(...alData.names.map(n => n.length), 8);
-  let html = '<div style="font-family:Consolas,monospace;font-size:12.5px;white-space:pre;line-height:1.55">';
-  html += '<div style="color:#64748b">' + ' '.repeat(nameW) +
-    ' ' + String(start + 1).padStart(cols / 2) + '</div>';
-  alData.names.forEach((name, i) => {
-    let line = '<span style="color:#334155;font-weight:600">' +
-      esc(name.padEnd(nameW)) + '</span> ';
-    for (const ch of shown[i])
-      line += `<span style="color:${alColor(ch, alData.type)};font-weight:700">${ch === '-' ? '-' : esc(ch)}</span>`;
-    html += '<div>' + line + '</div>';
-  });
-  html += '</div>';
-  box.innerHTML = html;
-  $('alNav').style.display = '';
-  $('alPageInfo').textContent = `列 ${start + 1}–${Math.min(start + cols, alData.cols)} / ${alData.cols}`;
+  const W = _alWrapW();
+  alData._nameW = Math.max(8, ...alData.names.map(n => n.length));
+  const nB = Math.max(1, Math.ceil(alData.cols / W));
+  let html = '<div style="font-family:Consolas,monospace;font-size:12.5px;user-select:none">';
+  for (let b = 0; b < nB; b++) html += _alBlockHtml(b);
+  box.innerHTML = html + '</div>';
+  _alBindDrag(box);
+  nav.style.display = 'flex';
+  $('alSaveBtn').style.display = '';
+  $('alTrimDel').style.display = alSelA >= 0 ? '' : 'none';
+  $('alTrimKeep').style.display = alSelA >= 0 ? '' : 'none';
+  $('alUndo').style.display = alUndoStack.length ? '' : 'none';
+  _alSelInfo();
   // 图例
   const key = alData.type === 'aa'
     ? ['AVLIMFWC|疏水', 'KRH|正电', 'DE|负电', 'STNQ|极性', 'PG|特殊', '-|gap']
@@ -632,11 +673,86 @@ function alignRender() {
   dl.textContent = t('tk.dlRef', '⬇ 下载') + ' ' + alData.path.split(/[\\/]/).pop();
 }
 
-function alignPage(d) {
-  if (!alData) return;
-  const cols = +($('alCols') && $('alCols').value) || 100;
-  const total = Math.max(1, Math.ceil(alData.cols / cols));
-  alPageNo = Math.min(total - 1, Math.max(0, alPageNo + d));
+/* ---- 拖拽选列与修剪（✂删选中列 / 🎯只留选中列 / ↩撤销）---- */
+function _alColFromEvent(e) {
+  const el = e.target && e.target.closest ? e.target.closest('.al-seq') : null;
+  if (!el || !alData) return null;
+  const b = +el.dataset.b, W = _alWrapW();
+  const rect = el.getBoundingClientRect();
+  const len = Math.min(W, alData.cols - b * W);
+  if (rect.width <= 0 || len <= 0) return null;
+  const cw = rect.width / len;   // 等宽字体：整段宽 / 列数 = 列宽
+  return b * W + Math.min(len - 1, Math.max(0, Math.floor((e.clientX - rect.left) / cw)));
+}
+
+function _alUpdateBlock(b) {
+  const el = document.querySelector(`#alBox .al-block[data-b="${b}"]`);
+  if (el) el.outerHTML = _alBlockHtml(b);
+}
+
+function _alSelInfo() {
+  const el = $('alSelInfo');
+  if (!el) return;
+  if (alSelA < 0 || !alData) { el.textContent = ''; return; }
+  const a = Math.min(alSelA, alSelB), b = Math.max(alSelA, alSelB);
+  el.textContent = t('tk.alSelRange', '已选列 {a}–{b}（{n} 列）')
+    .replace('{a}', a + 1).replace('{b}', b + 1).replace('{n}', String(b - a + 1));
+}
+
+function _alBindDrag(box) {
+  if (box._alBound) return;   // 事件委托只挂一次（render 会重建内部 DOM）
+  box._alBound = true;
+  box.addEventListener('mousedown', e => {
+    if (!alData || alEditing) return;
+    const c = _alColFromEvent(e);
+    if (c === null) return;
+    e.preventDefault();
+    _alDragA = c; alSelA = alSelB = c;
+    _alUpdateBlock(+e.target.closest('.al-seq').dataset.b);
+    _alSelInfo();
+  });
+  box.addEventListener('mousemove', e => {
+    if (_alDragA === null || !alData) return;
+    const c = _alColFromEvent(e);
+    if (c === null || c === alSelB) return;
+    alSelB = c;
+    // 拖拽中只重画锚点/光标两个块；mouseup 后一次性铺满全部块
+    _alUpdateBlock(Math.floor(c / _alWrapW()));
+    _alUpdateBlock(Math.floor(_alDragA / _alWrapW()));
+    _alSelInfo();
+  });
+  document.addEventListener('mouseup', () => {
+    if (_alDragA === null) return;
+    _alDragA = null;
+    if (alData && alSelA >= 0) alignRender();
+  });
+}
+
+function _alApply(op) {
+  if (!alData || alSelA < 0) return;
+  const a = Math.min(alSelA, alSelB), b = Math.max(alSelA, alSelB);
+  alUndoStack.push({ names: alData.names.slice(), seqs: alData.seqs.map(s => s.slice()) });
+  if (alUndoStack.length > 20) alUndoStack.shift();
+  alData.seqs = alData.seqs.map(s => op === 'del'
+    ? s.slice(0, a) + s.slice(b + 1)
+    : s.slice(a, b + 1));
+  alData.cols = alData.seqs.reduce((m, s) => Math.max(m, s.length), 0);
+  alData.aligned = alData.seqs.every(s => s.length === alData.cols);
+  alSelA = alSelB = -1;
+  alignRender();
+}
+
+function alTrimDel() { _alApply('del'); }
+function alTrimKeep() { _alApply('keep'); }
+
+function alUndo() {
+  const st = alUndoStack.pop();
+  if (!st || !alData) { return; }
+  alData.names = st.names;
+  alData.seqs = st.seqs;
+  alData.cols = st.seqs.reduce((m, s) => Math.max(m, s.length), 0);
+  alData.aligned = st.seqs.every(s => s.length === alData.cols);
+  alSelA = alSelB = -1;
   alignRender();
 }
 
@@ -659,25 +775,40 @@ function alignEditToggle() {
 }
 
 async function alignSave(btn) {
-  const content = $('alEdit').value;
-  if (!content.trim()) { alert('编辑区为空'); return; }
+  // 两个入口：✏️ 编辑模式存 textarea 内容；查看器模式直接把当前
+  // （可能已拖拽修剪过的）状态序列化为 FASTA 存副本
+  let content = '';
+  if (alEditing) {
+    content = $('alEdit').value;
+    if (!content.trim()) { alert(t('ui.app.editorEmpty')); return; }
+  } else {
+    if (!alData) { alert(t('ui.app.needAlnOpen')); return; }
+    let out = '';
+    alData.names.forEach((n, i) => {
+      out += '>' + n + '\n';
+      const s = alData.seqs[i];
+      for (let j = 0; j < s.length; j += 70) out += s.slice(j, j + 70) + '\n';
+    });
+    content = out;
+  }
+  const msg = alEditing ? $('alEditMsg') : $('alSaveMsg');
   btn.disabled = true;
   try {
     const r = await fetch('/api/align/save', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: alData.path, content }) });
     const d = await r.json();
-    if (!r.ok) { $('alEditMsg').textContent = '❌ ' + (d.error || '保存失败'); return; }
-    $('alEditMsg').textContent = `✅ 已保存 ${d.n} 条${d.aligned ? '（等长比对）' : '（⚠ 长度不一致——未比对状态）'}：${d.saved}`;
-    // 打开保存后的副本继续查看
+    if (!r.ok) { msg.textContent = '❌ ' + (d.error || '保存失败'); return; }
+    msg.textContent = `✅ 已保存 ${d.n} 条${d.aligned ? '（等长比对）' : '（⚠ 长度不一致——未比对状态）'}：${d.saved}`;
+    // 打开保存后的副本继续查看（后续可直接送建树 / SDT）
     $('alPath').value = d.saved;
     alignLoad();
-  } catch (e) { $('alEditMsg').textContent = '无法连接: ' + e; }
+  } catch (e) { msg.textContent = '无法连接: ' + e; }
   btn.disabled = false;
 }
 
 function alignSend(target) {
-  if (!alData) { alert('请先打开要比对的文件'); return; }
+  if (!alData) { alert(t('ui.app.needAlnOpen2')); return; }
   const p = alData.path;
   if (target === 'treebuild') {
     $('qt_fa').value = p;
@@ -704,7 +835,7 @@ async function loadTbColls() {
 
 async function tbBuild(btn) {
   const coll = _v('tbColl');
-  if (!coll) { alert('请先选择 GenBank 集合（到「参考序列获取」卡下载）'); return; }
+  if (!coll) { alert(t('ui.app.needGbSet')); return; }
   await gbBuildTree(coll, btn);
   loadGbCollections();
 }
@@ -1177,10 +1308,12 @@ function gxApplyPage() {
   }
   // 管道页：导航栏的 /pipeline 不带 ?sample=，以前就因此永远回不到上次的样品；
   // 现在用全局当前样品自动接上（?sample= 显式指定时仍以 URL 为准）。
+  // 第二参 'auto'：恢复失败（上次样品已不在磁盘）走静默清理 + toast，
+  // 不弹阻塞式 alert（见 app-batch.js selectSample）。
   if ($('samples') && VP_CTX.sample) {
     const q = new URLSearchParams(location.search);
     if (!q.get('sample') && typeof selectSample === 'function') {
-      selectSample(VP_CTX.sample);
+      selectSample(VP_CTX.sample, 'auto');
     }
   }
   gxApplyResultsFilter();
@@ -1267,7 +1400,7 @@ async function loadSamples() {
         <div class="pr-bar"><div style="width:${pct}%"></div></div>
         <div class="pr">${t('pp.progress')} ${s.done}/${s.total} ${t('pp.steps')}</div></div>`;
     }).join('') : `<p class="hint">${t('pp.noSamples')}</p>`;
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error('加载失败:', e); }
 }
 
 // ---------------- 建库 ----------------
@@ -1312,6 +1445,56 @@ async function buildHostDb(btn) {
   }
   /* 建库成功后后端会把新库设为「当前宿主库」→ 刷新列表与徽章 */
   watchTaskBtn(d.task, btn, '⏳ 建库中…', () => { loadDbs(); loadHostDbs(); });
+}
+
+/* 在线下载宿主基因组（gget·Ensembl / NCBI taxon / NCBI accession）→
+   完成后回填建库表单，上下游在数据库构建页一条龙衔接 */
+async function dlHostGenome(btn) {
+  const species = $('hostDlSpecies').value.trim();
+  const accession = ($('hostDlAcc') && $('hostDlAcc').value.trim()) || '';
+  if (!species && !accession) {
+    alert(t('bd.hostDlNeedSp', '请填写宿主物种拉丁名（如 Oryza sativa）或 Assembly Accession'));
+    return;
+  }
+  const body = {
+    species,
+    source: $('hostDlSource').value || 'gget',
+  };
+  if (accession) body.accession = accession;
+  if ($('hostDlChr') && $('hostDlChr').value.trim()) body.chromosomes = $('hostDlChr').value.trim();
+  if ($('hostDlRelease').value) body.release = +$('hostDlRelease').value;
+  if ($('hostDlTaxid').value) body.taxid = +$('hostDlTaxid').value;
+  let r;
+  try {
+    r = await fetch('/api/host_genome_download', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)});
+  } catch (e) { alert(t('c.startFail', '启动失败') + ': ' + e); return; }
+  if (!r.ok) { alert(t('c.startFail', '启动失败') + ': ' + ((await r.json().catch(() => ({}))).error || r.status)); return; }
+  const d = await r.json();
+  taskLogOpen.add(d.task);
+  startPolling();
+  /* 任务 result 带回 genome_fa/taxid：建库页同屏则回填表单（旧布局），
+     「基因组查询下载」独立页则写入结果行并给出建库跳转 */
+  watchTaskBtn(d.task, btn, '⏳ 下载中…', (snap) => {
+    loadHostDbs();
+    const res = snap && snap.result;
+    if (res && res.genome_fa) {
+      if ($('hostGenome')) {
+        $('hostGenome').value = res.genome_fa;
+        if (res.taxid) $('hostTaxid').value = res.taxid;
+      }
+      const box = $('hostDlResult');
+      if (box) {
+        box.innerHTML = `✅ ${esc(res.genome_fa)}` +
+          (res.taxid ? ` · TaxID ${res.taxid}` : '') +
+          ` <a href="/build#m-host">${t('rd.goHostBuild', '去构建宿主库 →')}</a>`;
+      }
+      if (typeof toast === 'function') {
+        toast(t('bd.hostDlDone', '宿主基因组已就绪，可直接构建宿主库'), '', {ttl: 6000});
+      }
+    }
+  });
 }
 
 /* 宿主库列表：当前生效的 + 已有的（按物种目录），可一键「设为当前」 */
@@ -1361,29 +1544,6 @@ async function setHostDb(name, btn) {
   } finally { if (btn) btn.disabled = old; }
 }
 
-async function buildVirusDb(btn) {
-  const body = {
-    fasta: $('virusFasta').value.trim(),
-    info: $('virusInfo').value.trim(),
-    hash_capacity: $('virusCap').value || '64M',
-    threads: +$('virusThreads').value || undefined,
-    rebuild: $('virusRebuild').checked,
-    clean_mid: !!($('virusCleanMid') && $('virusCleanMid').checked),
-  };
-  if (!body.fasta || !body.info) { alert(t('bd.needFastaInfo', '请填写病毒参考 FASTA 与 info 表路径')); return; }
-  let r;
-  try {
-    r = await fetch('/api/build_virus_db', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body)});
-  } catch (e) { alert(t('c.startFail', '启动失败') + ': ' + e); return; }
-  if (!r.ok) { alert(t('c.startFail', '启动失败') + ': ' + ((await r.json().catch(() => ({}))).error || r.status)); return; }
-  const d = await r.json();
-  taskLogOpen.add(d.task);
-  startPolling();
-  watchTaskBtn(d.task, btn, '⏳ 建库中…', () => loadDbs());
-}
-
 // ---------------- 结果页 ----------------
 async function openDir(sample) {
   await fetch('/api/open_report_dir/' + encodeURIComponent(sample));
@@ -1411,7 +1571,7 @@ async function deleteSample(sample, btn) {
       VP_CTX.setSample('');
     }
     loadSamples();   /* 无样品列表容器时内部自动跳过 */
-  } catch (e) { btn.disabled = false; setConnBanner(true); }
+  } catch (e) { btn.disabled = false; if (netFail(e)) setConnBanner(true); else console.error('样品操作失败:', e); }
 }
 
 /* 清除结果 ≠ 删除样品：只删分析产物，保留样品与输入档案（00_prep/input.json），
@@ -1439,7 +1599,7 @@ async function clearSample(sample, btn) {
     } else {
       location.reload();
     }
-  } catch (e) { btn.disabled = false; setConnBanner(true); }
+  } catch (e) { btn.disabled = false; if (netFail(e)) setConnBanner(true); else console.error('样品操作失败:', e); }
 }
 
 async function toggleFiles(sample, btn) {
@@ -1498,7 +1658,7 @@ async function loadHome() {
       <div class="mc-name">${t('hm.db.kvidx')}</div>
       <div class="mc-desc">${kvDesc}</div></a>`;
     $('dbCards').innerHTML = html;
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error('加载失败:', e); }
   try {
     const r = await fetch('/api/samples');
     const list = (await r.json()).slice(0, 6);
@@ -1511,14 +1671,16 @@ async function loadHome() {
           <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--green-600),#43b47c)"></div></div>
         <div class="mc-desc">${t('hm.progress')} ${s.done}/${s.total} ${t('pp.steps')}（${pct}%）</div></div>`;
     }).join('') : `<p class="hint">${t('hm.noSamples')}</p>`;
-  } catch (e) { setConnBanner(true); }
+  } catch (e) { if (netFail(e)) setConnBanner(true); else console.error('加载失败:', e); }
 }
 
 // ---------------- 阶段结果预览（表格/JSON 就地弹窗，HTML 新窗口打开） ----------------
 function previewStageFile(sample, stageDir, filename, stageKey) {
+  // view 路径可含子目录（如 02b 的 filter/filtered.tsv），逐段编码
+  const enc = filename.split('/').map(encodeURIComponent).join('/');
   // HTML 报告类（fastp/桑基/旭日/主报告）直接整页打开，体验更好
   if (filename.endsWith('.html')) {
-    window.open(`/api/samples/${encodeURIComponent(sample)}/${encodeURIComponent(stageDir)}/${encodeURIComponent(filename)}`, '_blank');
+    window.open(`/api/samples/${encodeURIComponent(sample)}/${encodeURIComponent(stageDir)}/${enc}`, '_blank');
     return;
   }
   const mask = document.createElement('div');
@@ -1527,7 +1689,7 @@ function previewStageFile(sample, stageDir, filename, stageKey) {
   mask.innerHTML = `<div class="dlg" style="width:900px">
     <div class="dlghead"><b>📄 ${esc(filename)}</b>
       <span>
-        <button class="btn small" onclick="window.open('/api/samples/${encodeURIComponent(sample)}/${encodeURIComponent(stageDir)}/${encodeURIComponent(filename)}?dl=1','_blank')">⬇ 下载</button>
+        <button class="btn small" onclick="window.open('/api/samples/${encodeURIComponent(sample)}/${encodeURIComponent(stageDir)}/${enc}?dl=1','_blank')">⬇ 下载</button>
         <button class="btn small" onclick="this.closest('.dlgmask').remove()">✕</button>
       </span></div>
     <div class="pv-body" style="padding:6px 18px 16px;overflow:auto;max-height:70vh">
@@ -1535,7 +1697,7 @@ function previewStageFile(sample, stageDir, filename, stageKey) {
   document.body.appendChild(mask);
   mask.addEventListener('click', e => { if (e.target === mask) mask.remove(); });
   const body = mask.querySelector('.pv-body');
-  fetch(`/api/samples/${encodeURIComponent(sample)}/${encodeURIComponent(stageDir)}/${encodeURIComponent(filename)}`)
+  fetch(`/api/samples/${encodeURIComponent(sample)}/${encodeURIComponent(stageDir)}/${enc}`)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
     .then(text => {
       if (filename.endsWith('.json')) {
@@ -1949,8 +2111,8 @@ async function kvPickSamples(targetId) {
   try {
     const r = await fetch('/api/samples');
     list = await r.json();
-  } catch (e) { alert('无法获取样品列表: ' + e); return; }
-  if (!list.length) { alert('尚无样品，请先到「样品创建 / 批量导入」创建'); return; }
+  } catch (e) { alert(t('ui.app.sampleListFail') + ': ' + e); return; }
+  if (!list.length) { alert(t('ui.app.noSamplesYet')); return; }
   const cur = new Set((val(target) || '').split(',').map(s => s.trim()).filter(Boolean));
   // 全局上下文（顶部导航）：当前样品默认勾上、当前项目默认作为筛选条件，
   // 省掉"切到本模块后重新找一遍样品"的重复操作。

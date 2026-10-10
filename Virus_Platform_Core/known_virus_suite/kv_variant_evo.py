@@ -54,6 +54,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -1456,13 +1457,24 @@ def plot_popgen(variants, genes, accession, genome_len, n_samples, out_dir,
     evo_dir.mkdir(parents=True, exist_ok=True)
     if win_rows:
         tsv = evo_dir / f'{safe_name(accession)}_popgen_window.tsv'
+        use_depth_n = (n_samples < 4)
         with open(tsv, 'w', encoding='utf-8') as fh:
-            fh.write('BIN_START\tBIN_END\tBIN_MID\tN_VARIANTS\tN_EFF\tPI\t'
-                     'TAJIMA_D\n')
+            # 头部声明（审查 P1-9）：N_EFF 来源与探索性口径必须写在产物
+            # 里——read depth 是技术抽样数而非独立基因组数，此表只作
+            # Pool-Seq 探索性指标，不得直接支持种群史/选择压力结论。
+            fh.write('# EXPLORATORY Pool-Seq statistic; N_EFF basis = '
+                     + ('mean read depth (single-sample; NOT independent '
+                        'genomes)' if use_depth_n
+                        else f'n_samples={n_samples}')
+                     + '\n')
+            fh.write('BIN_START\tBIN_END\tBIN_MID\tN_VARIANTS\tN_EFF\t'
+                     'N_EFF_BASIS\tPI\tTAJIMA_D\n')
+            basis = 'avg_depth' if use_depth_n else 'n_samples'
             for r in win_rows:
                 d = '' if r['TAJIMA_D'] is None else f"{r['TAJIMA_D']:.6f}"
                 fh.write(f"{r['BIN_START']}\t{r['BIN_END']}\t{r['BIN_MID']:.1f}\t"
-                         f"{r['N_VARIANTS']}\t{r['N_EFF']}\t{r['PI']:.8f}\t{d}\n")
+                         f"{r['N_VARIANTS']}\t{r['N_EFF']}\t{basis}\t"
+                         f"{r['PI']:.8f}\t{d}\n")
 
     has_genes = bool(genes)
     n_rows = 3 if has_genes else 2
@@ -1485,6 +1497,10 @@ def plot_popgen(variants, genes, accession, genome_len, n_samples, out_dir,
 
     items = _panel_snpgenie_bars(ax_c1, prod_rows or [], accession)
     _panel_popgen(ax_pi, ax_d, win_rows, accession)
+    # 探索性声明（P1-9）：单样本深度近似时在 D 面板明示
+    if win_rows and n_samples < 4:
+        ax_d.set_title('exploratory Pool-Seq D (n_eff = mean depth)',
+                       fontsize=8, style='italic', color='#a33')
     ax_pi.set_xlabel(f'Position along {accession} (nt)', fontsize=8.5)
 
     if items:
@@ -1648,8 +1664,18 @@ def run_variant_evo(out_dir, logger=None, formats=('png', 'pdf'),
                 'snpgenie': [], 'n_snpgenie': 0, 'snpgenie_skipped': [],
                 'skipped': []}
 
-    workdir_en = Path(snpgenie_workdir) if snpgenie_workdir else (
-        _PLATFORM_ROOT / 'run' / '_snpgenie_evo')
+    # SNPGenie 工作目录必须是**纯英文路径**（同函数内 _snpgenie 硬约束：
+    # 中文路径下 Perl mkdir 静默失败），而平台根目录正是中文"植物病毒分析
+    # 平台"——旧默认 <平台根>/run/_snpgenie_evo 直接落在中文路径下。
+    # 默认改系统临时目录（tempfile.mkdtemp，纯 ASCII），运行结束**保留**
+    # （报告/产物引用它）并在 manifest 记录实际路径。
+    if snpgenie_workdir:
+        workdir_en = Path(snpgenie_workdir)
+    else:
+        workdir_en = Path(tempfile.mkdtemp(prefix='snpgenie_evo_'))
+    if not str(workdir_en).isascii():
+        _log('warning', f'SNPGenie 工作目录含非 ASCII 字符（{workdir_en}）：'
+                        f'Perl 建目录可能静默失败，建议改到纯英文路径')
 
     plots: list[str] = []
     snpgenie_hits: list[dict] = []
@@ -1804,6 +1830,8 @@ def run_variant_evo(out_dir, logger=None, formats=('png', 'pdf'),
         'n_snpgenie': len(snpgenie_hits),
         'snpgenie_skipped': snpgenie_skipped,
         'gbk_dirs': [str(d) for d in gbk_dirs],
+        # SNPGenie 实际使用的英文工作目录（默认 tempfile.mkdtemp，运行后保留）
+        'snpgenie_workdir': str(workdir_en),
         'skipped': skipped,
     }
     try:

@@ -36,6 +36,9 @@
     PHYLOGEO: DIR + 'example_phylogeo.fasta',
     PHYLOGEO_META: DIR + 'example_phylogeo.meta.csv',
     PDPREP_FASTA: DIR + 'example_pdprep.fasta',
+    // 数据接入治理卡专用 meta（name/date/location 三列；name 与
+    // phylogeo.fasta 头逐字一致——seq_id/region/year 旧口径治理不认）
+    PDPREP_META: DIR + 'example_pdprep.meta.csv',
     ACMV: DIR + 'example_acmv.fasta',
     RENAME_MAP: DIR + 'example_rename_map.tsv',
     MIRNA: DIR + 'example_mirna.fasta'
@@ -51,7 +54,6 @@
     't-contigs':   { c_fa: 'CONTIGS' },
     't-verify':    { vf_fa: 'CONTIGS' },
     't-virchain':  { vc_input: 'R1', vc_input2: 'R2' },
-    't-cdd':       { cddSeqText: 'CONTIGS_TEXT' },
     't-hom':       { homSeqText: 'CONTIGS_TEXT' },
     't-consensus': { cs_fa: 'CONTIGS', cs_reads: 'R1' },
     't-variant':   { vr_ref: 'CONTIGS' },
@@ -59,9 +61,7 @@
     /* 进化动力学 5 张数据准备/下游卡 + miRNA：之前没有任何示例入口 */
     't-rtt':       { rtt_input: 'PHYLOGEO', rtt_meta: 'PHYLOGEO_META' },
     't-phylogeo':  { pg_input: 'PHYLOGEO', pg_meta: 'PHYLOGEO_META' },
-    't-pdprep':    { pd_src: 'files', pd_fa: 'PDPREP_FASTA', pd_meta: 'PHYLOGEO_META' },
-    't-pdrename':  { pdren_input: 'PHYLOGEO', pdren_map: 'RENAME_MAP' },
-    't-pdgroup':   { pdgrp_collection: 'EXAMPLE_SET', pdgrp_col: 'Geo Location' },
+    't-pdprep':    { pd_src: 'files', pd_fa: 'PHYLOGEO', pd_meta: 'PDPREP_META' },
     't-mirna':     { mirna_fasta: 'MIRNA', virus_fasta: 'ACMV' },
     't-seqprep':   null,      /* 已有自带示例按钮，保持原样 */
     't-align':     null,
@@ -90,7 +90,8 @@
   var _tmvText = null;
 
   /* 文本域示例：字段值写成 '<KEY>_TEXT' → 取该示例文件的内容填进 textarea。
-     CDD / BLASTN·BLASTX 两张卡走「粘贴序列」入口，需要的是序列正文而非路径。 */
+     BLASTN·BLASTX 卡走「粘贴序列」入口，需要的是序列正文而非路径。
+     （原 CDD 卡同款入口已随 CDD 下线移除。） */
   var TEXT_SRC = { CONTIGS_TEXT: 'CONTIG1', TMV_TEXT: 'TMV' };
 
   function $(id) { return document.getElementById(id); }
@@ -219,7 +220,7 @@
       var h2 = sec.querySelector('h2');
       if (!h2) return;
       if (hasFill) {
-        h2.appendChild(mkBtn('✨ 示例', '一键填入内置示例数据（examples/）',
+        h2.appendChild(mkBtn(t('ui.ex.btnFill'), t('ui.ex.btnFillTip'),
           function () {
             var n = applyFor(sec);
             if (typeof toast === 'function') {
@@ -228,7 +229,7 @@
           }));
       }
       if (mod) {
-        h2.appendChild(mkBtn('👁 示例结果', '查看内置示例的运行结果（只读）',
+        h2.appendChild(mkBtn(t('ui.ex.btnResult'), t('ui.ex.btnResultTip'),
           function () { showExampleResult(mod); }));
       }
     });
@@ -344,10 +345,10 @@
     't-kvsuite': 'kvsuite', 't-consensus': 'consensus', 't-variant': 'variant',
     '/orf': 'orf', '/annotation': 'orfa', '/genome': 'genoplot',
     '/primer': 'primer', '/hostremoval': 'hostremoval',
-    't-cdd': 'cdd', 't-hom': 'hom', '/logan': 'logan',
+    't-hom': 'hom', '/logan': 'logan',
     't-dsrna': 'dsrna', 't-mirna': 'mirna',
     't-rdp': 'rdp', 't-rtt': 'rtt', 't-phylogeo': 'phylogeo',
-    't-pdprep': 'pdprep', 't-pdrename': 'pdrename', 't-pdgroup': 'pdgroup',
+    't-pdprep': 'pdprep',
     't-phylodyn': 'phylodyn', 't-seqprep': 'seqprep'
   };
 
@@ -393,10 +394,8 @@
     catch (e) { return '<pre style="font-size:11.5px">' + esc(text) + '</pre>'; }
   }
 
-  /* CDD / BLAST 的在线结果 JSON → 命中表（比裸 JSON 好看得多） */
+  /* BLAST 的在线结果 JSON → 命中表（比裸 JSON 好看得多） */
   var HIT_COLS = {
-    cdd: ['query', 'hit_type', 'accession', 'short_name', 'evalue',
-          'from', 'to', 'superfamily'],
     hom: ['accession', 'title', 'sciname', 'identity', 'align_len',
           'evalue', 'bit_score']
   };

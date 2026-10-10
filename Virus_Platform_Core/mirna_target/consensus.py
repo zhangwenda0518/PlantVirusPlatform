@@ -1,11 +1,13 @@
-from __future__ import annotations
-"""
-PAmiRDB v3 Consensus Scoring System.
+"""PAmiRDB v3 Consensus Scoring System.
 Integrates miRanda + psRNATarget + RNAhybrid via alignment validation.
 """
-import sys, math
+from __future__ import annotations
+import sys, math, logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
+
+log = logging.getLogger(__name__)
 
 try:  # 包内相对导入（Virus_Platform_Core.mirna_target）
     from .alignment import align_mirna_to_target, AlignmentResult
@@ -36,6 +38,12 @@ def compute_seed_quality(alignment_str: str) -> dict:
     """
     Analyze seed region (positions 2-8) complementarity from alignment.
 
+    比对串为 miRanda 书写约定（上行 miRNA 3'→5'、下行 target 5'→3'，
+    见 alignment.align_mirna_to_target），故位置计数必须自右向左才是
+    miRNA 5' 起算（2026-10-03 修复 P0-4 联动）。逐列按碱基对分类——
+    本模块比对串的 '|' 同时覆盖 WC 与 G:U wobble，只看杠线会把 wobble
+    误计成 WC。
+
     Returns:
       seed_wc:    number of Watson-Crick pairs in seed (0-7)
       seed_wobble: number of G:U wobble pairs in seed (0-7)
@@ -50,7 +58,8 @@ def compute_seed_quality(alignment_str: str) -> dict:
 
     # Parse the miRNA and target lines from miRanda format
     pipe_line = lines[1].strip()
-    mirna_line = lines[0].replace("miRNA  5' ", "").replace(" 3'", "").strip()
+    mirna_line = lines[0].replace("miRNA  3' ", "").replace(" 5'", "").strip()
+    target_line = lines[2].replace("target 5' ", "").replace(" 3'", "").strip()
 
     # Count miRNA positions through the alignment (skip gaps in miRNA)
     seed_wc = 0
@@ -58,15 +67,18 @@ def compute_seed_quality(alignment_str: str) -> dict:
     seed_mismatch = 0
     mirna_pos = 0
 
-    for m_char, p_char in zip(mirna_line, pipe_line):
+    for m_char, t_char, p_char in reversed(list(zip(mirna_line, target_line,
+                                                    pipe_line))):
         if m_char == '-':
             continue
         mirna_pos += 1
         if not (2 <= mirna_pos <= 8):
             continue
-        if p_char == '|':
+        if t_char == '-':
+            seed_mismatch += 1
+        elif _is_wc(m_char, t_char):
             seed_wc += 1
-        elif p_char == ':':
+        elif _is_wobble(m_char, t_char):
             seed_wobble += 1
         else:
             seed_mismatch += 1
@@ -101,11 +113,14 @@ def _validate_psrna(mr, mirna_id: str, target_id: str) -> Optional[PsRNATargetRe
     错配 1 / 缺口开 2、延 0.5，种子区 2-13 内错配与缺口 ×1.5，miRNA 一侧
     缺口额外 +1），只计前 19 列；过滤：penalty ≤ 5 且种子错配 ≤ 2 且
     HSP ≥ 14 且 gap ≤ 1 且总错配 ≤ 8 且比对长 ≤ 22。切割判定 = miRNA
-    10-11 位无错配。"""
+    10-11 位无错配。
+
+    2026-10-03 修复 P0-4 联动：比对串改为 miRanda 官方书写约定（上行
+    miRNA 3'→5'），「自 miRNA 5' 端起」= 自右向左遍历比对列。"""
     lines = mr.alignment_str.split('\n')
     if len(lines) < 3: return None
-    mline = lines[0].replace("miRNA  5' ", "").replace(" 3'", "").strip()
-    tline = lines[2].replace("target 3' ", "").replace(" 5'", "").strip()
+    mline = lines[0].replace("miRNA  3' ", "").replace(" 5'", "").strip()
+    tline = lines[2].replace("target 5' ", "").replace(" 3'", "").strip()
 
     # ---- MiRNATarget 逐列打分（z = 比对列号，含缺口列，前 19 列） ----
     penalty = 0.0
@@ -117,8 +132,8 @@ def _validate_psrna(mr, mirna_id: str, target_id: str) -> Optional[PsRNATargetRe
     gap_status_q = gap_status_s = 'closed'
     hsp = 0                       # miRNA 非缺口字符数（HSP 判定用）
     ctr = 0                       # 10-11 位错配计数
-    col = 0                       # 比对列号（1-based）
-    for m, t in zip(mline, tline):
+    col = 0                       # 比对列号（1-based，自 miRNA 5' 端起）
+    for m, t in zip(mline[::-1], tline[::-1]):
         col += 1
         if col > ALIGNMENT_LENGTH:
             break
@@ -182,14 +197,17 @@ def _validate_psrna(mr, mirna_id: str, target_id: str) -> Optional[PsRNATargetRe
 
 
 def _validate_rnahybrid(mr, mirna_id: str, target_id: str) -> Optional[RNAhybridResult]:
-    """Validate miRanda alignment with RNAhybrid MFE criteria."""
+    """Validate miRanda alignment with RNAhybrid MFE criteria.
+
+    2026-10-03 修复 P0-4 联动：比对串为 miRanda 官方书写约定（上行
+    miRNA 3'→5'），种子区（miRNA 5' 第 2-8 位）须自右向左数。"""
     lines = mr.alignment_str.split('\n')
     if len(lines) < 3: return None
-    mline = lines[0].replace("miRNA  5' ", "").replace(" 3'", "").strip()
-    tline = lines[2].replace("target 3' ", "").replace(" 5'", "").strip()
+    mline = lines[0].replace("miRNA  3' ", "").replace(" 5'", "").strip()
+    tline = lines[2].replace("target 5' ", "").replace(" 3'", "").strip()
     
     mfe = 4.0; swc = 0; mpos = 0
-    for m, t in zip(mline, tline):
+    for m, t in zip(mline[::-1], tline[::-1]):
         if m != '-' and t != '-':
             if _is_wc(m, t): mfe += -2.0
             elif _is_wobble(m, t): mfe += -1.0
@@ -223,6 +241,9 @@ class ConsensusResult:
     best_energy: float = 0.0; best_identity: float = 0.0
     seed_quality_score: float = 0.0; seed_perfect_wc: int = 0; seed_wobble_count: int = 0
     consensus_detail: str = ""; passes_pamirdb_filter: bool = False
+    engines_actual: list = field(default_factory=list)   # 实际跑成并投票的引擎键名
+    engines_skipped: list = field(default_factory=list)  # 失败/异常引擎 + 原因
+    engine_notes: list = field(default_factory=list)     # 引擎口径旁注（诚实化声明）
 
 
 # 引擎键名 ↔ 投票名（algorithms 参数用键名，consensus_detail 用投票名）
@@ -255,34 +276,56 @@ def run_consensus_prediction(mirna_id, mirna_seq, target_id, target_name, target
 
     r2 = r3 = r4 = r5 = r6 = None
     if 'miRanda' in algos:
+        result.engines_actual.append('miranda')
         run_slow = (want is None and not fast_mode) or \
                    (want is not None and (want['rna22'] or want['tapir'] or want['psrobot']))
 
         if want is None or want['psrna']:
             r2 = _validate_psrna(r1, mirna_id, target_id)
-            if r2 and r2.passes: result.psrna = r2; r2.consensus_votes = 1; algos.append('psRNATarget')
+            if r2 and r2.passes:
+                result.psrna = r2; r2.consensus_votes = 1; algos.append('psRNATarget')
+                result.engines_actual.append('psrna')
 
         if want is None or want['rnahybrid']:
             r3 = _validate_rnahybrid(r1, mirna_id, target_id)
-            if r3 and r3.passes: result.rnahyb = r3; algos.append('RNAhybrid')
+            if r3 and r3.passes:
+                result.rnahyb = r3; algos.append('RNAhybrid')
+                result.engines_actual.append('rnahybrid')
 
         # Slow algorithms — only when requested (or in original full mode)
         if run_slow:
             if want is None or want['rna22']:
                 r4 = validate_with_rna22(r1, mirna_id, target_id, target_seq)
-                if r4 and r4.passes: result.rna22 = r4; algos.append('RNA22')
+                if r4 and r4.passes:
+                    result.rna22 = r4; algos.append('RNA22')
+                    result.engines_actual.append('rna22')
+                # 口径诚实化：本 RNA22 移植只看靶标结构特征（GC 富集种子 +
+                # hairpin），完全不使用 miRNA 序列——命中不代表 miRNA 相关。
+                result.engine_notes.append(
+                    'RNA22：仅靶标结构特征（GC 富集种子 + hairpin 结构），'
+                    '未使用 miRNA 序列，命中不能视为 miRNA 特异性证据')
 
             if want is None or want['tapir']:
                 try:
                     r5 = validate_with_tapir(r1, mirna_id, target_id, target_seq)
-                    if r5 and r5.passes: result.tapir = r5; algos.append('TAPIR')
-                except: pass
+                    if r5 and r5.passes:
+                        result.tapir = r5; algos.append('TAPIR')
+                        result.engines_actual.append('tapir')
+                except Exception as e:
+                    log.warning("TAPIR 校验失败跳过: %r", e)
+                    result.engines_skipped.append(
+                        {'engine': 'tapir', 'reason': f'{type(e).__name__}: {e}'})
 
             if want is None or want['psrobot']:
                 try:
                     r6 = validate_with_psrobot(r1, mirna_id, target_id, target_seq)
-                    if r6 and r6.passes: result.psrobot = r6; algos.append('psRobot')
-                except: pass
+                    if r6 and r6.passes:
+                        result.psrobot = r6; algos.append('psRobot')
+                        result.engines_actual.append('psrobot')
+                except Exception as e:
+                    log.warning("psRobot 校验失败跳过: %r", e)
+                    result.engines_skipped.append(
+                        {'engine': 'psrobot', 'reason': f'{type(e).__name__}: {e}'})
 
 
     if not algos: return None
@@ -292,11 +335,14 @@ def run_consensus_prediction(mirna_id, mirna_seq, target_id, target_name, target
     LEVEL_MAP = {1:'LOW', 2:'LOW+', 3:'MEDIUM', 4:'MEDIUM+', 5:'HIGH',
                  6:'HIGH+', 7:'VERY HIGH', 8:'VERY HIGH'}
     result.consensus_level = LEVEL_MAP.get(len(algos), 'LOW')
-    
-    es = [r1.energy] if r1 else []
-    if r2: es.append(getattr(r2, 'max_energy', 0))
-    if r3: es.append(getattr(r3, 'mfe', 0))
-    result.best_energy = min(es) if es else 0.0
+
+    # best_energy：只在「通过过滤的引擎」能量中取 min。被过滤掉的引擎
+    # 的 mfe/max_energy 从未参与投票，混进来会把 best_energy 拉低到
+    # 非命中值（2026-10-03 修复 P3-15）。
+    es = [r1.energy] if (r1 and result.miranda) else []
+    if result.psrna: es.append(getattr(result.psrna, 'max_energy', 0))
+    if result.rnahyb: es.append(getattr(result.rnahyb, 'mfe', 0))
+    result.best_energy = min(es) if es else None   # 通过数=0 时不伪造 0.0
     result.best_identity = r1.identity if r1 else 0.0
     result.passes_pamirdb_filter = result.miranda is not None
 
@@ -318,7 +364,14 @@ def to_dict(cr: ConsensusResult) -> dict:
          "best_energy": cr.best_energy, "best_identity": cr.best_identity,
          "seed_quality_score": cr.seed_quality_score,
          "seed_perfect_wc": cr.seed_perfect_wc,
-         "seed_wobble_count": cr.seed_wobble_count}
+         "seed_wobble_count": cr.seed_wobble_count,
+         # 实际参与的引擎（engines_actual）与失败跳过的引擎（engines_skipped）
+         # —— 后者用于区分「引擎跑失败」与「引擎跑了但未通过过滤」，
+         # 避免用请求引擎列表冒充实际结果（2026-10-03 修复 P1-4）。
+         "engines_actual": list(cr.engines_actual),
+         "engines_skipped": list(cr.engines_skipped),
+         "engine_notes": list(cr.engine_notes),
+         "passes_pamirdb_filter": cr.passes_pamirdb_filter}
     if cr.miranda:
         r = cr.miranda
         d.update(seed_perfect=r.seed_perfect, query_cover=r.query_cover,
@@ -341,7 +394,9 @@ def to_dict(cr: ConsensusResult) -> dict:
     if cr.rna22:
         r = cr.rna22
         d.update(rna22_mfe=r.mfe, rna22_pattern_score=r.pattern_score,
-                 rna22_seed=r.seed_perfect, rna22_alignment=r.alignment_str)
+                 rna22_seed=r.seed_perfect, rna22_alignment=r.alignment_str,
+                 # 口径诚实化：该引擎判定未使用 miRNA 序列
+                 rna22_miRNA_independent=getattr(r, 'miRNA_independent', True))
     if cr.tapir:
         r = cr.tapir
         d.update(tapir_score=r.tapir_score, tapir_accessibility=r.accessibility_score,

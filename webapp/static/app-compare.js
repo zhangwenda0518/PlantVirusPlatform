@@ -23,51 +23,6 @@ function _watchTask(tid, onDone, btn, busyText) {
   }, 5000);
 }
 
-async function ncbiSearch() {
-  const term = _v('n_term'), db = $('n_db').value;
-  if (!term) { alert('请输入检索式'); return; }
-  const box = $('ncbiPreview');
-  box.innerHTML = '<p class="hint">检索中…</p>';
-  try {
-    const r = await fetch('/api/ncbi/search', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ term, db, limit: 50 })});
-    if (!r.ok) { box.innerHTML = '<p class="hint" style="color:#b91c1c">检索失败: ' + esc((await r.json()).error || '') + '</p>'; return; }
-    const d = await r.json();
-    const head = '<tr><th>Accession</th><th>描述</th><th>物种</th><th>长度</th><th>更新</th></tr>';
-    box.innerHTML = `<p class="hint">命中 <b>${d.count}</b> 条（预览前 ${d.rows.length} 条）</p>` +
-      '<table class="table" style="width:100%;border-collapse:collapse">' + head +
-      d.rows.map(x => `<tr><td>${esc(x.acc)}</td>` +
-        `<td title="${esc(x.title)}">${esc((x.title || '').slice(0, 60))}</td>` +
-        `<td>${esc(x.organism)}</td><td>${esc(x.length)}</td><td>${esc(x.updated)}</td></tr>`).join('') +
-      '</table>';
-  } catch (e) { box.innerHTML = '<p class="hint" style="color:#b91c1c">无法连接: ' + esc(e) + '</p>'; }
-}
-
-async function ncbiDownload(btn) {
-  const term = _v('n_term'), name = _v('n_name');
-  if (!term || !name) { alert('检索式与集合名均为必填'); return; }
-  const unlock = lockBtn(btn, '⏳ 下载中…');
-  try {
-    const r = await fetch('/api/ncbi/download', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ term, name, db: $('n_db').value,
-                             max: +_v('n_max') || 100 })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
-    const d = await r.json();
-    taskLogOpen.add(d.task);
-    startPolling();
-    const timer = setInterval(async () => {
-      try {
-        const snap = await (await fetch('/api/task/' + d.task)).json();
-        if (['done', 'failed', 'cancelled'].includes(snap.status)) {
-          clearInterval(timer); unlock(); loadNcbiCollections();
-        }
-      } catch (e) { /* 轮询继续 */ }
-    }, 5000);
-  } catch (e) { alert('无法连接平台服务: ' + e); }
-}
-
 async function loadNcbiCollections() {
   const box = $('ncbiCollections');
   if (!box) return;
@@ -85,32 +40,32 @@ async function loadNcbiCollections() {
 async function gbDownload(btn) {
   const name = collName(), term = _v('s_term'), accs = _v('s_acc');
   if ((!term && !accs) || (term && accs)) {
-    alert('检索式与 accession 二选一'); return;
+    alert(t('ui.cmp.needQueryOrAcc')); return;
   }
   try {
     const r = await fetch('/api/gb/download', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, term, accessions: accs,
                              max: +_v('s_max') || 50 })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     _watchTask(d.task, loadGbCollections, btn, '⏳ 下载中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 async function gbImport(btn) {
   const files = _v('s_files');
-  if (!files) { alert('本机 .gb 路径必填'); return; }
+  if (!files) { alert(t('ui.cmp.needGbPath')); return; }
   const name = collName();
   try {
     const r = await fetch('/api/gb/import', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name,
                              files: files.split(',').map(s => s.trim()).filter(Boolean) })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     _watchTask(d.task, loadGbCollections, btn, '⏳ 导入中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 /* ================= CDS/PEP 提取（PhyloSuite 布局） ================= */
@@ -119,14 +74,14 @@ async function gbExtract(name, btn) {
     const r = await fetch('/api/gb/extract', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     _watchTask(d.task, () => {
       loadGbCollections();
     }, btn, '⏳ 提取中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 /* 显式巡检：重解析全部 .gb，重建清单与警告（列表页只读已生成的清单） */
@@ -135,10 +90,10 @@ async function gbInspect(name, btn) {
     const r = await fetch('/api/gb/inspect', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     _watchTask(d.task, loadGbCollections, btn, '⏳ 巡检中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 /* 集合建树：三种来源——
@@ -153,7 +108,7 @@ async function gbBuildTree(name, btn) {
       const r = await fetch('/api/gb/phylo', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, tree_tool: treeTool })});
-      if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+      if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
       const d = await r.json();
       _watchTask(d.task, loadGbCollections, btn, '⏳ 建树中…');
       return;
@@ -162,19 +117,19 @@ async function gbBuildTree(name, btn) {
     const seqs = src === 'aligned'
       ? (_v('tbAlignedPath') || '')
       : `run/gb_collections/${name}/extract/selected/${mol}.fa`;
-    if (!seqs) { alert('请填写已比对 FASTA 路径（或到「序列比对」卡打开后点「用刚才的比对」）'); return; }
+    if (!seqs) { alert(t('ui.cmp.needAlnPath')); return; }
     const method = treeTool === 'nj' ? 'nj' : 'fasttree';
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'quicktree',
         params: { seqs, method,
                   aligned: src === 'aligned' ? '1' : '0' } })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     if (typeof taskLogOpen !== 'undefined') taskLogOpen.add(d.task);
     startPolling();
     _watchTask(d.task, null, btn, '⏳ 建树中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 /* 建树来源切换：按来源显示/隐藏对应控件 */
@@ -192,7 +147,7 @@ function tbSourceChanged() {
 /* 把比对卡里当前打开的比对路径带入建树卡 */
 function tbUseAlPath() {
   const p = (alData && alData.path) || _v('alPath');
-  if (!p) { alert('还没有打开的比对文件，请先到「序列比对」卡打开一个比对'); return; }
+  if (!p) { alert(t('ui.cmp.noAlnOpen')); return; }
   const inp = $('tbAlignedPath');
   if (inp) inp.value = p;
 }
@@ -200,13 +155,13 @@ function tbUseAlPath() {
 /* 建树卡 → 比对卡：带着集合/分组跳到「序列比对」的比对查看器看建树比对 */
 function tbSendToAlign() {
   const coll = _v('tbColl');
-  if (!coll) { alert('请先选择 GenBank 集合（或到「序列比对」卡直接挑比对）'); return; }
+  if (!coll) { alert(t('ui.cmp.needGbSetOrAln')); return; }
   const sample = 'gb:' + coll;
   location.hash = '#t-align';
   const sel = $('alSample');
   if (!sel) return;
   const opt = Array.from(sel.options).find(o => o.value === sample);
-  if (!opt) { alert('该集合还没有比对产物（先在本卡完成一次建树）'); return; }
+  if (!opt) { alert(t('ui.cmp.setNoAln')); return; }
   sel.value = sample;
   alPickGroups();
 }
@@ -221,9 +176,9 @@ function alSourceChanged() {
 /* 按来源填入比对输入框 */
 async function alFillFromSource() {
   const src = ($('alSource') && $('alSource').value) || 'manual';
-  if (src === 'manual') { alert('手填模式下请直接选择文件或粘贴序列'); return; }
+  if (src === 'manual') { alert(t('ui.cmp.manualNeedInput')); return; }
   const coll = _v('alColl');
-  if (!coll) { alert('请先选择 GenBank 集合'); return; }
+  if (!coll) { alert(t('ui.cmp.needGbSet')); return; }
   const inp = $('al_fa');
   if (!inp) return;
   if (src === 'genome') {
@@ -493,7 +448,7 @@ let tvData = null, tvSource = '';
 
 async function treeToolLoadFile() {
   const p = _v('tv_file');
-  if (!p) { alert('请选择 Newick 树文件'); return; }
+  if (!p) { alert(t('ui.cmp.needNewick')); return; }
   try {
     const r = await fetch(`/api/tree/file?path=${encodeURIComponent(p)}`);
     if (!r.ok) { $('tvMeta').textContent = esc((await r.json()).error || '加载失败'); return; }
@@ -590,7 +545,7 @@ let qtRun = null;
 
 async function quickTreeRun(btn) {
   const seqs = _v('qt_fa');
-  if (!seqs) { alert('请选择或粘贴 FASTA（≥2 条序列）'); return; }
+  if (!seqs) { alert(t('ui.common.needFasta2')); return; }
   const method = _v('qtMethod') || 'nj';
   try {
     const r = await fetch('/api/tool/run', {
@@ -598,7 +553,7 @@ async function quickTreeRun(btn) {
       body: JSON.stringify({ tool: 'quicktree',
                              params: { seqs, method,
                                        max_n: +_v('qt_maxn') || 100 } })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     qtRun = d.run;
     $('tvMeta').textContent =
@@ -606,7 +561,7 @@ async function quickTreeRun(btn) {
     taskLogOpen.add(d.task);
     startPolling();
     _watchTask(d.task, () => quickTreeLoad(), btn, '⏳ 建树中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 async function quickTreeLoad() {
@@ -630,7 +585,7 @@ let sdData = null, sdRun = null;
 
 async function sdtRunMatrix(btn) {
   const seqs = _v('sd_fa');
-  if (!seqs) { alert('请选择或粘贴 FASTA（≥2 条序列）'); return; }
+  if (!seqs) { alert(t('ui.common.needFasta2')); return; }
   const mode = _v('sd_mode') || 'nt';          // nt | aa | ntaa
   const ntaa = mode === 'ntaa';
   try {
@@ -652,7 +607,7 @@ async function sdtRunMatrix(btn) {
                   orient: !!$('sd_orient').checked,
                   aligned: !!$('sd_aligned').checked,
                   palette: _v('sd_palette') || 'sdt' } })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     sdRun = d.run;
     sdData = null;
@@ -667,13 +622,13 @@ async function sdtRunMatrix(btn) {
     startPolling();
     _watchTask(d.task, () => ntaa ? identityLoad(sdRun) : sdtExactLoad(),
                btn, '⏳ 矩阵分析中…');
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 async function identityLoad(run) {
   try {
     const r = await fetch(`/tool_runs/${encodeURIComponent(run)}/identity.json`);
-    if (!r.ok) { alert('加载失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.loadFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     const base = `/tool_runs/${encodeURIComponent(run)}`;
     $('idtHeat').innerHTML = d.aa
@@ -697,7 +652,7 @@ async function identityLoad(run) {
       ` <a class="btn small" href="${base}/nt_heatmap.png?dl=1">⬇ NT 热图 PNG</a>`;
     $('idtResult').style.display = '';
     $('idtResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  } catch (e) { alert('无法连接: ' + e); }
+  } catch (e) { alert(t('ui.common.connShort') + ': ' + e); }
 }
 
 async function sdtExactLoad() {
@@ -710,10 +665,18 @@ async function sdtExactLoad() {
     const stype = (sdData.seqtype || 'nt').toUpperCase();
     /* 交互热图：可切配色、悬浮看值、缩放（复用 examples.js 的 heatmap 渲染）。
        只有 heatmap 渲染函数与配色表都就绪才走交互；否则回退静态 PNG。 */
-    const csList = (window.VPExamples && window.VPExamples.colorscales) || [];
+    const csSrc = (window.VPExamples && window.VPExamples.colorscales) || [];
+    /* SDT 经典色阶：与 sdt_exact.SDT_COLORS 同步（后端 10 档红→黄硬分界）。
+       Plotly 没有同名内置色标——按同一色值序列写成插值 stops（结构与其它
+       matplotlib 系色标一致），并在配色表头部补一条 'SDT' 作为默认选中项。 */
+    const SDT_CS = [[0, '#7d050d'], [0.1111, '#a81c0d'], [0.2222, '#cc3d0f'],
+                    [0.3333, '#e66b17'], [0.4444, '#f5992b'], [0.5556, '#fcbf52'],
+                    [0.6667, '#ffdb82'], [0.7778, '#ffedb2'], [0.8889, '#fff7db'],
+                    [1, '#fffff0']];
+    const csList = csSrc.length ? [['SDT', SDT_CS]].concat(csSrc) : [];
     const hasHM = !!(window.VPExamples && window.VPExamples.heatmap) &&
                   csList.length > 0;
-    const wantLbl = { sdt: 'RdYlBu', cividis: 'Cividis', viridis: 'Viridis',
+    const wantLbl = { sdt: 'SDT', cividis: 'Cividis', viridis: 'Viridis',
                       'RdYlBu': 'RdYlBu', Spectral: 'Spectral', YlGnBu: 'YlGnBu',
                       coolwarm: 'coolwarm', magma: 'Magma' }[sdData.palette] || 'Viridis';
     const want = csList.some(c => c[0] === wantLbl) ? wantLbl : (csList[0]?.[0] || '');

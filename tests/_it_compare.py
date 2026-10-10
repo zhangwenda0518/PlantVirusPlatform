@@ -83,7 +83,9 @@ def main():
     names, m = d['names'], d['matrix']
 
     def _base(n):
-        return _re.sub(r'_\d+$', '', n)
+        # 名字截断放宽到 56（2026-10-04）后变体全名保留，剥后缀需覆盖
+        # _variantN 词形（旧 40 截断下靠截断重名成组，名字唯一后失效）
+        return _re.sub(r'(_variant\d*|_\d+)$', '', n)
 
     groups = {}
     for n in names:

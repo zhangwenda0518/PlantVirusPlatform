@@ -270,7 +270,9 @@ def _run_mafft(in_fasta, out_fasta, threads=None, logger=None,
         os.path.splitext(in_fasta)[1] or '.fa')
     aln_input = _orient_normalize(staged_in, logger=logger)
     extra = {'auto': ['--auto'],
-             'linsi': ['--localpair', '--maxiterate', '1000'],
+             # 'linsi' 仅为工具页参数兼容而保留，统一走 --auto
+             # （L-INS-i 对长参考序列过慢）
+             'linsi': ['--auto'],
              'fast': ['--retree', '1', '--maxiterate', '0']}.get(
                  strategy, ['--auto'])
     if strategy == 'auto':
@@ -288,13 +290,27 @@ def _run_mafft(in_fasta, out_fasta, threads=None, logger=None,
     if logger:
         logger.log(f"MAFFT 比对: {os.path.basename(in_fasta)}"
                    + ("（ASCII 中转）" if was_staged else ""))
-    run_cmd_redirect(cmd, out_fasta, logger=logger)
-    if aln_input != staged_in:
-        try:
-            os.remove(aln_input)
-        except OSError:
-            pass
-    _ascii_fetch(staged_in, in_fasta, was_staged)
+    try:
+        run_cmd_redirect(cmd, out_fasta, logger=logger)
+        if aln_input != staged_in:
+            try:
+                os.remove(aln_input)
+            except OSError:
+                pass
+        _ascii_fetch(staged_in, in_fasta, was_staged)
+    finally:
+        # ⚠️ 异常路径也要回收 %TEMP% 中转目录（2026-10-03 修复）：旧实现的
+        #    清理只在成功路径上跑，MAFFT 失败/超时抛出时会把暂存输入（以及
+        #    定向翻正的 .orient.fa）一直留在 %TEMP%。**只在 was_staged 时
+        #    动手** —— `_ascii_drop` 会删文件+删目录，未中转时 staged_in
+        #    就是**原始输入路径**，绝不能碰。
+        if was_staged:
+            if aln_input != staged_in:
+                try:
+                    os.remove(aln_input)
+                except OSError:
+                    pass
+            _ascii_drop(staged_in)
     out_path = check_path(out_fasta, must_exist=True)
     # MAFFT 参数/输入异常时可能退出码 0 但产物为空或非 FASTA —— 不校验的话
     # 空比对会一路流到建树/热图，报出"序列不足"之类的下游错误
@@ -367,6 +383,19 @@ def _run_trimal(in_aln, out_aln, logger=None, min_frac=0.3, min_cols=100):
                        f"使用未清剪比对", "WARN")
         info['error'] = f'{type(e).__name__}: {e}'
         return in_aln, info
+    finally:
+        # ⚠️ 异常/回退路径也要回收 %TEMP% 中转目录（2026-10-03 修复）：旧实现
+        #    只在成功路径 `_ascii_drop`，trimAl 失败或"修剪过度回退"时暂存
+        #    输入/暂存产物会留在 %TEMP%。**只在 staged 时动手** —— `_ascii_drop`
+        #    会删文件+删目录，未中转时 staged_in 就是**原始比对路径**，绝不能碰。
+        #    （成功路径已删过一轮，重复删是幂等操作。）
+        if staged:
+            if staged_out != out_aln:
+                try:
+                    os.remove(staged_out)
+                except OSError:
+                    pass
+            _ascii_drop(staged_in)
 
 
 def _run_fasttree(aln_fasta, tree_out, logger=None):
@@ -564,9 +593,18 @@ def pairwise_identity_matrix(aln_fasta):
     for i in range(n):
         for j in range(i + 1, n):
             a, b = seqs[i], seqs[j]
+            if len(a) != len(b):
+                # ⚠️ 裸 zip 会**静默截断**到短序列长度 → identity 看似正常却只
+                #    比了前一段位点（未比对序列/裁剪不一致时必现）。宁可直接报错，
+                #    要求调用方先做多序列比对（2026-10-03 修复）。
+                raise ValueError(
+                    f'成对 identity 要求等长序列：{names[i]} 长 {len(a)}、'
+                    f'{names[j]} 长 {len(b)} —— 请先做多序列比对或裁剪到等长')
             match = comparable = 0
             for x, y in zip(a, b):
-                if x != '-' and y != '-':
+                # gap 判定统一 `in '-.'`：'.' 与 '-' 同为 gap（trimAl/BioEdit
+                # 产物常见），旧实现只认 '-'，把 '.' 当成碱基位点参与比较。
+                if x not in '-.' and y not in '-.':
                     comparable += 1
                     if x == y:
                         match += 1
@@ -906,10 +944,16 @@ def build_phylo(sample_dir, top_n_refs=10, tree_tool='fasttree', threads=None,
                     logger.log(f"  NCBI 下载失败（跳过）：{type(e).__name__}: {e}", "WARN")
 
         # 参考谱系标注（植物库元数据 > ICTV VMR 当前版 > acvirus taxa.txt）
+        # ⚠️ ref_meta 的键是**带版本号**的完整 accession（与 refs.fa 头一致），
+        #    而 ictv_meta/ictv_gb_set 按去版本 base 归一 —— 两边各按自己的键查；
+        #    再建一个 base 索引兜底（ref_meta 混有无版本号时也能命中 plant_ref）。
+        ref_meta_by_base = {}
+        for _k, _v in ref_meta.items():
+            ref_meta_by_base.setdefault(_k.split('.')[0].upper(), _v)
         refs_info = []
         for sacc in found_refs:
-            m = ref_meta.get(sacc) or {}
             base = sacc.split('.')[0].upper()
+            m = ref_meta.get(sacc) or ref_meta_by_base.get(base) or {}
             ilin = ictv_meta.get(base) or {}
             if m:
                 src = 'plant_ref'
@@ -950,11 +994,29 @@ def build_phylo(sample_dir, top_n_refs=10, tree_tool='fasttree', threads=None,
                     write_fasta_record(f, sid, s)
                     seen_ids.add(sid)
                     seen_ids.add(base_id)
-                    found_refs.append(base_id)
+                    # ⚠️ 记**完整 sid**（与写进比对的 id 逐字一致，2026-10-03 修复）：
+                    #    旧实现记 base_id（去版本），带版本号时下游
+                    #    `nm2 in found_refs`（best_identity_to_ref）永远不命中
+                    #    → 额外参考被漏统计；refs.tsv 的 accession/source 也对不上。
+                    found_refs.append(sid)
                     n_extra += 1
         if logger:
             logger.log(f"  组合序列: contigs {len(cids)} + 参考 {len(found_refs)}"
                        + (f" (含额外参考 {n_extra})" if n_extra else ""))
+
+        # MAFFT 对单序列输入会静默输出空文件（退出码 0、0 字节），随后
+        # "输出为空" 报错会让整个阶段崩掉；组内可用序列 <2 条时按
+        # skipped 组记录并继续（primer 按 g.skipped 跳过，报告与
+        # SDT/MSA 查看器按产物缺失自然略过该组）
+        if _fasta_size(combined)[0] < 2:
+            msg = (f"组 {gname} 仅 {len(cids)} 条 contig + {len(found_refs)} 条"
+                   f"参考，不足 2 条无建树意义，跳过该组")
+            if logger:
+                logger.log(msg, "WARN")
+            results.append({'group': gname, 'contigs': cids,
+                            'n_refs': len(found_refs), 'dir': gname,
+                            'skipped': True, 'reason': msg})
+            continue
 
         aln = os.path.join(gdir, 'aln.fasta')
         _run_mafft(combined, aln, threads=threads, logger=logger)

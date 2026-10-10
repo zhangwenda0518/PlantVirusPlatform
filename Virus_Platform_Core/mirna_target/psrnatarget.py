@@ -78,11 +78,12 @@ def _column_class(q: str, h: str):
 # ── Smith-Waterman 局部比对（仿射缺口，SSEARCH36 参数） ─────────────
 
 def _sw_align(q: str, t: str):
-    """q 对 t 的最优局部比对。返回 (q_cols, t_cols)（两串等长的列字符列表，
-    含 '-' 占位）。"""
+    """q 对 t 的最优局部比对。返回 (q_cols, t_cols, t_lo, t_hi)
+    （两串等长的列字符列表，含 '-' 占位；t_lo/t_hi 为比对覆盖的 t 上
+    1-based 坐标闭区间，用于还原靶坐标）。"""
     m, n = len(q), len(t)
     if m == 0 or n == 0:
-        return [], []
+        return [], [], 0, 0
     H = [[0.0] * (n + 1) for _ in range(m + 1)]
     ptr = [[0] * (n + 1) for _ in range(m + 1)]   # 0=结束 1=diag 2=q缺(上) 3=t缺(左)
     best, bi, bj = 0.0, 0, 0
@@ -114,7 +115,8 @@ def _sw_align(q: str, t: str):
         else:
             q_cols.append('-'); t_cols.append(t[j - 1]); j -= 1
     q_cols.reverse(); t_cols.reverse()
-    return q_cols, t_cols
+    t_lo, t_hi = (j + 1, bj) if q_cols else (0, 0)
+    return q_cols, t_cols, t_lo, t_hi
 
 
 # ── 结果对象（字段与既有接口一致） ──────────────────────────────────
@@ -179,6 +181,12 @@ def score_alignment(query_aln, subject_aln):
             gaps += 1
             total_mismatches += 1
             is_mismatch = True
+        elif _column_class(q, h) == 'wc':
+            # 完美配对 → 0。2026-10-03 修复 P1-3：原先缺 'wc' 分支，
+            # q==h 的完美配对落进 else 按错配 1.0 计分（self 比对
+            # penalty=比对列数、完美命中被自己的打分否掉）。
+            curr = 0.0
+            gap_status_q = gap_status_s = 'closed'
         elif _column_class(q, h) == 'gu':
             curr = 0.5                       # G:U 摆动（种子区内不乘）
             gus += 1
@@ -231,11 +239,18 @@ def _estimate_duplex_energy(query_aln, subject_aln) -> float:
 def psrna_score_alignment(mirna_id: str, target_id: str,
                           query_aln, subject_aln,
                           target_offset: int = 0,
+                          target_range=None,
                           ) -> Optional[PsRNATargetResult]:
     """对一条比对施加 psRNATarget 打分与过滤（MiRNATarget 口径）。
 
     query_aln = miRNA 列（**按 miRNA 5'→3' 定向**），subject_aln = 目标列；
     两者等长。返回 PsRNATargetResult（passes 表示通过全部过滤）。
+
+    target_range = 该比对在 subject 串上的 1-based 闭区间 (lo, hi)
+    （_sw_align 返回的 t_lo/t_hi）。注意 miRNA 5'→3' 帧下 subject 列自左
+    向右 = target 3'→5'，坐标递减，故不能按列序数坐标（2026-10-03 修复：
+    旧实现给出 start>end 的倒置区间）。未给 target_range 时退化为
+    「subject 列自第 target_offset+1 位起」的旧口径。
     """
     penalty, seed_mm, total_mm, gaps, gus, _ = score_alignment(
         query_aln, subject_aln)
@@ -247,13 +262,12 @@ def psrna_score_alignment(mirna_id: str, target_id: str,
               total_mm <= TOTAL_MISMATCHES_CUTOFF and
               subject_len <= MAX_ALIGNMENT_LENGTH and hsp > 0)
 
-    # 靶坐标：数 subject 列里非缺口字符（从 miRNA 5' 端那侧数起）
-    t_start = target_offset + len([c for c in subject_aln if c != '-']) + 1
-    t_end = target_offset + 1
-    for i in range(len(subject_aln)):
-        if subject_aln[i] != '-':
-            t_end = target_offset + 1 + i
-            break
+    # 靶坐标（subject 串内 1-based 闭区间，lo ≤ hi）
+    if target_range:
+        t_start, t_end = int(target_range[0]), int(target_range[1])
+    else:
+        t_start = target_offset + 1
+        t_end = target_offset + len(subject_aln)
 
     # 切割位点：psRNATarget 在 miRNA 10-11 位错配时抑制切割
     central_mm = 0
@@ -298,25 +312,34 @@ def evaluate_mirna_vs_target(mirna_seq: str, target_seq: str,
                              mirna_id: str = '', target_id: str = '',
                              ) -> Optional[PsRNATargetResult]:
     """完整评估：正反两条目标链各做一次 SSEARCH36 参数的局部比对，
-    取更能通过过滤的那条（与参考实现两次 ssearch36 调用一致）。"""
+    取更能通过过滤的那条（与参考实现两次 ssearch36 调用一致）。
+
+    2026-10-03 修复：
+      * 反链比对前先 _dna() 归一（含 U 的 RNA 输入原会经 revcomp 的
+        未识别碱基映射整条变成 N）；
+      * 坐标改用 _sw_align 返回的比对区间（旧实现给出 start>end）。
+    """
     m = _dna(mirna_seq)
     q_rev = _revcomp_dna(m)              # 正向链比对用的 query
     best = None
-    for t_str, is_rev in ((target_seq, False), (_revcomp_dna(target_seq), True)):
+    for t_str, is_rev in ((target_seq, False), (_revcomp_dna(_dna(target_seq)), True)):
         t = _dna(t_str)
-        q_cols, h_cols = _sw_align(q_rev, t)
+        q_cols, h_cols, t_lo, t_hi = _sw_align(q_rev, t)
         if not q_cols:
             continue
         # 比对输出方向 = revcomp-miRNA 5'→3' = miRNA 3'→5'：反转为 miRNA 5'→3'
         res = psrna_score_alignment(mirna_id, target_id,
                                     list(reversed(q_cols)),
-                                    list(reversed(h_cols)))
+                                    list(reversed(h_cols)),
+                                    target_range=(t_lo, t_hi))
         if res is None:
             continue
         if is_rev:
             # 反向链命中：坐标换算回原目标链（区间取反）
             L = len(target_seq)
             res.target_start, res.target_end = L - res.target_end + 1, L - res.target_start + 1
+        # 择优：优先通过过滤者；同通过状态时 expectation（=penalty，越小越好）
+        # 更小者胜。比较方向本身正确，修复前选错源于满分比对被按错配计分。
         if best is None or (res.passes and not best.passes) or \
            (res.passes == best.passes and res.expectation < best.expectation):
             best = res

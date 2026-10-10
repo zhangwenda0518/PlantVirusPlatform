@@ -3,9 +3,10 @@
 #    Windows cp312 wheel 生态即按此验证；其它版本组合未测试）。
 # 安装: python -m pip install -r requirements.txt
 # 开发/测试额外依赖见 requirements-dev.txt
-# 提示：本文件全部为 >= 下界约束；打包分发前建议以
+# 提示：本文件全部为 >= 下界约束；打包分发前以实测环境刷新锁定快照：
 #   python -m pip freeze > requirements.lock
-# 固化一份实测快照（pyrodigal-rv 的版本漂移事故即由此而来）。
+# requirements.lock 已纳管入库（requirements.txt 的精确版本快照，仅供复现，
+# 不参与 pip install；pyrodigal-rv 的版本漂移事故即由此防范）。
 flask>=3.0
 biopython>=1.80
 pandas>=2.0
@@ -24,22 +25,26 @@ orfipy>=0.0.4          # ORF 预测（platform.json 以 3rd/python/Scripts/orfip
 pyrodigal>=2.0
 # ⚠️ PyPI 上 pyrodigal-rv 支持 Windows/Py3.12 的最新版就是 0.1.0（1.x 无 cp312
 # Windows wheel），声明 >=1.0 会让 pip 直接装不上（2026-09-11 嵌入版环境实测）。
-# 实际生产验证过的就是 0.1.0。模块名 pyrodigal_gv 来自下面新增的 pyrodigal-gv。
+# 实际生产验证过的就是 0.1.0。
 pyrodigal-rv>=0.1.0; platform_system == "Windows"
-pyrodigal-gv>=0.3
+# pyrodigal-gv 已移除（2026-10-03）：平台零处 import pyrodigal_gv，装它没有用途；
+# 且其元数据要求 pyrodigal~=3.5（!=3.5.0）与上面 pyrodigal-rv 需要的
+# pyrodigal>=3.6.3 直接冲突，会让 pip install -r 解析失败。需要时再单独安装：
+#   python -m pip install pyrodigal-gv
+# （模块名 pyrodigal_gv 与 pyrodigal-rv 的 pyrodigal_rv 是两个独立的包）
 primer3-py>=2.0
-# dsRNA 设计全链路（dsrna_scoring，dsRIP 效价公式的 self_fold_energy 项）
-# 需要 ViennaRNA 的 Python 绑定（import RNA）；缺失时 dsRNA 工具报数据面错误
+# LOGAN 溯源「一键批量提交」依赖（方式二；未安装时该功能灰显，手动方式不受影响）
+selenium>=4.15
+
+# ViennaRNA 的 Python 绑定（import RNA）：miRNA 靶标预测的
+# RNAhybrid / psRNATarget / TAPIR 复刻引擎用其折叠能项
 viennarna>=2.6
 tqdm>=4.60
-kaleido>=0.2
 # ⑥b ORF 功能注释 HMM 层（层2；Windows 原生 wheel，自带 HMMER3 实现）
 pyhmmer>=0.11
 # 桌面独立窗口壳：app.py 启动优先用 pywebview 开原生窗口（无地址栏）；
 # 未安装时自动回退浏览器模式，功能不受影响
 pywebview>=4.0
-# LOGAN 溯源「一键批量提交」依赖（方式二；未安装时该功能灰显，手动方式不受影响）
-selenium>=4.15
 # 病毒基因组图（⑨ 基因组图阶段，DFV 备选引擎，纯 Python）
 dna_features_viewer>=3.1
 # 已知病毒识别与定量（kv_filter / kv_identify 在**模块级** import polars，
@@ -62,6 +67,8 @@ openpyxl>=3.1
 # python -m pip install distinctipy taxburst
 # 变异热图标签防重叠（adjustText，缺失时退化为无防重叠排版的纯文本标签）
 # python -m pip install adjustText
+# 已知病毒定量箱线/散点图（known_virus_suite/kv_fig.py，缺失时回退 matplotlib 原生实现）
+# python -m pip install seaborn
 # 加速工具（可选，放平台根目录即可被自动探测）：crabz.exe（Rust 多线程 gzip）
 # https://github.com/sstadick/crabz/releases
 # 拖拽代理（scripts/drag_proxy.py，由「启动拖拽代理.bat」启动）专用：

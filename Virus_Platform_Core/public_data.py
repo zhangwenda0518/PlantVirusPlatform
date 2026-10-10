@@ -15,11 +15,16 @@
 """
 import os
 import re
+import base64
+import ipaddress
 import json
+import logging
 import time
 import gzip
 import shutil
 import socket
+import random
+import ssl
 import subprocess
 import threading
 import urllib.request
@@ -39,6 +44,8 @@ ALLOWED_HOSTS = {
     'download.big.ac.cn',           # GSA 下载（big 镜像）
     'ddbj.nig.ac.jp',               # DDBJ（DRR 编号的原始 archive）
     'eutils.ncbi.nlm.nih.gov',      # NCBI eutils（DRR→DRA/DRX 元数据解析）
+    'trace.ncbi.nlm.nih.gov',       # NCBI SRA STAT 预计算分类（病毒预筛，
+                                    # 见 public_meta/prescreen_engine.py）
 }
 _IP_RE = re.compile(r'^\d{1,3}(\.\d{1,3}){3}$')
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -49,22 +56,19 @@ DATA_FILE_RE = re.compile(
 
 
 def _is_private_ip(ip):
-    parts = ip.split('.')
-    if len(parts) != 4:
-        return True
+    """私有/保留地址判定（IPv4 + IPv6，同 ncbi_download.py 口径）。
+
+    旧实现只按 IPv4 四段解析，IPv6 字符串必然 len(parts)!=4 → 一律判私有，
+    导致 AAAA 记录（如 2600:1901:0:c831::）整条被拒。改用 ipaddress 统一判定：
+    公网 IPv6 放行，内网/回环/链路本地/组播/保留/未指定一律拒绝；
+    无法解析的字符串按不安全处理（True）。
+    """
     try:
-        a, b = int(parts[0]), int(parts[1])
+        a = ipaddress.ip_address(str(ip).strip())
     except ValueError:
         return True
-    if a in (0, 10, 127) or a >= 224:            # 0.x / 10.x / loopback / 组播保留
-        return True
-    if a == 169 and b == 254:                     # link-local
-        return True
-    if a == 172 and 16 <= b <= 31:                # 172.16/12
-        return True
-    if a == 192 and b == 168:                     # 192.168/16
-        return True
-    return False
+    return bool(a.is_private or a.is_loopback or a.is_link_local
+                or a.is_multicast or a.is_reserved or a.is_unspecified)
 
 
 def check_url_host(url):
@@ -105,16 +109,59 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 _OPENER = urllib.request.build_opener(_SafeRedirectHandler)
 
+# NGDC 反爬验证页（2026-09-17 上线）：对无 Referer 的脚本请求返回一张
+# 静态"正在进行安全检查"页（实测 nginx 按 Referer 放行，auth_token
+# Cookie 是其页内 JS 的自检产物）。GSA 的 CRR 详情页正因此解析不出
+# 下载链接——搜索页能过、browse 详情页被拦，症状恰是"未找到公开文件"。
+_NGDC_CHALLENGE_MARK = '正在进行安全检查'
+_NGDC_SALT_RE = re.compile(r'var\s+secret\s*=\s*"([^"]+)"\s*\+\s*dateStr')
 
-def _http_get(url, timeout=40):
-    """受限 GET：请求前逐次校验（白名单 + 解析 IP + 重定向逐跳校验）。"""
+
+def _ngdc_auth_token(salt):
+    """按验证页 JS 的算法生成 auth_token：base64(salt + UTC 日期)，去
+    padding。JS 用 toISOString() 取的是 UTC 日期——用本地日期算出的
+    token 过不了当天 UTC 早于本地的时段。"""
+    today = time.strftime('%Y-%m-%d', time.gmtime())
+    return base64.b64encode((salt + today).encode()).decode().rstrip('=')
+
+
+def _http_get(url, timeout=40, retries=3, _challenge_html=None):
+    """受限 GET：请求前逐次校验（白名单 + 解析 IP + 重定向逐跳校验）。
+
+    - NGDC 域一律带站内 Referer（无 Referer 会被反爬验证页拦截）；
+      万一仍命中验证页，按页内 JS 的 salt 算 auth_token Cookie 重放一次。
+    - SSL 瞬断 / 超时 / 连接重置按指数退避重试：批量解析时一次网络抖动
+      不应把整条 accession 打成"解析失败"。
+    """
     ok, why = check_url_host(url)
     if not ok:
         raise ValueError(f'出站请求被拒绝: {why}')
-    req = urllib.request.Request(url,
-                                 headers={'User-Agent': _UA, 'Accept': '*/*'})
-    with _OPENER.open(req, timeout=timeout) as r:
-        return r.read().decode('utf-8', 'replace')
+    headers = {'User-Agent': _UA, 'Accept': '*/*'}
+    m = re.match(r'^https?://([^/:?#]+)', url, re.I)
+    if m and m.group(1).lower().endswith(('.cncb.ac.cn', '.big.ac.cn')):
+        headers['Referer'] = 'https://ngdc.cncb.ac.cn/gsa/search'
+    if _challenge_html is not None:
+        salt = _NGDC_SALT_RE.search(_challenge_html)
+        token = _ngdc_auth_token(salt.group(1) if salt else 'my_nginx_salt_')
+        headers['Cookie'] = 'auth_token=' + token
+    last_err = None
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with _OPENER.open(req, timeout=timeout) as r:
+                html = r.read().decode('utf-8', 'replace')
+            if _NGDC_CHALLENGE_MARK in html and _challenge_html is None:
+                return _http_get(url, timeout=timeout, retries=retries,
+                                 _challenge_html=html)
+            return html
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, ssl.SSLError, TimeoutError,
+                ConnectionError) as e:
+            last_err = e
+            if attempt < retries - 1:
+                time.sleep(1.5 * (2 ** attempt) + random.random())
+    raise last_err
 
 
 def aria2c_path():
@@ -179,14 +226,19 @@ _ENA_API = ('https://www.ebi.ac.uk/ena/portal/api/filereport'
 
 
 def _dedupe_urls(urls):
+    """URL 去重 + NGDC 页面常见的 '//SRR' 双斜杠修正。
+
+    旧实现是 re.sub(r'(?<=//SRR)', '/SRR', u)——在 '//SRR' 之后**插入** '/SRR'，
+    '//SRR1000' 反而变成 '//SRR/SRR1000'（越改越错）。这里用负向后顾只吃掉
+    多余的那一条斜杠：'//SRR1000' → '/SRR1000'，且不动 'https://' 的双斜杠。
+    """
     out, seen = [], set()
     for u in urls:
         u = u.strip()
         if u.startswith('//'):
             u = 'https:' + u
-        u = re.sub(r'(?<=//SRR)', '/SRR', u)       # NGDC 页面常见的 //SRR 双斜杠
-        u = re.sub(r'(?<=//ERR)', '/ERR', u)
-        u = re.sub(r'(?<=//CRR)', '/CRR', u)
+        # 修正路径里的重复斜杠（//SRR / //ERR / //DRR / //CRR / //RR），保留协议 // 
+        u = re.sub(r'(?<!:)//(?=S?RR|ERR|DRR|CRR|RR)', '/', u)
         if u not in seen:
             seen.add(u)
             out.append(u)
@@ -204,6 +256,7 @@ def _resolve_ena(acc):
     rec = dict(zip(header, row))
     ftps = [x for x in (rec.get('fastq_ftp') or '').split(';') if x]
     byts = [x for x in (rec.get('fastq_bytes') or '').split(';') if x]
+    md5s = [x for x in (rec.get('fastq_md5') or '').split(';') if x]
     if not ftps:
         # ENA 未生成 FASTQ.GZ（常见于刚公布 / 发布者仅提供 SRA 原始数据）。
         # 只要 NCBI SRA 有数据（INSDC 三库元数据互通），就用 sracha
@@ -225,7 +278,11 @@ def _resolve_ena(acc):
             size = int(byts[i]) if i < len(byts) else 0
         except ValueError:
             size = 0
-        files.append({'url': url, 'bytes': size})
+        # ENA 已请求 fastq_md5，此前被丢掉（条目里 md5 恒为空 → 下载后无从校验）
+        md5 = str(md5s[i]).strip() if i < len(md5s) else ''
+        if not re.fullmatch(r'[0-9a-fA-F]{32}', md5 or ''):
+            md5 = ''
+        files.append({'url': url, 'bytes': size, 'md5': md5})
     # 单端库有时同时列出 .fastq.gz 与 _1/_2 —— _1/_2 齐全时只保留配对
     paired = [x for x in files if re.search(r'_1\.', x['url'])
               or re.search(r'_2\.', x['url'])]
@@ -275,36 +332,51 @@ def _resolve_ddbj(acc):
 
 
 def _resolve_ngdc(acc):
-    """CRR → NGDC 搜索页 → browse 详情页 → 下载 URL（吸收 gsa_sra.down.py 流程）。"""
+    """CRR → NGDC 搜索页 → browse 详情页 → 下载 URL（吸收 gsa_sra.down.py 流程）。
+
+    详情页抓取由 _http_get 自动过反爬验证页（Referer + auth_token）。"""
     html = _http_get(f'https://ngdc.cncb.ac.cn/gsa/search?searchTerm={acc}')
     urls = [u for u in _dedupe_urls(re.findall(
         r'(?:(?:ftp|https?):)?//download[0-9]*\.(?:cncb|big)\.ac\.cn/[^"\'<>\s]+',
         html)) if acc in u]
-    m = re.search(rf'href="((?:/gsa/)?browse/[^"]*{acc}[^"]*)"', html)
+    browse_re = (rf'href="((?:https?://ngdc\.cncb\.ac\.cn)?'
+                 rf'(?:/gsa/)?browse/[^"]*{acc}[^"]*)"')
+    m = re.search(browse_re, html)
     if not m:
         html2 = _http_get(f'https://ngdc.cncb.ac.cn/gsa/search?db=GSA&term={acc}')
-        m2 = re.search(rf'href="((?:/gsa/)?browse/[^"]*{acc}[^"]*)"', html2)
+        m2 = re.search(browse_re, html2)
         path = m2.group(1) if m2 else None
     else:
         path = m.group(1)
     if path and not urls:
-        detail = ('https://ngdc.cncb.ac.cn' + path
-                  if path.startswith('/gsa/')
-                  else 'https://ngdc.cncb.ac.cn/gsa/' + path.lstrip('/'))
+        if path.startswith('http'):
+            detail = path
+        elif path.startswith('/gsa/'):
+            detail = 'https://ngdc.cncb.ac.cn' + path
+        else:
+            detail = 'https://ngdc.cncb.ac.cn/gsa/' + path.lstrip('/')
         html3 = _http_get(detail)
         urls = [u for u in _dedupe_urls(re.findall(
             r'(?:(?:ftp|https?):)?//download[0-9]*\.(?:cncb|big)\.ac\.cn/[^"\'<>\s]+',
             html3)) if acc in u]
     files = []
+    rejected = []
     for u in urls:
         u = re.sub(r'^ftp://', 'https://', u)      # 统一 HTTPS（协议白名单）
         if not DATA_FILE_RE.search(u):
             continue
         ok, msg = check_url_host(u)
         if not ok:
-            raise ValueError(f'NGDC 返回了不允许的地址: {msg}')
+            # 单个外站/非白名单 URL 不应整批判死：记录后继续看其余候选，
+            # 只有全部候选都被拒才报错（页面里常混有 CDN/统计域名）
+            rejected.append(f'{u}（{msg}）')
+            continue
         if all(f['url'] != u for f in files):
             files.append({'url': u, 'bytes': 0})
+    if rejected:
+        logging.getLogger(__name__).warning(
+            'NGDC %s：忽略 %d 个不在白名单/校验不通过的候选 URL: %s',
+            acc, len(rejected), '; '.join(rejected[:3]))
     # cncb/big 双镜像去重：同文件名优先 cncb 主站
     by_name = {}
     for f in files:
@@ -314,6 +386,10 @@ def _resolve_ngdc(acc):
             by_name[bn] = f
     files = list(by_name.values())
     if not files:
+        if rejected:
+            # 全部候选都被拒才报错（此时把拒绝原因带出来便于排查）
+            raise ValueError(f'NGDC 返回的 {acc} 候选地址全部未通过校验：'
+                             + '; '.join(rejected[:3]))
         raise ValueError(f'NGDC 未找到 {acc} 的公开下载文件（可能受控/未公开）')
     return {'db': 'GSA', 'organism': '', 'bio_sample': '', 'files': files}
 
@@ -362,6 +438,65 @@ def _gzip_ok(path):
         return True
     except (OSError, EOFError):
         return False
+
+
+def _bz2_ok(path):
+    """bz2 流式解压校验（读全量）：返回 (ok, msg)。
+
+    DDBJ 的 .fastq.bz2 此前没有任何完整性校验（既无 ENA 的 md5，也无数字节
+    可比），半截文件会一路流到转换链才炸。这里按"能否完整解压"判定：
+    读全量算通过，ReadError/EOFError/OSError 即 broken。
+    """
+    import bz2
+    try:
+        with bz2.open(path, 'rb') as f:
+            while f.read(1 << 20):
+                pass
+        return True, ''
+    except (OSError, EOFError, ValueError) as e:
+        return False, f'{type(e).__name__}: {e}'
+
+
+def _md5_ok(path, expect, max_bytes=2 * 1024 ** 3):
+    """本地算 MD5 与期望值比对 → (ok, note)。
+
+    ok: True=一致 / False=不一致 / None=未校验（超过 max_bytes 跳过或读失败，
+    此时 note 给出原因，调用方写入条目标注）。
+    """
+    import hashlib
+    try:
+        if os.path.getsize(path) > max_bytes:
+            return None, f'skipped_size>{max_bytes // 1024 ** 3}GB'
+        h = hashlib.md5()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(1 << 20), b''):
+                h.update(chunk)
+        got = h.hexdigest()
+    except OSError as e:
+        return None, f'error_{type(e).__name__}'
+    if got.lower() == str(expect).strip().lower():
+        return True, ''
+    return False, f'md5 不符（期望 {expect}, 实际 {got}）'
+
+
+def _sracha_owned_name(n, acc):
+    """sracha 产物是否属于该 acc（边界明确的精确形式）。
+
+    旧实现用 `n.startswith(acc)` 归属产物：SRR1000 会吃掉 SRR10001 的文件
+    （'SRR10001_1.fastq.gz'.startswith('SRR1000') 为真），把别人的数据登记到
+    本条目下。这里改成白名单式精确匹配：
+      <acc>.sra / <acc>.fastq.gz / <acc>.fq.gz / <acc>_1|_2.fastq.gz|fq.gz
+    """
+    if not n or not acc:
+        return False
+    if n == f'{acc}.sra':
+        return True
+    for suf in ('.fastq.gz', '.fq.gz'):
+        if n == acc + suf:
+            return True
+        if n in (f'{acc}_1{suf}', f'{acc}_2{suf}'):
+            return True
+    return False
 
 
 def _known_total(fe):
@@ -545,8 +680,12 @@ class DownloadManager:
                 meta = check_path(b['dir'] + os.sep + 'batch.json',
                                   must_exist=False, in_platform=True)
                 os.makedirs(b['dir'], exist_ok=True)
-                with safe_open(meta, 'wt') as f:
+                # 原子落盘：前端/任务中心会并发读 batch.json，直接覆写会让读端
+                # 拿到半截 JSON（下载页整页 500）。先写 .tmp 再 os.replace。
+                tmp = meta + '.tmp'
+                with safe_open(tmp, 'wt') as f:
                     json.dump(b, f, ensure_ascii=False, indent=1)
+                os.replace(tmp, meta)
             except (OSError, ValueError):
                 pass
 
@@ -618,10 +757,22 @@ class DownloadManager:
                 continue
 
     # ---- 创建 ----
-    def create(self, name, accessions, concurrency=2, convert_sra=True):
+    def create(self, name, accessions, concurrency=2, convert_sra=True,
+               out_dir=None):
+        """创建批次。out_dir：可选自定义输出位置（目录）；不填/留空则用
+        默认 downloads/<批次id>/。指定目录即批次目录本身（不再嵌一层
+        批次 id，用户指定哪里数据就在哪里）；经 check_path 校验——平台内
+        或已挂载的输出根（write_roots）内，越界抛 ValueError。"""
         bid = f'{_sanitize(name)}_{time.strftime("%Y%m%d_%H%M%S")}'
-        bdir = check_path(os.path.join(_batch_root(), bid),
-                          must_exist=False, in_platform=True)
+        if str(out_dir or '').strip():
+            bdir = check_path(str(out_dir).strip(), must_exist=False,
+                              in_platform=True)
+            os.makedirs(bdir, exist_ok=True)
+            custom_dir = True
+        else:
+            bdir = check_path(os.path.join(_batch_root(), bid),
+                              must_exist=False, in_platform=True)
+            custom_dir = False
         b = {'id': bid, 'name': _sanitize(name), 'status': 'resolving',
              'created': time.strftime('%Y-%m-%d %H:%M'),
              'started': time.time(), 'finished': None,
@@ -633,7 +784,9 @@ class DownloadManager:
             self.batches[bid] = b
         self._save(b)
         self._blog(b, f'创建批次 {b["name"]}：共 {len(accessions)} 个条目，'
-                      f'输出目录 {os.path.basename(bdir)}')
+                      f'输出目录 {bdir}')
+        if custom_dir and os.listdir(bdir):
+            self._blog(b, '⚠ 指定目录非空：与本次数据同名的文件将被覆盖/续传')
         self._notify(bid)          # 让任务中心立刻出现这张卡
 
         def resolver():
@@ -869,24 +1022,64 @@ class DownloadManager:
                                    f'实际 {actual}）')
                 self._blog(b, f'失败 {fe["acc"]}: {fe["error"]}')
                 return
+        verify_kind = 'bytes' if exp else 'size_approx'
         if out.lower().endswith('.gz') and not _gzip_ok(out):
             with self.lock:
                 fe['status'] = 'failed'
                 fe['error'] = 'gzip 文件损坏（魔数/抽样解压失败）'
             self._blog(b, f'失败 {fe["acc"]}: {fe["error"]}')
             return
+        if out.lower().endswith('.bz2'):
+            # DDBJ .fastq.bz2：无 md5/精确字节数可依，用 bz2 流式解压校验（读全量）
+            ok_bz, why_bz = _bz2_ok(out)
+            if not ok_bz:
+                with self.lock:
+                    fe['status'] = 'failed'
+                    fe['error'] = f'bz2 文件损坏（流式解压失败: {why_bz}）'
+                self._blog(b, f'失败 {fe["acc"]}: {fe["error"]}')
+                return
+            verify_kind = 'bz2_stream'
+            self._blog(b, f'校验 {fe["acc"]}: bz2 流式解压通过')
+        exp_md5 = str(fe.get('md5') or '')
+        # 本地 md5 兜底（sracha 路径自己已做 MD5；.sra 的 md5 是 FASTQ 的，不适用）
+        if (re.fullmatch(r'[0-9a-fA-F]{32}', exp_md5) and fe.get('url')
+                and not out.lower().endswith('.sra')):
+            ok_md5, note_md5 = _md5_ok(out, exp_md5)
+            if ok_md5 is False:
+                with self.lock:
+                    fe['status'] = 'failed'
+                    fe['error'] = f'MD5 校验失败: {note_md5}'
+                self._blog(b, f'失败 {fe["acc"]}: {fe["error"]}')
+                return
+            if ok_md5 is None:
+                # 大文件跳过/读取异常：如实标注，不阻断（WARN）
+                with self.lock:
+                    fe['md5_note'] = note_md5
+                self._blog(b, f'警告 {fe["acc"]}: MD5 未校验（{note_md5}）')
+            else:
+                verify_kind = 'md5'
         with self.lock:
             fe['status'] = 'done'
             fe['verified'] = True
+            fe['verify'] = verify_kind
+            if not exp:
+                # 元数据未给字节数：只做了 ±1MiB 粗校验，来源如实标注
+                fe['size_source'] = 'unknown'
             fe['progress'] = 1.0
         self._blog(b, f'完成 {fe["acc"]}')
         self._save(b)
 
     def _dl_aria2(self, a2, b, fe):
         out = fe['out']
+        extra = []
+        if re.fullmatch(r'[0-9a-fA-F]{32}', str(fe.get('md5') or '')):
+            # ENA 给了 md5 时让 aria2c 一并做完整性校验（有 .aria2 控制文件
+            # 时按已记录的分块校验；本地收尾还会再算一遍 md5 兜底）
+            extra = ['--check-integrity=true']
         cmd = [a2, '-x', '4', '-s', '4', '-k', '1M', '-c',
                '--file-allocation=none', '--console-log-level=warn',
                '--summary-interval=2', '--retry-wait=3', '--max-tries=5',
+               *extra,
                '-d', b['dir'], '-o', os.path.basename(out), fe['url']]
         try:
             proc = subprocess.Popen(
@@ -988,13 +1181,23 @@ class DownloadManager:
     _SRACHA_PROG_SUFFIX = '.sracha-progress'
 
     def _sracha_progress(self, bdir, acc):
-        """读 sracha 进度文件 → (done_bytes, total_bytes, md5) 或 None。"""
-        prefix = '.' + str(acc)
-        cands = None
+        """读 sracha 进度文件 → (done_bytes, total_bytes, md5) 或 None。
+
+        归属判定同样必须精确：旧实现取前缀 '.'+acc，'.SRR1000' 会把
+        SRR10001 的进度文件也算进来（startswith 前缀碰撞）。这里把
+        '. <产物名> .sracha-progress' 中的产物名剥出来后按 _sracha_owned_name
+        校验（产物名形如 SRR123.sra / SRR123.fastq.gz）。
+        """
+        cands = []
         try:
-            cands = [n for n in os.listdir(bdir)
-                     if n.startswith(prefix)
-                     and n.endswith(self._SRACHA_PROG_SUFFIX)]
+            for n in os.listdir(bdir):
+                if not n.endswith(self._SRACHA_PROG_SUFFIX) or not n.startswith('.'):
+                    continue
+                stem = n[1:-len(self._SRACHA_PROG_SUFFIX)]
+                # stem 是产物名（SRR123.sra / SRR123.fastq.gz）；也接受裸 acc
+                # （startsWith 旧行为里 '.SRR123.sracha-progress' 这类精确形式）
+                if stem == acc or _sracha_owned_name(stem, acc):
+                    cands.append(n)
         except OSError:
             return None
         for n in cands:
@@ -1107,15 +1310,14 @@ class DownloadManager:
                 fe['error'] = (f'sracha 退出码 {rc}'
                                + ('；' + tail[-1] if tail else ''))
             return False
-        # 识别产物：acc.sra（NCBI 路径）或 acc[_N].fastq.gz / acc.fastq.gz（ENA 路径）
+        # 识别产物：acc.sra（NCBI 路径）或 acc[_N].fastq.gz（ENA 路径）
+        # 归属必须用 _sracha_owned_name 的精确形式，不用 startswith(acc)——
+        # 否则 SRR1000 会把 SRR10001 的产物登记到自己名下
         names = set(os.listdir(bdir))
         sra_p = bdir + os.sep + acc + '.sra'
         fastqs = sorted(
             n for n in names
-            if n.startswith(acc)
-            and (n == acc + '.fastq.gz'
-                 or re.search(r'_1\.f(ast)?q\.gz$', n, re.I)
-                 or re.search(r'_2\.f(ast)?q\.gz$', n, re.I)))
+            if _sracha_owned_name(n, acc) and n.endswith(('.fastq.gz', '.fq.gz')))
         with self.lock:
             # ENA 路径已经产出 FASTQ（或 sracha 把 .sra 与 .sracha-progress
             # 之外的产物直接落好）时优先登记 FASTQ：原先先判 .sra，会把
@@ -1584,6 +1786,7 @@ class DownloadManager:
                     elapsed = None
             return {'id': b.get('id') or bid, 'name': b.get('name') or bid,
                     'status': b.get('status') or 'failed',
+                    'dir': b.get('dir') or '',
                     'created': b.get('created') or '',
                     'error': b.get('error') or '',
                     'started': started, 'finished': finished,

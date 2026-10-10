@@ -413,5 +413,5 @@
 		"overrepresented_sequences": {
 		}
 	},
-	"command": "/fastp/fastp -i D:\桌面\植物病毒分析平台\databases\examples\example_R1.fastq.gz -o D:\桌面\植物病毒分析平台\tool_runs\fastp_20260909_230245\00_prep\fastp_R1.fastq.gz -w 8 -j D:\桌面\植物病毒分析平台\tool_runs\fastp_20260909_230245\00_prep\fastp_report.json -h D:\桌面\植物病毒分析平台\tool_runs\fastp_20260909_230245\00_prep\fastp_report.html --qualified_quality_phred 20 --length_required 50 -I D:\桌面\植物病毒分析平台\databases\examples\example_R2.fastq.gz -O D:\桌面\植物病毒分析平台\tool_runs\fastp_20260909_230245\00_prep\fastp_R2.fastq.gz --detect_adapter_for_pe "
+	"command": "/fastp/fastp -i D:\桌面\植物病毒分析平台\examples\example_R1.fastq.gz -o D:\桌面\植物病毒分析平台\run\tool_runs\fastp_20261006_162226_b8b93c\00_prep\fastp_R1.fastq.gz -w 8 -j D:\桌面\植物病毒分析平台\run\tool_runs\fastp_20261006_162226_b8b93c\00_prep\fastp_report.json -h D:\桌面\植物病毒分析平台\run\tool_runs\fastp_20261006_162226_b8b93c\00_prep\fastp_report.html --qualified_quality_phred 20 --length_required 15 -I D:\桌面\植物病毒分析平台\examples\example_R2.fastq.gz -O D:\桌面\植物病毒分析平台\run\tool_runs\fastp_20261006_162226_b8b93c\00_prep\fastp_R2.fastq.gz --detect_adapter_for_pe "
 }

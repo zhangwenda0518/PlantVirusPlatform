@@ -9,8 +9,12 @@ import os
 import sys
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-KV_INFO = (r'D:\桌面\植物病毒分析平台\databases\virusref_db\kv_index'
-           r'\reference.ref_info.tsv')
+# 平台根：默认自动推导（tests/bench/ 上溯 3 层 = 平台根），可用 VP_ROOT 覆盖
+PLATFORM = (os.environ.get('VP_ROOT')
+            or os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__)))))
+KV_INFO = os.path.join(PLATFORM, 'databases', 'virusref_db', 'kv_index',
+                       'reference.ref_info.tsv')
 
 # (组, 显示名, 库内 Species 关键词列表 —— 任一命中即算覆盖)
 CHECKLIST = [

@@ -58,27 +58,52 @@ def api_task_log(tid):
 def api_task_stream(tid):
     """SSE 实时任务进度流：快照有变化立即推送，任务结束自动关流。
 
-    前端 EventSource 订阅（LOGAN 批量面板用），替代定时轮询。"""
+    前端 EventSource 订阅（LOGAN 批量面板用），替代定时轮询。
+
+    多路复用：`?also=<tid2>,<tid3>`（逗号分隔，单连接最多 8 个任务）
+    在一次连接里同时推送多个任务的快照，每条 data 事件带 tid 字段标明
+    来源；所有任务都到终态（或消失）才关流。HTTP/1.1 浏览器对同源
+    SSE 有 6 连接上限，批量任务逐条开流会触顶把轮询也堵死——前端将其
+    合并成一条连接即可（用法：/api/task/<主tid>/stream?also=a,b,c）。
+    不传 also 时事件负载与旧版逐字节一致（单任务订阅无需改动）。
+    """
+    tids = [tid]
+    for extra in (request.args.get('also') or '').split(','):
+        extra = extra.strip()
+        if extra and extra not in tids:
+            tids.append(extra)
+    tids = tids[:8]                       # 单连接上限，防被拿来放大轮询
+    multi = len(tids) > 1
+
     def gen():
-        last = None
+        last = {}
         idle = 0
-        while True:
-            snap = tm.snapshot(tid, log_lines=10)
-            if snap is None:
-                yield 'event: gone\ndata: {}\n\n'
-                return
-            data = json.dumps(snap, ensure_ascii=False)
-            if data != last:
-                last = data
-                idle = 0
-                yield f'data: {data}\n\n'
-            else:
-                idle += 1
-                if idle >= 30:                     # ~20s 心跳注释行
+        done = set()                      # 已到终态 / 已消失的任务
+        while len(done) < len(tids):
+            for t in tids:
+                if t in done:
+                    continue
+                snap = tm.snapshot(t, log_lines=10)
+                if snap is None:
+                    done.add(t)
+                    gone = json.dumps({'tid': t}, ensure_ascii=False) \
+                        if multi else '{}'
+                    yield f'event: gone\ndata: {gone}\n\n'
+                    continue
+                item = dict(snap, tid=t) if multi else snap
+                data = json.dumps(item, ensure_ascii=False)
+                if data != last.get(t):
+                    last[t] = data
                     idle = 0
-                    yield ': ping\n\n'
-            if snap.get('status') != 'running':
-                return
+                    yield f'data: {data}\n\n'
+                if snap.get('status') != 'running':
+                    done.add(t)
+            if len(done) >= len(tids):
+                break
+            idle += 1
+            if idle >= 30:                     # ~20s 心跳注释行
+                idle = 0
+                yield ': ping\n\n'
             time.sleep(0.7)
 
     return Response(gen(), mimetype='text/event-stream',

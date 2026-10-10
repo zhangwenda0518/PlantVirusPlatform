@@ -202,9 +202,13 @@ def cmd_host_analysis(args):
     sample = _safe_sample_name(args.sample)
     sample_dir = os.path.join(DIRS['results'], sample)
     logger = make_logger(f'hostana_{sample}')
-    s = predict_hosts(sample_dir, logger=logger, force=args.force)
+    s = predict_hosts(sample_dir, logger=logger, force=args.force,
+                      min_confidence=args.min_confidence)
     logger.close()
     print(f"宿主预测完成: {s['n_contigs']} 条 contigs")
+    if s.get('min_confidence') is not None:
+        print(f"置信度门槛 {s['min_confidence']}: "
+              f"{s.get('n_low_confidence', 0)} 条标注 Low_confidence")
     for cat, n in s['categories'].items():
         print(f"  {cat:15s}: {n}")
 
@@ -218,7 +222,9 @@ def cmd_orfa(args):
     sample_dir = os.path.join(DIRS['results'], sample)
     logger = make_logger(f'orfa_{sample}')
     s = run_orf_annotation(sample_dir, threads=args.threads, logger=logger,
-                           force=args.force, libs=args.libs)
+                           force=args.force, libs=args.libs,
+                           min_pident=args.min_pident,
+                           min_qcov=args.min_qcov)
     logger.close()
     used = s.get('libs') or []
     print("启用注释层: " + '、'.join(LIB_LABELS.get(l, l) for l in used))
@@ -349,6 +355,9 @@ def cmd_submit_validate(args):
         if ex:
             print(f"      例: {ex}")
     print("修复占位符后再提交 GenBank（Web 端「提交准备」页可在线编辑）")
+    # 有未解决问题时以退出码 1 结束（main() 对返回 False 统一 sys.exit(1)），
+    # 供脚本/CI 串联 `submit-validate && submit-export` 时正确短路。
+    return False
 
 
 def cmd_submit_fill(args):
@@ -404,6 +413,16 @@ def cmd_submit_sbt(args):
     print(f"template.sbt 已生成: {path}（{1 + len(extra)} 位作者）")
 
 
+def _subproc_env(deepseek_api=None, ncbi_api=None):
+    """子进程环境：API Key 经环境变量注入，不落命令行（进程表/日志可见）。"""
+    env = dict(os.environ)
+    if deepseek_api:
+        env['DEEPSEEK_API_KEY'] = str(deepseek_api)
+    if ncbi_api:
+        env['NCBI_API_KEY'] = str(ncbi_api)
+    return env
+
+
 def cmd_meta_search(args):
     import subprocess as _sp
     from Virus_Platform_Core.public_meta import search_engine
@@ -413,11 +432,10 @@ def cmd_meta_search(args):
         cmd += ['-o', args.out]
     if args.no_detailed:
         cmd.append('--no-detailed')
-    if args.ncbi_api or os.environ.get('NCBI_API_KEY'):
-        cmd += ['--ncbi-api', args.ncbi_api or os.environ['NCBI_API_KEY']]
-    if args.deepseek_api:
-        cmd += ['--deepseek-api', args.deepseek_api]
-    r = _sp.run(cmd)
+    # key 走环境变量（search_engine 侧优先读 env）
+    env = _subproc_env(args.deepseek_api,
+                       args.ncbi_api or os.environ.get('NCBI_API_KEY'))
+    r = _sp.run(cmd, env=env)
     if r.returncode == 0:
         print("下一步: python main.py meta-info --runs <输出目录>/sra.list")
 
@@ -438,11 +456,9 @@ def cmd_meta_info(args):
         cmd += ['-o', args.out]
     if args.fill_date:
         cmd.append('--fill-date')
-    if args.deepseek_api:
-        cmd += ['--deepseek-api', args.deepseek_api]
-    if args.ncbi_api:
-        cmd += ['--ncbi-api', args.ncbi_api]
-    _sp.run(cmd)
+    # key 走环境变量（info_engine 侧优先读 env）
+    env = _subproc_env(args.deepseek_api, args.ncbi_api)
+    _sp.run(cmd, env=env)
 
 
 def cmd_meta_plot(args):
@@ -452,9 +468,19 @@ def cmd_meta_plot(args):
 
 def cmd_host_genome(args):
     from Virus_Platform_Core.public_meta.host_genome import main as _hg_main
-    sys.argv = ['host_genome.py', '--species', args.species]
+    sys.argv = ['host_genome.py',
+                '--species', args.species or '',
+                '--source', args.source]
+    if args.accession:
+        sys.argv += ['--accession', args.accession]
+    if args.chromosomes:
+        sys.argv += ['--chromosomes', args.chromosomes]
     if args.out:
         sys.argv += ['--outdir', args.out]
+    if args.release:
+        sys.argv += ['--release', str(args.release)]
+    if args.taxid:
+        sys.argv += ['--taxid', str(args.taxid)]
     if args.include_organelles:
         sys.argv.append('--include-organelles')
     if args.ncbi_api:
@@ -466,6 +492,18 @@ def cmd_host_genome(args):
     if args.skip_datasets:
         sys.argv.append('--skip-datasets')
     _hg_main()
+
+
+def cmd_datasets(args):
+    """透传给 datasets_cli 子命令（genome/gene/taxonomy/virus）。"""
+    from Virus_Platform_Core.public_meta.datasets_cli import main as _dm
+    sys.argv = ['datasets.py'] + [a for a in args.ds_args if a != '--']
+    _dm()
+
+
+def cmd_datasets_setup(args):
+    from Virus_Platform_Core.public_meta.datasets_cli import setup
+    setup(log=print)
 
 
 def cmd_ref_status(args):
@@ -638,6 +676,48 @@ def cmd_tool_runs(args):
         return None
 
 
+def cmd_crispr_design(args):
+    """CRISPR/Cas12a 检测试剂设计（与 GUI 工具卡 t-crispr 同引擎同产物）。"""
+    import time as _time
+    from Virus_Platform_Core import crispr_design as cd
+    get_config()                      # 确保 DIRS / 工具探测就绪
+    out_dir = args.out or os.path.join(
+        DIRS['tool_runs'],
+        'crispr_cli_' + _time.strftime('%Y%m%d_%H%M%S'))
+    logger = make_logger('crispr_design')
+    params = {
+        'amp_mode': args.amp, 'profile': args.profile,
+        'nuclease': args.nuclease, 'probe_type': args.probe,
+        'spacer_len': args.spacer_len, 'top_n': args.top_n,
+        'flank': args.flank, 'site_margin': args.margin,
+        'use_host': '0' if args.no_host else '1',
+        'group_by_segment': '0' if args.no_group else '1',
+        'near_fasta': args.near or '',
+        'threads': args.threads or 0,
+    }
+    if args.product_min:
+        params['product_min'] = args.product_min
+    if args.product_max:
+        params['product_max'] = args.product_max
+
+    def _prog(stage, frac, msg=''):
+        print(f'  [{stage:8s}] {int(frac * 100):3d}%  {msg}')
+
+    summary, _report = cd.run_chain(args.input, params, out_dir,
+                                    logger, _prog)
+    logger.close()
+    print(f"CRISPR 设计完成: {summary['n_sets_output']} 组合"
+          f"（候选 {summary['n_sets_total']}，最优评分 "
+          f"{summary['best_score']}，耗时 {summary['elapsed_sec']}s）")
+    for seg, d in summary['segments'].items():
+        print(f"  {seg:12s}: {d['n_isolates']} 株 / 共识 {d['consensus_len']}bp"
+              f" / PAM {d['n_pam_sites']} → 漏斗后 {d['n_after_funnel']}"
+              f" → 组合 {d['n_designed']}")
+    print(f"产物目录: {summary['out_dir']}")
+    print("⚠ " + summary['evidence_note'])
+    return None
+
+
 def cmd_importprobe(args):
     """内部命令：在**子进程**里逐个导入模块并打印协议行。
 
@@ -808,6 +888,13 @@ def cmd_selfcheck(args):
 
 def main():
     cfg = get_config()
+    # 退出前把 AI 审计队列排空：CLI 跑管道同样会发布事件（note_stage_*），
+    # 而 Windows 下 SIGTERM 不触发 atexit（实测）。信号处理器只能在主线程装。
+    try:
+        from Virus_Platform_Core.ai_agent import audit as _ai_audit
+        _ai_audit.install_signals()
+    except Exception:
+        pass
     p = argparse.ArgumentParser(description="植物病毒分析平台 CLI",
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog=__doc__)
@@ -856,7 +943,7 @@ def main():
                     choices=['rnaviral', 'metaviral', 'meta', 'rna', 'isolate'])
     sp.add_argument('--subsample', type=int, default=0,
                     help='仅取前 N 对 reads（快速测试用），0=全部')
-    sp.add_argument('--min-contig-len', type=int, default=500)
+    sp.add_argument('--min-contig-len', type=int, default=200)
     sp.add_argument('--top-n-refs', type=int, default=10, help='进化分析取近缘参考数')
     sp.add_argument('--tree-tool', default='fasttree', choices=['fasttree', 'raxml-ng', 'nj'])
     sp.add_argument('--tree-sampling', default='blast',
@@ -898,6 +985,46 @@ def main():
     sp = sub.add_parser('ncbi-list', help='列出已下载的 NCBI 参考集合')
     sp.set_defaults(func=cmd_ncbi_list)
 
+    sp = sub.add_parser(
+        'crispr-design',
+        help='CRISPR/Cas12a 检测试剂设计（crRNA × RPA/PCR 引物协同，'
+             '与 GUI「检测与防治→CRISPR 检测试剂设计」同引擎）')
+    sp.add_argument('-i', '--input', required=True,
+                    help='目标 FASTA（多分离物；header 含 RNA1/S2 等标签自动分片段）')
+    sp.add_argument('--near', default=None,
+                    help='近缘病毒排除 FASTA（可选）')
+    sp.add_argument('--no-host', action='store_true',
+                    help='跳过宿主基因组筛查（默认启用 host-db）')
+    sp.add_argument('--no-group', action='store_true',
+                    help='不按片段标签分组（全部记录视为同一分子）')
+    sp.add_argument('--amp', default='RPA', choices=['RPA', 'PCR'],
+                    help='扩增方式（默认 RPA）')
+    sp.add_argument('--profile', default='strict',
+                    choices=['strict', 'relaxed'],
+                    help='参数档（relaxed=高变异 RNA 病毒放松口径）')
+    sp.add_argument('--nuclease', default='cas12a',
+                    choices=['cas12a', 'cas13a'],
+                    help='效应酶（cas12a=LbCas12a TTTV；cas13a=LwaCas13a '
+                         '免 PAM/T7 体外转录，默认 cas12a）')
+    sp.add_argument('--spacer-len', type=int, default=0,
+                    help='crRNA spacer 长度（0=按酶档案默认：Cas12a 20 / '
+                         'Cas13a 30；区间 20–24 / 27–30）')
+    sp.add_argument('--probe', default='none', choices=['none', 'exo', 'nfo'],
+                    help='RPA 探针（exo=荧光 FAM/THF/BHQ1；nfo=侧流 '
+                         'FAM/THF/C3 + 配套生物素引物；默认 none）')
+    sp.add_argument('--top-n', type=int, default=20, help='输出组合数（默认 20）')
+    sp.add_argument('--flank', type=int, default=250, help='位点侧翼窗口 bp（默认 250）')
+    sp.add_argument('--margin', type=int, default=25,
+                    help='扩增子含位点的最小边距 bp（默认 25）')
+    sp.add_argument('--product-min', type=int, default=0,
+                    help='产物下限 bp（0=用档位默认）')
+    sp.add_argument('--product-max', type=int, default=0,
+                    help='产物上限 bp（0=用档位默认）')
+    sp.add_argument('-o', '--out', default=None,
+                    help='产物根目录（默认 run/tool_runs/crispr_cli_<时间戳>）')
+    sp.add_argument('-t', '--threads', type=int, default=0)
+    sp.set_defaults(func=cmd_crispr_design)
+
     sp = sub.add_parser('gb-dl',
                         help='下载 GenBank 集合（同属共线性比较输入）')
     sp.add_argument('-n', '--name', required=True, help='集合名')
@@ -933,6 +1060,10 @@ def main():
                         help='对已有 ③组装 结果做 ICTV 宿主预测')
     sp.add_argument('--sample', required=True)
     sp.add_argument('--force', action='store_true')
+    sp.add_argument('--min-confidence', type=float, default=None,
+                    help='ICTV 级联置信度门槛（0-1 小数，默认不过滤）；'
+                         'Integrated_Confidence/P_Max 低于门槛的预测在 '
+                         'confidence_flag 列标注 Low_confidence')
     sp.set_defaults(func=cmd_host_analysis)
 
 
@@ -941,8 +1072,15 @@ def main():
     sp.add_argument('--threads', type=int, default=None)
     sp.add_argument('--libs', default=None,
                     help='启用的注释层，逗号分隔：prot（层1 序列同源）/ '
-                         'pfam（层2 Pfam HMM）/ cdd（层2 CDD 结构域）；'
-                         '缺省=全部启用。例：--libs pfam,cdd')
+                         'pfam（层2 Pfam HMM）/ bfvd（层2 BFVD 病毒域，'
+                         '与 NCBI 提交同源）；缺省=全部启用。例：--libs prot,pfam')
+    sp.add_argument('--min-pident', type=float, default=None,
+                    help='层1 命中 identity 门槛（百分数 0-100，默认不过滤）；'
+                         'DIAMOND 侧默认只有 e≤1e-5 一道门槛，收紧可减少'
+                         '低 identity 误配（经验起点 30）')
+    sp.add_argument('--min-qcov', type=float, default=None,
+                    help='层1 命中 query 覆盖度门槛（百分数 0-100，默认不过滤；'
+                         '经验起点 50）')
     sp.add_argument('--force', action='store_true')
     sp.set_defaults(func=cmd_orfa)
 
@@ -1002,7 +1140,8 @@ def main():
     sp.add_argument('--coverage', help='覆盖度（如 42.5x）')
     sp.set_defaults(func=cmd_submit_init)
 
-    sp = sub.add_parser('submit-validate', help='提交准备：必填字段校验')
+    sp = sub.add_parser('submit-validate',
+                        help='提交准备：必填字段校验（存在未解决问题时退出码 1）')
     sp.add_argument('--name', required=True)
     sp.set_defaults(func=cmd_submit_validate)
 
@@ -1108,15 +1247,31 @@ def main():
     sp.add_argument('--out', default='SCI_Figures_Output', help='图表输出目录')
     sp.set_defaults(func=cmd_meta_plot)
 
-    sp = sub.add_parser('host-genome', help='宿主参考基因组下载（NCBI，供建宿主库）')
-    sp.add_argument('--species', required=True, help='物种拉丁名')
+    sp = sub.add_parser('host-genome', help='宿主参考基因组下载（NCBI / gget·Ensembl，供建宿主库）')
+    sp.add_argument('--species', default=None, help='物种拉丁名（如 "Lycium barbarum"；与 --accession 二选一）')
+    sp.add_argument('--accession', default=None, help='组装 accession（GCF_/GCA_，datasets 精确下载）')
+    sp.add_argument('--chromosomes', default=None, help='染色体过滤（如 X,Y；仅 --accession 模式）')
+    sp.add_argument('--source', choices=('ncbi', 'gget'), default='ncbi',
+                    help='下载来源：ncbi=RefSeq（默认）；gget=Ensembl/Ensembl Plants')
     sp.add_argument('--out', default=None, help='输出目录（默认 host-db/<taxid>_<物种>/）')
-    sp.add_argument('--include-organelles', action='store_true', help='同时下载叶绿体/线粒体基因组')
+    sp.add_argument('--release', type=int, default=None, help='gget: Ensembl release（默认最新）')
+    sp.add_argument('--taxid', type=int, default=None, help='指定 NCBI TaxID（省去在线查询）')
+    sp.add_argument('--include-organelles', action='store_true', help='同时下载叶绿体/线粒体基因组（仅 NCBI 源）')
     sp.add_argument('--ncbi-api', default=None)
     sp.add_argument('--min-length', type=int, default=0)
     sp.add_argument('--verify-only', action='store_true', help='仅检查已有下载')
     sp.add_argument('--skip-datasets', action='store_true', help='跳过 datasets CLI，直接 E-utilities 回退')
     sp.set_defaults(func=cmd_host_genome)
+
+    sp = sub.add_parser('datasets',
+                        help='NCBI datasets CLI 下载：datasets genome|gene|taxonomy|virus …（--help 看各模式参数）')
+    sp.add_argument('ds_args', nargs=argparse.REMAINDER,
+                    help='透传参数，如 genome --accession GCF_000001405.40 --chromosomes X,Y')
+    sp.set_defaults(func=cmd_datasets)
+
+    sp = sub.add_parser('datasets-setup',
+                        help='安装/更新 NCBI datasets CLI（官方 exe → 3rd/tools/datasets/）')
+    sp.set_defaults(func=cmd_datasets_setup)
 
     sp = sub.add_parser('ref-status', help='查看病毒参考库版本与统计')
     sp.set_defaults(func=cmd_ref_status)
@@ -1192,7 +1347,24 @@ def main():
     sp.set_defaults(func=cmd_importprobe)
 
     args = p.parse_args()
-    rc = args.func(args)
+    # 顶层异常包装（2026-10-04 审查 E5）：此前 cmd_* 异常裸抛 traceback，
+    # 脚本化批处理难以区分「参数/运行失败」与解释器崩溃。统一为
+    # 一行可读错误 + 退出码 2（1 保留给 selfcheck 的「存在未就绪项」）。
+    try:
+        rc = args.func(args)
+    except KeyboardInterrupt:
+        print('\n[中断] 用户取消', file=sys.stderr)
+        sys.exit(130)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f'[错误] {type(e).__name__}: {e}\n'
+              f'       （完整回溯: python -c "import traceback, '
+              f'sys; sys.argv=...；或加环境变量 VP_CLI_TRACEBACK=1 重跑）',
+              file=sys.stderr)
+        if os.environ.get('VP_CLI_TRACEBACK'):
+            raise
+        sys.exit(2)
     # selfcheck 返回 False（存在未就绪项）时以非零码退出，供脚本判断
     if rc is False:
         sys.exit(1)

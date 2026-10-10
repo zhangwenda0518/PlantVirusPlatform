@@ -13,8 +13,10 @@
 """
 import os
 import json
+import urllib.parse
 
 from .utils import (check_path, safe_open, iter_fasta, is_step_done,
+                   verify_svg,
                     mark_step_done)
 
 try:
@@ -41,12 +43,15 @@ def dfv_available():
 
 
 # ---------------------------------------------------------------- GFF 解析
-def parse_gff(path, seqid=None):
+def parse_gff(path, seqid=None, logger=None):
     """平台 GFF3 → {contig: [feat_dict, ...]}；feat 坐标为 1-based 闭区间。
 
     seqid 给定时只保留该 contig 的记录。
+    坐标列非整数的行逐行跳过并 WARN（此前 int() 裸抛会让整步出图失败，
+    2026-10-03 审计 P3）。
     """
     by_ctg = {}
+    n_bad = 0
     with safe_open(path) as fh:
         for line in fh:
             if line.startswith('#'):
@@ -54,14 +59,21 @@ def parse_gff(path, seqid=None):
             cols = line.rstrip('\n').split('\t')
             if len(cols) < 9:
                 continue
+            try:
+                start, end = int(cols[3]), int(cols[4])
+            except ValueError:
+                n_bad += 1
+                continue
             attrs = {}
             for kv in cols[8].split(';'):
                 if '=' in kv:
                     k, v = kv.split('=', 1)
-                    attrs[k.strip()] = v
+                    # ⑥b 写出的 orf_annotation.gff3 属性按 GFF3 规范做过
+                    # 百分号转义（如 %25/%3B），此处解码还原（2026-10-03 审计 P3）
+                    attrs[k.strip()] = urllib.parse.unquote(v)
             feat = {
                 'type': cols[2],
-                'start': int(cols[3]), 'end': int(cols[4]),
+                'start': start, 'end': end,
                 'strand': 1 if cols[6] != '-' else -1,
                 'product': attrs.get('product', ''),
                 'category': attrs.get('category', ''),
@@ -69,6 +81,9 @@ def parse_gff(path, seqid=None):
                 'id': attrs.get('ID', ''),
             }
             by_ctg.setdefault(cols[0], []).append(feat)
+    if n_bad and logger:
+        logger.log(f"GFF 有 {n_bad} 行坐标列非整数，已跳过（{os.path.basename(path)}）",
+                   "WARN")
     if seqid is not None:
         return {seqid: by_ctg.get(seqid, [])}
     return by_ctg
@@ -140,6 +155,7 @@ def plot_contig_svgs(seqid, feats, seq_len, out_prefix, organism=''):
             svg = '%s.%s' % (out_prefix,
                              'dfv_circle' if circular else 'dfv_linear') + '.svg'
             fig.savefig(svg, bbox_inches='tight')
+            verify_svg(svg)
             plt.close(fig)
             made.append(svg)
     finally:
@@ -165,6 +181,7 @@ def _gb_record_svgs(record, out_prefix):
             svg = '%s.%s' % (out_prefix,
                              'dfv_circle' if circular else 'dfv_linear') + '.svg'
             fig.savefig(svg, bbox_inches='tight')
+            verify_svg(svg)
             plt.close(fig)
             made.append(svg)
     finally:
@@ -204,10 +221,22 @@ def run_dfv_plots(sample_dir, logger=None, force=False, max_plots=12,
     plots = []
     if ann_in and str(ann_in).lower().endswith(
             ('.gb', '.gbk', '.gbff', '.genbank')):
-        # GenBank 直接出图（逐 record）
+        # GenBank 直接出图（逐 record）。逐条容错：单条坏记录只中断后续
+        # 解析并 WARN，已出的图保留（SeqIO.parse 是生成器，异常后无法续读，
+        # 2026-10-03 审计 P3；参照 ictv_db._rebuild_gb_fasta 的逐文件容错）
         from Bio import SeqIO
         n = 0
-        for rec in SeqIO.parse(check_path(ann_in, must_exist=True), 'genbank'):
+        it = SeqIO.parse(check_path(ann_in, must_exist=True), 'genbank')
+        while True:
+            try:
+                rec = next(it)
+            except StopIteration:
+                break
+            except Exception as e:
+                if logger:
+                    logger.log(f"GenBank 解析在 {n} 条记录后中断: "
+                               f"{type(e).__name__}: {e}", "WARN")
+                break
             if max_plots and n >= max_plots:
                 break
             prefix = os.path.join(out_dir, _safe_name(rec.id or rec.name))
@@ -226,7 +255,7 @@ def run_dfv_plots(sample_dir, logger=None, force=False, max_plots=12,
             (None if fasta_in else _pick_inputs(sample_dir)[1])
         if logger and gff:
             logger.log(f"注释文件: {gff}")
-        by_ctg = parse_gff(gff) if gff else {}
+        by_ctg = parse_gff(gff, logger=logger) if gff else {}
         if fasta_in and not gff and logger:
             logger.log("未提供注释文件：画裸骨架图（无特征）")
         seqs = sorted(((h.split()[0], s) for h, s in iter_fasta(fa)),

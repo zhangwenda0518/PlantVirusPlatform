@@ -29,7 +29,7 @@
 
 对齐 MMPV-RNA 02b_Filter / 09b_Analysis_Verify（`verify.py`）：
 
-- 宿主污染筛选 → 长度分流 → **blastx**（蛋白级）+ CDD 结构域 + **类病毒 blastn**（环状 RNA 病原专项）；
+- 宿主污染筛选 → 长度分流 → **blastx**（蛋白级）+ **BFVD 病毒域**（mmseqs2，与 NCBI 提交链同库；原 CDD B 路因 ~5GB 索引反复 OOM 于 2026-09-29 换为 BFVD） + **类病毒 blastn**（环状 RNA 病原专项）；
 - 产物（`03b_verify/`）：验证通过的候选集与证据明细。
 
 ## ③c 共识序列与变异
@@ -39,7 +39,7 @@
 
 ## contig 深度注释（工具箱配套）
 
-`contig_annot.py`：NCBI Taxonomy 8 级谱系统列（realm→kingdom→…→species）+ 覆盖度/深度汇总，工具箱「contig 分类与深度分析」四件套之一；本地版由 `local_search.py` 提供同一套命中结构（BLASTN / DIAMOND BLASTX / mmseqs2 CDD，前端无需区分数据来源）。
+`contig_annot.py`：NCBI Taxonomy 8 级谱系统列（realm→kingdom→…→species）+ 覆盖度/深度汇总，工具箱「contig 分类与深度分析」四件套之一；本地版由 `local_search.py` 提供同一套命中结构（BLASTN / DIAMOND BLASTX，前端无需区分数据来源）。
 
 ## CLI
 

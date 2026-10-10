@@ -32,11 +32,27 @@ DEFAULTS = {'max_gap': 0.10, 'max_n': 0.05, 'min_length': 0.90,
 
 _CANON = set('ACGTRYSWKMBDHVN')       # DNA（含简并）
 _ALPHA = set('ACGTU')                 # 明确的碱基
+_GAP_CHARS = '-.?'                    # gap 口径：`-` 与比对软件常用的 `.` / `?`
 
 
 def read_fasta(path) -> "OrderedDict[str, str]":
-    """读 FASTA → 有序 {名字(首词): 序列(大写, 无空白)}。"""
+    """读 FASTA → 有序 {名字(首词): 序列(大写, 无空白)}。
+
+    ⚠️ 2026-10-03：首词重名**不再静默覆盖** —— 原实现 `seqs[name] = …` 会让
+    后写的把先写的顶掉，序列条数凭空少掉、QC 剔除集对不上。第二条起改名
+    `名字.2` / `名字.3` … 保留，重名明细见 `read_fasta_detailed`。
+    """
+    return read_fasta_detailed(path)[0]
+
+
+def read_fasta_detailed(path):
+    """同 `read_fasta`，但额外返回 (重名明细 [{name, kept_as}, …])。
+
+    重名不是小事：explorer 导出的 FASTA 头常是 `>acc 描述`，首词可能撞车；
+    丢掉任何一条都会让 QC 的条数与剔除集对不上（静默丢数据）。
+    """
     seqs: "OrderedDict[str, str]" = OrderedDict()
+    dups: List[Dict] = []
     name = None
     buf: List[str] = []
     with io.open(path, encoding='utf-8', errors='replace') as f:
@@ -44,15 +60,27 @@ def read_fasta(path) -> "OrderedDict[str, str]":
             ln = ln.rstrip('\r\n')
             if ln.startswith('>'):
                 if name is not None:
-                    seqs[name] = ''.join(buf).upper()
+                    _put_seq(seqs, dups, name, ''.join(buf).upper())
                 tok = ln[1:].strip().split()
                 name = tok[0] if tok else ''
                 buf = []
             elif ln.strip():
                 buf.append(''.join(ln.split()))
     if name is not None:
-        seqs[name] = ''.join(buf).upper()
-    return seqs
+        _put_seq(seqs, dups, name, ''.join(buf).upper())
+    return seqs, dups
+
+
+def _put_seq(seqs, dups, name, seq):
+    """存一条序列；首词重名时加 `.2`/`.3`… 后缀（不覆盖、并留痕）。"""
+    nm = name
+    if nm in seqs:
+        k = 2
+        while '%s.%d' % (name, k) in seqs:
+            k += 1
+        nm = '%s.%d' % (name, k)
+        dups.append({'name': name, 'kept_as': nm})
+    seqs[nm] = seq
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -60,14 +88,20 @@ def read_fasta(path) -> "OrderedDict[str, str]":
 # ══════════════════════════════════════════════════════════════════════
 
 def seq_metrics(name: str, seq: str) -> Dict:
-    """一条序列的 QC 指标（不含判定）。"""
+    """一条序列的 QC 指标（不含判定）。
+
+    ⚠️ 口径（2026-10-03 修）：`-` / `.` / `?` **统一算 gap**（原实现把 `.`
+    既算 gap 又算简并字符 → `n_frac` 与 `gap_frac` 对同一批 `.` 双计）；
+    `n_frac` 只统计 **IUPAC 简并码 + N**（R/Y/S/W/K/M/B/D/H/V/N），
+    真正非法的字符（X / `*` / 数字等）仍只进 `degenerate`，不冒充 gap。
+    """
     n = len(seq)
     if n == 0:
         return {'name': name, 'length': 0, 'gap': 0, 'gap_frac': 1.0,
                 'n_frac': 1.0, 'n_amb': 0, 'degenerate': 0}
-    gaps = seq.count('-') + seq.count('.')
-    amb = sum(1 for c in seq if c not in _ALPHA and c != '-')
-    bad = sum(1 for c in seq if c not in _CANON and c != '-')    # 非 DNA 字符（含 X/?/*）
+    gaps = sum(1 for c in seq if c in _GAP_CHARS)
+    amb = sum(1 for c in seq if c in _CANON and c not in _ALPHA)  # 简并/N
+    bad = sum(1 for c in seq if c not in _CANON and c not in _GAP_CHARS)
     return {'name': name, 'length': n, 'gap': gaps, 'gap_frac': gaps / n,
             'n_frac': amb / n, 'n_amb': amb, 'degenerate': bad}
 
@@ -127,7 +161,7 @@ def qc(fasta: str, *, reference: Optional[str] = None,
       · `ok`
     """
     say = log or (lambda *_: None)
-    seqs = read_fasta(fasta)
+    seqs, dup_names = read_fasta_detailed(fasta)
     if not seqs:
         return {'ok': False, 'error': 'FASTA 是空的', 'n_seq': 0}
     lengths = [len(s) for s in seqs.values()]
@@ -166,9 +200,15 @@ def qc(fasta: str, *, reference: Optional[str] = None,
             core_ids[nm] = pairwise_identity(
                 ''.join(s[i] if i < len(s) else '-' for i in core_cols),
                 ''.join(ref_seq[i] if i < len(ref_seq) else '-' for i in core_cols))
-    vals = sorted(v for v in core_ids.values() if v is not None) or \
-        sorted(v for v in ids.values() if v is not None)
-    med = vals[len(vals) // 2] if vals else None
+    vals_core = sorted(v for v in core_ids.values() if v is not None)
+    vals_ids = sorted(v for v in ids.values() if v is not None)
+    # ⚠️ 两个中位数**分别算、分别报**（2026-10-03 修）：原实现把同一个 med 同时
+    #    写进 `identity_median` 与 `core_identity_median`，报告里两列永远相等，
+    #    读者会以为"两种口径一致"，其实只是根本没算第二个。
+    #    判 identity_low 的阈值仍用 core 优先、无 core 列时退回 id 口径（行为不变）。
+    med_ids = vals_ids[len(vals_ids) // 2] if vals_ids else None
+    med_core = vals_core[len(vals_core) // 2] if vals_core else None
+    med = med_core if med_core is not None else med_ids
     n_big_gap_cols = sum(1 for c in col_n if c < 0.5 * len(seqs))
     # ⚠️ **gap 判定不能直接用整条序列的 gap 比例**：多条比对的 gap 是"共享"的 ——
     #    只要**少数**序列带插入/移位，MAFFT 就会把比对撑长，而**其余每条**都被追加大段
@@ -216,8 +256,11 @@ def qc(fasta: str, *, reference: Optional[str] = None,
         'length_min': min(lengths), 'length_max': max(lengths),
         'length_modal': modal,
         'reference_kind': ref_kind, 'reference_len': ref_len,
-        'identity_median': med,
-        'core_identity_median': med,
+        'identity_median': med_ids,
+        'core_identity_median': med_core,
+        # 首词重名（保留为 `名.2`/`名.3`…）：条数与明细必须能对上，
+        # 否则用户拿报告核 FASTA 时会发现"条数少了几条"却找不到原因
+        'n_dup_names': len(dup_names), 'dup_names': dup_names[:20],
         'n_core_cols': len(core_cols),
         'n_gap_block_cols': n_big_gap_cols,
         'n_present_cols': len(present_cols),
@@ -238,6 +281,16 @@ def qc(fasta: str, *, reference: Optional[str] = None,
         % (rep['n_seq'], '已等长' if aligned else '**不等长**',
            rep['length_min'], rep['length_max'], modal, ref_kind,
            rep['n_keep'], rep['n_drop']))
+    if dup_names:
+        say('比对 QC：首词重名 %d 条（已按 `名.2`/`名.3`… 保留，不会丢序列）：%s'
+            % (len(dup_names),
+               '、'.join('%s→%s' % (d['name'], d['kept_as'])
+                         for d in dup_names[:5])))
+        rep['dup_hint'] = (
+            'FASTA 里有 %d 条序列的首词重名（如 %s）—— 已按 `名.2` 后缀保留，'
+            '**没有丢序列**；但下游按名取序列时仍需注意这是靠后缀区分的。'
+            % (len(dup_names),
+               '、'.join(d['name'] for d in dup_names[:3])))
     if not aligned:
         rep['advice'] = ('序列**不等长**（A0/建树要求等长比对）→ 先跑一遍序列比对'
                          '（MAFFT），再回来 QC。')

@@ -3,9 +3,10 @@
 ⑥b 基因组示意图（littlegenomes 风格适配版）。
 
 吸收 biolumber/littlegenomes 的画法：基线 + 500nt 刻度比例尺 + 特征矩形
-（垂直偏移分层防重叠）；在此适配：
+（按链与奇偶序分道；**同道的坐标重叠仍可能互相覆盖**——不是真正的
+防重叠布局，空间不足时以提示信息为准）；在此适配：
 - ORF 画成**链方向箭头**（littlegenomes 为无方向矩形），按功能类别着色
-- HMM/CDD 结构域画成**窄条**（s 宽度思路）叠放于 ORF 外侧，鼠标悬停可见
+- HMM 结构域画成**窄条**（s 宽度思路）叠放于 ORF 外侧，鼠标悬停可见
   域名（SVG <title>）
 - 纯字符串拼 SVG，零第三方依赖（打包友好）
 """
@@ -55,7 +56,7 @@ def _safe_stem(name):
 def render_contig_svg(contig, length, orfs, out_path):
     """单条 contig 的线性基因组图。
 
-    orfs: [{'start','end','strand','product','category','hmm_hits','cdd_hits'}, ...]
+    orfs: [{'start','end','strand','product','category','hmm_hits'}, ...]
     （1 起始闭区间坐标，start/end 已由 orf_annotation.tsv 保证）
     """
     length = max(int(length or 0), 1)
@@ -63,12 +64,17 @@ def render_contig_svg(contig, length, orfs, out_path):
     left, top = 20.0, 58.0
     w = length * xscale
     line_y = top + 60.0
+    # 有结构域命中时图底加图例行（此前窄条含义只在 SVG <title> 悬浮提示，
+    # 静态导出/打印完全不可读——2026-10-04 审查 D6）
+    has_dom = any(o.get('hmm_hits') or o.get('bfvd_hits') for o in orfs)
+    legend_h = 30.0 if has_dom else 0.0
+    svg_h = line_y + 110 + legend_h
 
     parts = []
     parts.append(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w + 260:.0f}" '
-        f'height="{line_y + 110:.0f}" viewBox="0 0 {w + 260:.0f} '
-        f'{line_y + 110:.0f}" font-family="Arial,sans-serif">')
+        f'height="{svg_h:.0f}" viewBox="0 0 {w + 260:.0f} '
+        f'{svg_h:.0f}" font-family="Arial,sans-serif">')
     parts.append(f'<text x="{left}" y="26" font-size="14" font-weight="bold">'
                  f'{_esc(contig)}</text>')
     parts.append(f'<text x="{left}" y="44" font-size="11" fill="#555">'
@@ -122,7 +128,7 @@ def render_contig_svg(contig, length, orfs, out_path):
                    f"{x0:.1f},{y + h / 2:.1f}")
         tip = (f"{_esc(o.get('product') or '(未注释)')} · "
                f"{_esc(o.get('category') or '')} · {s}-{e}({strand})")
-        for hh in (o.get('hmm_hits'), o.get('cdd_hits')):
+        for hh in (o.get('hmm_hits'), o.get('bfvd_hits')):
             if hh:
                 tip += f"\n{_esc(hh)}"
         parts.append(f'<polygon points="{pts}" fill="{color}" '
@@ -130,15 +136,15 @@ def render_contig_svg(contig, length, orfs, out_path):
                      f'stroke-width="0.6"><title>{tip}</title></polygon>')
         label = o.get('product') or ''
         if label and bw > 52:
-            short = label if len(label) <= 22 else label[:20] + '…'
+            short = label if len(label) <= 26 else label[:24] + '…'
             parts.append(f'<text x="{x0 + bw / 2:.1f}" '
                          f'y="{y + h / 2 + 3.4:.1f}" font-size="8.5" '
                          f'text-anchor="middle" fill="#ffffff">'
                          f'{_esc(short)}</text>')
 
-    # 结构域窄条（叠放于基线上下外侧，交替层；littlegenomes 的 s 宽度思路）
+    # 结构域窄条（基线上下外侧按序号奇偶交替分道；同道坐标重叠仍可能覆盖）
     for i, o in enumerate(sorted(orfs, key=lambda x: (x.get('start') or 0))):
-        hh = o.get('hmm_hits') or o.get('cdd_hits')
+        hh = o.get('hmm_hits') or o.get('bfvd_hits')
         if not hh:
             continue
         s, e = int(o.get('start') or 0), int(o.get('end') or 0)
@@ -152,6 +158,20 @@ def render_contig_svg(contig, length, orfs, out_path):
         parts.append(f'<rect x="{x0:.1f}" y="{y:.1f}" width="{bw:.1f}" '
                      f'height="{DOM_H}" fill="{color}" stroke="#1a5276" '
                      f'stroke-width="0.4"><title>{_esc(hh)}</title></rect>')
+
+    # 图底图例：结构域命中条含义（深浅交替 = 相邻 ORF 交替分道）
+    if has_dom:
+        ly = line_y + ORF_H + 10 + DOM_H + 30.0
+        parts.append(f'<rect x="{left:.1f}" y="{ly:.1f}" width="16" '
+                     f'height="{DOM_H}" fill="{DOMAIN_COLOR}" '
+                     f'stroke="#1a5276" stroke-width="0.4"/>')
+        parts.append(f'<rect x="{left + 24:.1f}" y="{ly:.1f}" width="16" '
+                     f'height="{DOM_H}" fill="{DOMAIN_COLOR_ALT}" '
+                     f'stroke="#1a5276" stroke-width="0.4"/>')
+        parts.append(
+            f'<text x="{left + 48:.1f}" y="{ly + DOM_H - 1:.1f}" '
+            f'font-size="9" fill="#333">结构域命中（Pfam HMM / BFVD；'
+            f'深浅交替为相邻 ORF 分道防叠；SVG 交互版悬停可看域名）</text>')
 
     parts.append('</svg>')
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -181,8 +201,13 @@ def render_sample_diagrams(rows, out_dir, contig_lengths=None, max_plots=12,
     for cid in ordered:
         try:
             rel = os.path.join('genome_diagrams', f'{_safe_stem(cid)}.svg')
+            abs_p = os.path.join(out_dir, rel)
             render_contig_svg(cid, contig_lengths.get(cid),
-                              by_contig[cid], os.path.join(out_dir, rel))
+                              by_contig[cid], abs_p)
+            # SVG 良构自检（2026-10-07 审查 P1-4）：本模块手写 SVG 文本，
+            # 与 dfv_plot/gbdraw 同属产物出口，此前只有 dfv_plot 挂了守卫。
+            from .utils import verify_svg
+            verify_svg(abs_p, logger=logger)
             out.append(rel)
         except Exception as e:
             if logger:

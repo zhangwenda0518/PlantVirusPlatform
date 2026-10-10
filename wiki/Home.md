@@ -25,7 +25,7 @@
 | **[Kvsuite]** | ②b 已知病毒识别与定量（salmon EM 定量 / minibwa、二次过滤、比对与深度） |
 | **[Assembly]** | ③ SPAdes 组装与 contig 分类 · ③b 候选序列验证 · ③c 共识序列与变异 |
 | **[Host-Prediction]** | ④ ICTV 宿主概率级联预测 + NCBI 宿主元数据交叉验证、桑基/旭日图 |
-| **[ORF]** | ⑥ pyrodigal/pyrodigal-rv ORF 预测 · ⑥b 功能注释（RefSeq 蛋白 + Pfam + CDD 三层） |
+| **[ORF]** | ⑥ pyrodigal/pyrodigal-rv ORF 预测 · ⑥b 功能注释（RefSeq 蛋白 + Pfam HMM + BFVD 病毒域） |
 | **[Phylo]** | ⑦ 进化树（MAFFT/trimAl + FastTree/RAxML-NG/NJ）· SDT 精确引擎 · MSA 查看 |
 | **[Primer]** | ⑧ primer3 引物设计（保守区/全长）、热力学评分、宿主特异性检查 |
 | **[Genome-Plots]** | ⑨ 基因组图（gbdraw 圈图/线图、dna_features_viewer 回退、自备文件） |
@@ -51,6 +51,7 @@
 | **[Settings-Ops]** | 设置中心（双语/线程/默认参数/磁盘水位）、任务中心、环境自检、tool_runs 管理、数据库迁移、打包分发 |
 | **[CLI-Reference]** | `main.py` 全部 30+ 子命令逐参数速查 |
 | **[FAQ]** | 常见问题、已知事项与设计说明（中文路径、大基因组建库、SDT 口径、ML 建树…） |
+| **[AI-Assistant]** | AI 助手（对话驱动智能代理）：只读顾问层、主动驱动三层（讲解/播报/决策闸门）、执行权三级、审计留痕、设置项与 API |
 
 ---
 
@@ -116,3 +117,4 @@ python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample DEMO
 [Settings-Ops]: https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops
 [CLI-Reference]: https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference
 [FAQ]: https://github.com/zhangwenda0518/VirusPlatform/wiki/FAQ
+[AI-Assistant]: https://github.com/zhangwenda0518/VirusPlatform/wiki/AI-Assistant

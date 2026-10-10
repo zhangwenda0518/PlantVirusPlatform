@@ -43,4 +43,8 @@ def page_virome_app():
 
 @bp.route('/virome/<path:filename>')
 def virome_asset(filename):
-    return send_from_directory(_VIROME_DIST, filename)
+    # send_from_directory 本身防目录穿越；显式 check_path 与全站下载路由
+    # （pages/prescreen/tools_api/download）统一口径，审计只查一处规则
+    from ..utils import check_path
+    full = check_path(os.path.join(_VIROME_DIST, filename))
+    return send_from_directory(_VIROME_DIST, os.path.basename(full))

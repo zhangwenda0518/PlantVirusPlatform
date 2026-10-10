@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""真浏览器验证 t-cdd / t-hom 的「本地引擎」按钮链路（Playwright）。
+"""真浏览器验证 t-hom 的「本地引擎」按钮链路（Playwright）。
 
-/tools 一次只显示一个二级模块，所以用 ?g=annotate#t-hom / #t-cdd 分别进入。
-覆盖：示例自动填入 → 引擎默认 local → 点 ▶ BLASTN / ▶ 运行 CDD →
+/tools 一次只显示一个二级模块，所以用 ?g=annotate#t-hom 进入。
+覆盖：示例自动填入 → 引擎默认 local → 点 ▶ BLASTN →
 命中表出现且标注「本地库（离线）」。
+（原 t-cdd 段已随 CDD 卡下线移除，2026-09-29。）
 用法：python tests/_check_local_annot_ui.py
 """
 import sys
@@ -62,29 +63,6 @@ def main() -> int:
         pg.select_option('#hom_engine', 'online')
         print(f'  切换在线后 = {pg.input_value("#hom_engine")}')
         pg.select_option('#hom_engine', 'local')
-
-        # ---------- t-cdd（CDD 本地） ----------
-        # 注意：只改 hash 的 goto 是「同文档导航」，不会重新加载页面，
-        # 所以加一个变化的 query 参数强制真实导航。
-        pg.goto(BASE + '&_=2#t-cdd', wait_until='domcontentloaded')
-        pg.wait_for_selector('#cdd_engine', state='visible', timeout=30000)
-        print(f'  cdd_engine 默认 = {pg.input_value("#cdd_engine")}')
-        try:
-            pg.wait_for_function(
-                "() => { const t = document.getElementById('cddSeqText');"
-                " return t && t.value.trim().length > 0; }", timeout=15000)
-        except Exception:                          # noqa: BLE001
-            pg.click('#t-cdd .vp-ex-btn:has-text("✨ 示例")')
-            pg.wait_for_function(
-                "() => { const t = document.getElementById('cddSeqText');"
-                " return t && t.value.trim().length > 0; }", timeout=15000)
-        print(f'  cddSeqText 已填入 {len(pg.input_value("#cddSeqText"))} 字符')
-        pg.click('#t-cdd button:has-text("运行 CDD 域搜索")')
-        rows, head = _rows(pg, 'cddBody')
-        print(f'  CDD 命中 {rows} 行 · 表头含「本地库」: {"本地库" in head}')
-        print(f'  CDD 表头: {head.splitlines()[0][:120]}')
-        if rows < 1 or '本地库' not in head:
-            fails.append('CDD 本地结果异常')
 
         if errs:
             print('  控制台错误:')

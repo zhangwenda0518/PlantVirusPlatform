@@ -62,11 +62,9 @@ def RNA22(seq):
     seeds = find_seed(seq)
     for idx, seg in seeds:
         rc = reverse_complement(seg)
-        if score_seed(rc) > 4:
-            # Validate with hairpin check
-            hairpins = find_hairpin(seq[idx:idx + len(seg) + 5])
-            if hairpins:
-                sites.append((idx, seg))
+        # Validate with hairpin check（2026-10-03 合并嵌套 if，语义不变）
+        if score_seed(rc) > 4 and find_hairpin(seq[idx:idx + len(seg) + 5]):
+            sites.append((idx, seg))
     return sites
 
 
@@ -74,7 +72,13 @@ def RNA22(seq):
 
 @dataclass
 class RNA22Result:
-    """RNA22 prediction result."""
+    """RNA22 prediction result.
+
+    miRNA_independent 恒 True（2026-10-03 口径诚实化）：本移植版参考实现
+    只分析**靶标序列自身**的结构特征（GC 富集 7-nt 种子 + 下游 hairpin），
+    miRNA 序列仅用于展示与种子错配计数，不参与任何筛选/打分——命中不代表
+    miRNA 特异性证据，汇总时必须带此声明。
+    """
     mirna_id: str
     target_id: str
     mfe: float                    # 参考实现无 MFE 概念，恒 0（保留字段兼容）
@@ -87,6 +91,7 @@ class RNA22Result:
     alignment_str: str
     passes: bool
     consensus_votes: int = 0
+    miRNA_independent: bool = True
 
 
 def _to_rna(seq: str) -> str:
@@ -100,6 +105,10 @@ def validate_with_rna22(miranda_result, mirna_id: str,
 
     在 miRanda 命中区间附近（±8nt）扫描目标序列，存在「GC 富集 7-nt 种子
     （score_seed > 4）+ 下游 hairpin」的合格位点且与命中区间重叠 → 通过。
+
+    2026-10-03 口径诚实化：本引擎**不使用 miRNA 序列**判定（miRNA 只在
+    输出里用于展示错配数），故返回对象标注 miRNA_independent=True；
+    passes=True 的含义是「靶标自身存在合格结构位点」，不是 miRNA 特异性证据。
     """
     if not target_seq:
         return None
@@ -147,6 +156,7 @@ def validate_with_rna22(miranda_result, mirna_id: str,
         alignment_str=aln_str,
         passes=True,
         consensus_votes=0,
+        miRNA_independent=True,          # 判定未用 miRNA 序列（口径诚实化）
     )
 
 

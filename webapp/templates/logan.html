@@ -349,7 +349,7 @@ async function refreshBatchTasks() {
 
 async function startBatch(name) {
   const emails = ($('bp-mail-' + name)?.value || '').trim();
-  if (!emails) { alert('请先填写通知邮箱（Logan-Search 完成后会发下载链接到邮箱）'); return; }
+  if (!emails) { alert(t('ui.lg.needEmail')); return; }
   const body = {
     emails,
     group: $('bp-group-' + name)?.value || 'Fast_No_human',
@@ -359,7 +359,7 @@ async function startBatch(name) {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body)});
   if (!res.ok) {
-    let m = '批量提交启动失败';
+    let m = t('ui.lg.batchStartFail');
     try { m = (await res.json()).error || m; } catch (e) {}
     alert(m); return;
   }
@@ -368,7 +368,7 @@ async function startBatch(name) {
 }
 
 async function cancelBatch(name, tid) {
-  if (!confirm('确定取消该批量提交？已提交到服务器的片段仍可能陆续出结果。')) return;
+  if (!confirm(t('ui.lg.cancelConfirm'))) return;
   await fetch(`/api/task/${tid}/cancel`, {method: 'POST'});
 }
 
@@ -449,7 +449,7 @@ async function importResult(name, idx, input) {
 }
 
 async function delJob(name) {
-  if (!confirm('确定删除查询「' + name + '」及其导入的结果？')) return;
+  if (!confirm(t('ui.lg.delConfirm').replace('{name}', name))) return;
   await fetch(`/api/logan/job/${encodeURIComponent(name)}/delete`, {method: 'POST'});
   loadJobs();
 }

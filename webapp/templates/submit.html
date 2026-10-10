@@ -272,7 +272,7 @@ async function createDemo() {
 }
 
 async function copyProject(name) {
-  const dst = prompt(`另存为（新项目名）：`, name + '_copy');
+  const dst = prompt(t('ui.sb.saveAsPrompt'), name + '_copy');
   if (!dst || !dst.trim()) return;
   try {
     await jfetch('/api/submit/copy', {method: 'POST',
@@ -441,7 +441,7 @@ async function addRow() {
 async function delRows() {
   const sel = $('grid').querySelectorAll('tbody tr.sel');
   if (!sel.length) { alert(t('sb.pickProject', '请先选择行')); return; }
-  if (!confirm(`删除 ${sel.length} 行？`)) return;
+  if (!confirm(t('ui.sb.delRowsConfirm').replace('{n}', sel.length))) return;
   const idx = Array.from(sel).map(tr => +tr.dataset.i);
   await jfetch(`/api/submit/table/${encodeURIComponent(CUR)}/rows`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -528,7 +528,7 @@ async function doValidate() {
 async function doFasta(btn) {
   if (!CUR) return;
   const src = val('fastaSrc');
-  if (!src) { alert('请先填平台内 FASTA 路径'); return; }
+  if (!src) { alert(t('ui.sb.needFastaPath')); return; }
   const unlock = lockBtn(btn, '⏳ 提取中…');
   try {
     const d = await jfetch(`/api/submit/table/${encodeURIComponent(CUR)}/fasta`, {
@@ -631,7 +631,7 @@ async function loadOrfRuns() {
 async function linkOrf(btn) {
   if (!CUR) return;
   const run = val('orfRun');
-  if (!run) { alert('先选择要关联的 orf/orfa 运行'); return; }
+  if (!run) { alert(t('ui.sb.needOrfRun')); return; }
   const unlock = lockBtn(btn, '⏳ 关联中…');
   try {
     const d = await jfetch(`/api/submit/table/${encodeURIComponent(CUR)}/link_orf`, {
@@ -680,7 +680,7 @@ async function autoFasta(btn) {
       $('fastaSrc').value = d.fasta;
       toast('✨ 已自动推断', d.fasta, {ttl: 6000});
     } else {
-      alert('未能自动推断序列 FASTA——请先在①导入 contigs 运行或关联 orf 运行，或手动粘贴路径');
+      alert(t('ui.sb.noAutoFasta'));
     }
   } catch (e) { alert(e.message); }
   unlock();
@@ -689,7 +689,7 @@ async function autoFasta(btn) {
 async function importRun(btn) {
   if (!CUR) return;
   const run = val('impRun');
-  if (!run) { alert('先选择要导入的运行'); return; }
+  if (!run) { alert(t('ui.sb.needImportRun')); return; }
   const unlock = lockBtn(btn, '⏳ 导入中…');
   try {
     const d = await jfetch(`/api/submit/table/${encodeURIComponent(CUR)}/import_run`, {
@@ -828,7 +828,7 @@ function toggleFileEdit(btn) {
   if (!f) return;
   if ($('fileView').isContentEditable) { exitFileEdit(); return; }
   if (f.toLowerCase().endsWith('.sqn')) {
-    alert('.sqn 为二进制 ASN.1，仅可查看（同原 GUI）');
+    alert(t('ui.sb.sqnBinary'));
     return;
   }
   $('fileView').contentEditable = 'true';

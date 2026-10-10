@@ -58,7 +58,7 @@ python main.py tools        :: 只看工具探测状态
 进入 **数据库** 页按顺序完成：
 
 1. **下载 NCBI Taxonomy**（~57MB，`python main.py init-taxonomy`）——nodes/names/merged.dmp，宿主判定与谱系解析的基础；
-2. **构建宿主库**：选宿主基因组 FASTA（NCBI 下载、自行组装均可，`python main.py host-genome --species "..."` 可直接下载）+ 填宿主 **NCBI TaxID**（如 4081 番茄、112863 枸杞）→ 构建。TaxID 建库前自动校验（不存在/已合并直接提示）；序列名自动规范化；大基因组自动切片（见 [Databases](Databases)）；
+2. **构建宿主库**：选宿主基因组 FASTA（NCBI / gget·Ensembl Plants 双源下载、自行组装均可，`python main.py host-genome --species "..." [--source gget]` 可直接下载；数据资源组「基因组查询下载」独立卡也可下载，完成显示路径与 TaxID）+ 填宿主 **NCBI TaxID**（如 4081 番茄、112863 枸杞）→ 构建。TaxID 建库前自动校验（不存在/已合并直接提示）；序列名自动规范化；大基因组自动切片（见 [Databases](Databases)）；
    - 输出默认 `host-db/<TaxID>_<源目录名>_host_db/`，建完即设为「当前宿主库」；多宿主库可共存，列表里一键「设为当前」；
    - 病毒库**无需构建**：平台已预置 `databases/virusref_db`（鉴定+定量+BLAST）与 `databases/kunpeng_db`（分类库）。
 

@@ -31,7 +31,7 @@
 |---|---|
 | MCC 注释树解析 | BEAST MCC 树的节点状态/高度读取（`mot.py` 口径） |
 | TempMig | 离散性状迁移时序 |
-| **RRT**（root-to-tip 回归） | 分子钟检验：枝长 vs 采样时间线性回归（`treetime_rtt.py` 正则抠 β/R² + scipy.linregress 自算 p 值；`rtt_drt.py` 双口径修正 AUDIT 缺陷） |
+| **RRT**（root-to-tip 回归） | 分子钟检验：TreeTime ML 同口径重实现（`treetime_rtt.py` 走 `treetime_ml.run_clock_api`，速率/R² 直接读 TreeTime 收敛产物 `molecular_clock.txt`）。刻意**不**照抄上游的「正则抠日志 β/R² + scipy.linregress 自算 p」——实测那是数学恒等式（R²≡1、p≡0，见模块 docstring ①）；时间信号显著性改由 `rtt_drt.py` 的零分布检验给出，双口径修正 AUDIT 缺陷 |
 | **DRT**（dating regression） | 定年回归诊断（与 RRT 配对使用） |
 | RSPP | 序列抽样代表性 |
 | **BSP**（Bayesian skyline plot） | 种群动态历史（`bsp.py`，含 ESS 有效样本量诊断） |

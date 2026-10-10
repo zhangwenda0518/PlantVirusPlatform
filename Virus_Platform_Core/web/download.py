@@ -127,10 +127,16 @@ def api_dl_create():
         abort(400, '请提供要下载的编号/URL 列表')
     if len(items) > 500:
         abort(400, '单批最多 500 条（大批次请拆分）')
-    bid = get_dl_manager().create(
-        name, items,
-        concurrency=int(body.get('concurrency') or 2),
-        convert_sra=bool(body.get('convert_sra', True)))
+    try:
+        bid = get_dl_manager().create(
+            name, items,
+            concurrency=int(body.get('concurrency') or 2),
+            convert_sra=bool(body.get('convert_sra', True)),
+            out_dir=str(body.get('out_dir') or '').strip() or None)
+    except ValueError as e:
+        # 自定义输出位置越界（仅允许平台内/已挂载输出根内）等校验失败：
+        # 把原因原样讲给用户（400），而不是 500 哑错
+        abort(400, str(e))
     return jsonify({'batch': bid})
 
 
@@ -235,6 +241,12 @@ def api_dl_to_pipeline():
         created.append(sample)
     queued = 0
     if enqueue and created:
-        _queue().add(created, None, {}, project=project)
+        added = _queue().add(created, None, {}, project=project)
+        # 与 samples.py 的 /api/queue/add 对齐：给「待启动」条目挂任务中心
+        # 卡片。不挂的话条目只在分析流程页可见，任务中心里整批"消失"
+        # （用户以为入队没生效）；卡片在真任务开跑后自动让位。
+        from Virus_Platform_Core.web.samples import bind_queue_entry
+        for it in (added or ()):
+            bind_queue_entry(it)
         queued = len(created)
     return jsonify({'created': created, 'skipped': skipped, 'queued': queued})

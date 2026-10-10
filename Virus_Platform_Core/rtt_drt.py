@@ -49,10 +49,12 @@ from __future__ import annotations
 import math
 import os
 
-from .phylogeo import parse_newick, resolve_years
+from .phylogeo import resolve_years
 
-# 与参照管道一致的默认值：20 次置换、种子 42 固定
-DEFAULT_N_PERM = 20
+# 默认 999 次置换、种子 42 固定（审查 P2：原 20 次的 p 值分辨率下限
+# 1/21≈0.048，"显著与否"几乎由最极端一次结果决定；999 次给到 1/1000
+# 分辨率，DRT 置换为轻量计算，代价可接受）
+DEFAULT_N_PERM = 999
 DEFAULT_SEED = 42
 # DRT 回归至少要有的带日期叶数（与 root_to_tip 的内部门槛一致）
 DEFAULT_MIN_TIPS = 5
@@ -81,8 +83,15 @@ def tree_geometry(tree_path):
     """
     if not os.path.isfile(tree_path):
         raise RuntimeError(f'树文件不存在：{tree_path}')
-    text = open(tree_path, encoding='utf-8', errors='replace').read()
-    root = parse_newick(text)
+    with open(tree_path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
+    # ⚠️ 必须用 `treetime_ml.parse_annotated_newick` 而非 `phylogeo.parse_newick`：
+    #    后者不认 `[&…]` 注释，`(A:1[&height=0.5],B:2)` 会把 A 的枝长吞成 0.0
+    #    （实测）→ 全部根到叶距离错、DRT 结果无意义。TreeTime 的
+    #    divergence/timetree.nexus 树**总是带注释**，是这里的常规输入。
+    #    两者的节点 schema 同构（name/length/children），可直接替换。
+    from .treetime_ml import parse_annotated_newick
+    root = parse_annotated_newick(text)
 
     adj = {}
     names = {}
@@ -252,16 +261,22 @@ def rtt_root_scan(tree_path, dates, date_trait='year',
 def _percentileofscore_rank(values, score):
     """复刻 ``scipy.stats.percentileofscore(values, score)``（默认 kind='rank'）。
 
-    即 ``100 × (n_< + 0.5 × n_=) / n``。自己写是为了**不引入 scipy** ——
-    本模块只依赖 numpy，打包时少一个隐性依赖（平台的 `3rd/python` 就吃过
-    "可选库静默降级"的亏）。
+    公式 ＝ ``(left + right + plus1) × 50 / n``，其中 ``left`` = 小于 score 的个数、
+    ``right`` = 小于等于 score 的个数、``plus1`` = score 在样本里时取 1 否则 0。
+
+    ⚠️ 旧实现写的是 ``100 × (n_< + 0.5 × n_=) / n`` —— 它等价于「并列值全取
+    下秩」，而 scipy 的 rank 口径取**并列值的平均秩**，两者在有并列时差
+    ``1/(2n)``：实测 ``values=[1,2,2,3,4], score=2`` scipy 给 50.0、旧实现 40.0。
+    判据 ``passed_percentile95`` 直接依赖这个值，差 1/(2n) 会让边界轮次改判，
+    所以这里必须与 scipy 逐位一致。自己写是为了**不引入 scipy** —— 本模块只依赖
+    numpy，打包时少一个隐性依赖（平台的 `3rd/python` 就吃过"可选库静默降级"的亏）。
     """
     n = len(values)
     if n == 0:
         return None
     n_less = sum(1 for v in values if v < score)
-    n_eq = sum(1 for v in values if v == score)
-    return 100.0 * (n_less + 0.5 * n_eq) / n
+    n_le = sum(1 for v in values if v <= score)
+    return (n_le + n_less + (1 if n_le > n_less else 0)) * 50.0 / n
 
 
 def _ci95(values):
@@ -643,7 +658,8 @@ def date_randomization_test_treetime(aln_path, tree_path, dates, work_dir, *,
                                      seed=DEFAULT_SEED, seq_len=None,
                                      timeout=1800, rtt_kw=None, say=None,
                                      progress=None, cancel=None,
-                                     sec_per_run_hint=None):
+                                     sec_per_run_hint=None,
+                                     drt_permutation=False):
     """日期随机化检验（DRT）—— 统计量 = **TreeTime 的根到尾回归 R²**。
 
     与同模块 `date_randomization_test()` 的唯一区别是统计量的来源：那个用平台
@@ -653,15 +669,19 @@ def date_randomization_test_treetime(aln_path, tree_path, dates, work_dir, *,
     零假设：采样日期与拓扑无关。把日期在 tip 之间随机置换 n_perm 次，每次
     **重跑一次 TreeTime**，得到零分布；真实 R² 在零分布中的位置给出经验 p。
 
-    ⚠️ 代价：每轮一次完整 TreeTime。476 叶实测 87 s/次，n_perm=10 ≈ 16 分钟。
-    所以默认只 10 次（老的零成本版本默认 20 次）。`cancel` 在**每轮之间**检查。
+    ⚠️ 代价：每轮一次完整 TreeTime。476 叶实测 87 s/次，n_perm=20 ≈ 30 分钟。
+    **因此置换默认不执行**：`drt_permutation=False`（默认）时只做真实数据这一轮
+    TreeTime，结果里 `drt_permutation=False`、`p_value=None`、verdict 恒为
+    'inconclusive'；要真正的零分布检验必须显式传 `drt_permutation=True`
+    （调用方/`run_clock` 侧透传）。结果 dict 的 `drt_permutation` 字段记录
+    本次是否真的执行了置换，**引用 p 值前必须先看它**。`cancel` 在每轮之间检查。
 
     `dates`: `{叶名: 十进制年}`。`work_dir`: 每轮一个子目录（`real/`、`perm_000/`…），
     TreeTime 的全部产物都留着（可逐轮复核，不删中间态）。
 
     返回 dict，字段与 `date_randomization_test()` **同名同义**（`verdict` /
     `p_value` / `perm_r2` / `conclusion` …），另加 `engine='treetime-drt'`、
-    `stat_basis`、`sec_per_run`、`elapsed`。
+    `stat_basis`、`sec_per_run`、`elapsed`、`drt_permutation`。
     """
     import time as _time
     # 本模块的既有约定：numpy **只在函数内局部导入**（见 213 / 269 / 334 行），
@@ -712,11 +732,15 @@ def date_randomization_test_treetime(aln_path, tree_path, dates, work_dir, *,
         f'本轮 {sec_per_run:.1f}s；预计总耗时 '
         f'{estimate_treetime_perm_cost(sec_per_run, n_perm) / 60.0:.1f} 分钟')
 
-    # ── 置换 ──
+    # ── 置换（可选：默认关闭，见 docstring 的代价说明）──
+    loop_n = n_perm if drt_permutation else 0
+    if not drt_permutation:
+        say('[DRT-TreeTime] drt_permutation=False（默认）→ **跳过置换**，'
+            '只保留真实数据这一轮的 TreeTime 结果；要零分布检验请显式打开。')
     rng = np.random.default_rng(seed)
     perm_r2, perm_rate, perm_ok, perm_fail = [], [], [], []
     n_invalid = 0
-    for i in range(n_perm):
+    for i in range(loop_n):
         if _cancelled():
             warnings.append(f'用户取消：置换做到 {i}/{n_perm} 轮就停了，'
                             f'零分布只有 {len(perm_r2)} 个点')
@@ -754,6 +778,9 @@ def date_randomization_test_treetime(aln_path, tree_path, dates, work_dir, *,
         'n_valid': n_valid,
         'n_invalid': n_invalid,
         'n_dated_tips': len(names),
+        # 本次是否真的执行了置换零分布（False ＝ 只跑了真实数据一轮，
+        # p_value/perm_r2 等字段不可用于判读）。
+        'drt_permutation': bool(drt_permutation),
         'sec_per_run': round(sec_per_run, 2),
         'elapsed': round(_time.time() - t0, 1),
         'real_r2': round(real_stat, 6),
@@ -794,6 +821,19 @@ def date_randomization_test_treetime(aln_path, tree_path, dates, work_dir, *,
     min_valid = int(math.ceil(1.0 / DRT_ALPHA)) - 1
     out['min_valid_for_alpha'] = min_valid
     if n_valid == 0:
+        if not drt_permutation:
+            out['verdict_basis'] = ('置换未执行（drt_permutation=False，默认）'
+                                    '→ 无零分布，无法判读')
+            out['verdict_text'] = (
+                '⚠ 无结论：未执行日期随机化置换（drt_permutation=False）'
+                f'—— 以上真实 R²={real_stat:.4f} 只是 TreeTime 的时钟拟合，'
+                '不是 DRT 判据；需要检验请显式传 drt_permutation=True')
+            out['conclusion'] = ('DRT（TreeTime 口径）无结论：置换未执行'
+                                 '（drt_permutation=False）')
+            warnings.append(
+                'drt_permutation=False：只跑了真实数据一轮 TreeTime，'
+                '**没有**零分布 → p 值/显著性判据本次不可用。')
+            return out
         out['verdict_basis'] = '零分布为空（所有置换都没跑出 R²）→ 无法判读'
         out['verdict_text'] = '⚠ 无结论：日期随机化全部失败，无法判断时间信号'
         out['conclusion'] = 'DRT（TreeTime 口径）无结论：零分布为空'

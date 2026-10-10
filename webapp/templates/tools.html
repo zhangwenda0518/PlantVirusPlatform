@@ -43,6 +43,11 @@
       <input id="pc_input2" type="text" placeholder="可选" data-i18n-ph="c.phOptional">
       <button class="btn small" onclick="browse('pc_input2')">📁</button>
     </div>
+    <label data-i18n="tk.outDirOpt">输出目录（可选，不填 = 默认 run/tool_runs/）</label>
+    <div class="filerow">
+      <input id="pc_outdir" type="text" placeholder="选择输出目录（产物写在其下「运行名」子目录）" data-i18n-ph="tk.outDirOptPh">
+      <button class="btn small" onclick="browseDir('pc_outdir')">📁</button>
+    </div>
     <label class="chk"><input type="checkbox" id="pc_dedup"> <span data-i18n="tk.fpDedup">启用 --dedup 去 PCR 重复</span>
       <span class="hint" data-i18n="tk.fpDedupHint">（高深度宏数据慎用，可能误删真实重复）</span></label>
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px">
@@ -75,6 +80,17 @@
     <div class="filerow" data-page-node-id="KDSMA4Y9Gmb3NKehqBfQFf">
       <input id="cv_input" type="text" placeholder="选择 .sra / .fastq.gz" data-i18n-ph="tk.cvInputPh" data-page-node-id="5IriSyrwjuBGaiZ3z2CZeo">
       <button class="btn small" onclick="browse('cv_input')" data-page-node-id="yyJy9JfQ8zNP4PKhwbwq27">📁</button>
+    </div>
+    <!-- 2026-09-30：可选 R2 —— 双端 FASTQ 分别转换、分别输出（.sra 自含双端，无需 R2） -->
+    <label data-i18n="tk.cvInput2Lbl">R2 文件（可选，双端 FASTQ 时填写；分别转换输出）</label>
+    <div class="filerow">
+      <input id="cv_input2" type="text" placeholder="选择 R2 .fastq.gz（不填 = 单端）" data-i18n-ph="tk.cvInput2Ph">
+      <button class="btn small" onclick="browse('cv_input2')">📁</button>
+    </div>
+    <label data-i18n="tk.outDirOpt">输出目录（可选，不填 = 默认 run/tool_runs/）</label>
+    <div class="filerow">
+      <input id="cv_outdir" type="text" placeholder="选择输出目录（产物写在其下「运行名」子目录）" data-i18n-ph="tk.outDirOptPh">
+      <button class="btn small" onclick="browseDir('cv_outdir')">📁</button>
     </div>
     <label data-i18n="tk.cvTargetLbl" data-page-node-id="uoMZSFoSdnDLMyPRLUQIzN">目标格式</label>
     <select id="cv_target" data-page-node-id="Rv2OWYcpKNIWlQm26mlhma">
@@ -115,6 +131,11 @@
     <div class="filerow" data-page-node-id="XRiYW9WlBvnrAFlqF1XS7L">
       <input id="f_r2" type="text" placeholder="可选" data-i18n-ph="c.phOptional" data-page-node-id="Irwz1RUWtXKSaDT3Z1vAZV">
       <button class="btn small" onclick="browse('f_r2')" data-page-node-id="1jkscE5pboHr6EWcR1Xbr5">📁</button>
+    </div>
+    <label data-i18n="tk.outDirOpt">输出目录（可选，不填 = 默认 run/tool_runs/）</label>
+    <div class="filerow">
+      <input id="f_outdir" type="text" placeholder="选择输出目录（产物写在其下「运行名」子目录）" data-i18n-ph="tk.outDirOptPh">
+      <button class="btn small" onclick="browseDir('f_outdir')">📁</button>
     </div>
     <label class="chk" data-page-node-id="TgUcoHaVJY2Ealyevm0JI2"><input type="checkbox" id="f_dedup" data-page-node-id="CTVYakrml7JkKcB0KRlcWD"> <span data-i18n="tk.fpDedup" data-page-node-id="U2BGoBKid4D6NVCn5euHDP">启用 --dedup 去 PCR 重复</span>
       <span class="hint" data-i18n="tk.fpDedupHint" data-page-node-id="L2GR0zLwYQiBdDQlFNixQd">（高深度宏数据慎用，可能误删真实重复）</span></label>
@@ -373,7 +394,7 @@
           <details class="rpt-sec" open data-page-node-id="aJ3PuAFgRsM8pwq4cvgJup">
             <summary data-i18n="tk.vcDetailSec" data-page-node-id="MUqfKjpgr83RMwWC9uDYNO">病毒序列分类（contig 明细）</summary>
             <div class="rpt-sec-body" data-page-node-id="R4ANb0qUAc2nX3mwZOwN97">
-              <p class="hint" data-i18n="tk.vcDetailHint" data-page-node-id="XUWECMZvkPUeyhwXZvrUXR">每行 contig 可直接做 <b data-page-node-id="3LTm4LKhXC6MeRghbnrJBD">CDD</b> 保守域（NCBI，6-frame 翻译）·
+              <p class="hint" data-i18n="tk.vcDetailHint" data-page-node-id="XUWECMZvkPUeyhwXZvrUXR">每行 contig 可直接做
               <b data-page-node-id="4NBtZftMjzfNDbkssmNi36">BLASTN/BLASTX</b>（NCBI nt/nr，限病毒）。
               近完整基因组（0.8 ≤ 长度/属均长 ≤ 1.2）绿色标注；分值 = 支持 k-mer 片段 /
               映射总片段。<b data-page-node-id="XKb0shf4icUXm8zdKoiXNe">≥0.9 极可靠</b> · 0.5~0.9 高可信 · 0.1~0.5 需复核。</p>
@@ -383,7 +404,7 @@
                 <select id="vcHostF" onchange="hostFilterChanged()" style="max-width:180px" data-page-node-id="8EdxUIg0ahmzz6ER66eAOb">
                   <option value="" data-i18n="tk.optAllHosts" data-page-node-id="0mTq4tzd56c1DRBSghMFUT">（全部宿主）</option>
                 </select>
-                <button class="btn small primary" style="margin-left:auto" onclick="jumpVerify()" title="对本运行全部病毒 contig 做候选序列验证（长度分流 + blastx/CDD + 类病毒）" data-i18n="tk.jumpVerify" data-i18n-title="tk.jumpVerifyTitle" data-page-node-id="9xJC2p48DMABH7XJajH0p6">🛡 候选序列验证</button>
+                <button class="btn small primary" style="margin-left:auto" onclick="jumpVerify()" title="对本运行全部病毒 contig 做候选序列验证（长度分流 + blastx/BFVD + 类病毒）" data-i18n="tk.jumpVerify" data-i18n-title="tk.jumpVerifyTitle" data-page-node-id="9xJC2p48DMABH7XJajH0p6">🛡 候选序列验证</button>
                 <span class="hint" data-i18n="tk.filterSyncHint" data-page-node-id="rZN44LMXBKQhScUTpr46qp">筛选同步作用于桑基图 / 分类表 / 旭日图（按 contig 级宿主归类）</span>
               </div>
               <div class="scroll-lg" id="anaTable" style="margin-top:10px" data-page-node-id="vcllReouqLtiMWra0fUZXg">
@@ -435,13 +456,14 @@
 
 
   <!-- 候选序列验证：宿主筛选 → 长度分流 → 双路过滤。
-       ≥1000bp 走病毒支（diamond blastx + mmseqs CDD，并集/交集）；
+       ≥1000bp 走病毒支（DIAMOND blastx + mmseqs2 BFVD，并集/交集；
+       B 路证据源 2026-09-29 由 CDD 换为 BFVD——病毒专属库、免白名单）；
        250–1000bp 走类病毒支（blastn vs viroids_v4）。
        过滤器语义：no-hit 保留为 unclassified（新病毒/新类病毒候选池）。 -->
   <section class="card" id="t-verify" data-page-node-id="oYON3BBurtzQBNAkWEq4z1">
     <h2 data-i18n="tk.verifyH2" data-page-node-id="kB1hhtMlWRu8VFQ6BtiWBU">🛡 候选序列验证</h2>
     <p class="hint" data-i18n="tk.vfHint" data-page-node-id="ewKbGANs6MxXjta0b26Qwo">对候选 contig 做<b data-page-node-id="nOuZv0OoXrqo0DDa2ebvYP">宿主筛选 → 长度分流 → 双路过滤</b>：
-       <b data-page-node-id="uZ9C2Np8AoKpfVPZImTqsB">≥1000 bp</b> 走病毒支（DIAMOND blastx + mmseqs2 CDD，取并集或交集）；
+       <b data-page-node-id="uZ9C2Np8AoKpfVPZImTqsB">≥1000 bp</b> 走病毒支（DIAMOND blastx + mmseqs2 BFVD 病毒域，取并集或交集）；
        <b data-page-node-id="2xuSxWHXsCec5krb6GjS4F">250–1000 bp</b> 走类病毒支（blastn vs 类病毒库）。
        过滤器语义：未命中（no-hit）<b data-page-node-id="su8i8lpBKeyUlbLS9RNKtU">保留</b>为 unclassified——那是新病毒 / 新类病毒候选池，
        不会当「排除」。</p>
@@ -474,9 +496,9 @@
       <div class="gp-item" data-page-node-id="cub9Co7P07vgtSD8IAKCP5">
         <label data-i18n="tk.vfMethodLbl" data-page-node-id="OzZovzncaQSF1GfgNSxTQg">过滤方法</label>
         <select id="vf_methods" data-page-node-id="30F7gEIXTNhVFE361AvbcB">
-          <option value="blastx,cdd" selected data-i18n="tk.optBothMethods" data-page-node-id="z11BUwRyU61nuNjaVIdxeD">blastx + CDD（双跑）</option>
+          <option value="blastx,bfvd" selected data-i18n="tk.optBothMethods" data-page-node-id="z11BUwRyU61nuNjaVIdxeD">blastx + BFVD（双跑）</option>
           <option value="blastx" data-i18n="tk.optBlastxOnly" data-page-node-id="uPlbkLocGvLsNPoed9iMwJ">仅 blastx</option>
-          <option value="cdd" data-i18n="tk.optCddOnly" data-page-node-id="XJJFSrDIODrG8irBBTuIs8">仅 CDD</option>
+          <option value="bfvd" data-i18n="tk.optBfvdOnly" data-page-node-id="XJJFSrDIODrG8irBBTuIs8">仅 BFVD</option>
         </select>
       </div>
       <div class="gp-item" data-page-node-id="Uj0qqNaqdUtVUS5PEUSvIG">
@@ -579,11 +601,11 @@
           <option value="intersection" data-i18n="tk.optCombineIntersection" data-page-node-id="xeC30TPyPG3TLROdyahUFW">验证合并：intersection</option>
         </select>
       </label>
-      <label class="chk" title="blastx=NCBI nr 同源比对；cdd=保守域搜索" data-page-node-id="sNIfKcCiaovpYVVNbmXdDi">
+      <label class="chk" title="blastx=NCBI nr 同源比对；bfvd=BFVD 病毒域搜索（与 NCBI 提交同源）" data-page-node-id="sNIfKcCiaovpYVVNbmXdDi">
         <select id="vc_methods" style="font-size:12px" data-page-node-id="baRkR1aM1EmnBmZRSWjibe">
-          <option value="blastx,cdd" selected data-i18n="tk.optMethodBoth" data-page-node-id="J6QdqiDoITUqFw6FZqu3PM">验证方法：blastx + CDD</option>
+          <option value="blastx,bfvd" selected data-i18n="tk.optMethodBoth" data-page-node-id="J6QdqiDoITUqFw6FZqu3PM">验证方法：blastx + BFVD</option>
           <option value="blastx" data-i18n="tk.optMethodBlastx" data-page-node-id="D8B7Ab3CVmAug1sP9xVH5N">验证方法：仅 blastx</option>
-          <option value="cdd" data-i18n="tk.optMethodCdd" data-page-node-id="55eMd2cNOLMDl2exGMr9oK">验证方法：仅 CDD</option>
+          <option value="bfvd" data-i18n="tk.optMethodBfvd" data-page-node-id="55eMd2cNOLMDl2exGMr9oK">验证方法：仅 BFVD</option>
         </select>
       </label>
     </div>
@@ -963,18 +985,9 @@
         </div>
       </details>
       <details class="rpt-sec" open data-page-node-id="knNaBGUjATGgCf1Vle7Rt6">
-        <summary data-i18n="tk.kvSecCharts" data-page-node-id="eBhtgmWN3B8FaLsg2wE5uM">可视化图表（丰度 / 检出热图）</summary>
+        <summary data-i18n="tk.kvSecCharts" data-page-node-id="eBhtgmWN3B8FaLsg2wE5uM">可视化图表（丰度分布 / 共丰度）</summary>
         <div class="rpt-sec-body" data-page-node-id="OOGxq7hvCuiFWaE4ilRx66">
-          <div class="hint" style="margin-bottom:4px">① 各样品病毒丰度（EM reads 堆叠柱）</div>
-          <div id="kvAbundanceChart" style="width:100%;min-height:340px" data-page-node-id="cxyG9mxD1khsAx1zNWA9Ba"></div>
-          <div style="margin-top:14px;margin-bottom:4px">
-            <span class="hint" style="margin-right:6px">② 样品 × 病毒检出热图，指标：</span>
-            <select onchange="kvChartMetric(this.value)" style="font-size:12px">
-              <option value="Coverage(%)">覆盖率 %</option>
-              <option value="MeanDepth">平均深度</option>
-            </select>
-          </div>
-          <div id="kvHeatmapChart" style="width:100%;min-height:340px" data-page-node-id="aCvXHO1DQRzNGq0FuaCxhR"></div>
+          <div id="kvCharts" style="width:100%" data-page-node-id="cxyG9mxD1khsAx1zNWA9Ba"></div>
         </div>
       </details>
       <div class="rh" id="rh-kvsuite" data-page-node-id="YP7X781tn7KsqqLrbeCSxu"></div>
@@ -1274,55 +1287,11 @@
   </section>
 
 
-  <!-- 保守域与功能元件注释（独立工作区：NCBI CDD 保守域，逐 contig）
-       语义定位：注释阶段——已确认病毒的「基因组有什么功能元件」，
-       产出结构域位置 / 边界，服务于基因组图谱与 GenBank 提交注释。
-       判定候选 contig 是否为真病毒属识别阶段，见 virus 组验证环节。 -->
-  <section class="card" id="t-cdd" data-page-node-id="7c2PRhnhhvVuYrKu8R8fhs">
-    <h2 data-i18n="tk.cddH2" data-page-node-id="rSa0s631o5DWOmy3nmt0Av">🧩 保守域与功能元件注释（CDD）</h2>
-    <p class="hint" data-i18n="tk.cddHint" data-page-node-id="S9mGfWKXbXgJSFUoGxMuvT">对病毒 contig 逐条做 <b data-page-node-id="lgf95pseRqfCvBiyYvrme2">CDD 保守域搜索</b>（NCBI，6-frame
-       翻译取最长 ORF ≥50aa），定位结构域的<b data-page-node-id="M0jdJRaDp14FBlwpHxvYwx">位置与边界</b>，为基因组图谱绘制
-       与功能元件注释提供依据。结果缓存在运行目录 analysis/ 下可重复查看；
-       近完整基因组（绿色）contig 的结构域边界更完整可靠。
-       同源比对见「同源比对（BLASTN · BLASTX）」卡片；引物设计见独立模块「🧪 引物设计（primer3）」。</p>
-    <details class="rpt-sec" open data-page-node-id="H5B1Jcp4ggi4z7oPPwyEQq">
-      <summary data-i18n="tk.seqInputSec" data-page-node-id="kzqHuAC9DwsqUcqV4axzuS">① 直接输入序列 / 文件</summary>
-      <div class="rpt-sec-body" data-page-node-id="oFbkXHauMwgPUPiHZQi5bU">
-        <div class="filerow" data-page-node-id="P5L45M8QKOH2IXikwycjgc">
-          <input id="cddSeqIn" type="text" placeholder="选择 .fasta 文件，或在下方粘贴核酸序列" data-i18n-ph="tk.phSeqOrPaste" data-page-node-id="Jg8gn2OsOpubdi84Qc1V2D">
-          <button class="btn small" onclick="browse('cddSeqIn')" data-page-node-id="EK2rzGIk8G0ZrDrex4fA8c">📁</button>
-          <button class="btn small" onclick="caSeqFromPaste('cddSeqIn')" data-i18n="tk.btnPaste" data-page-node-id="ZGZf9O0Ecn7EBvYLfNV5ak">📋 粘贴</button>
-        </div>
-        <textarea id="cddSeqText" rows="10" spellcheck="false"
-          style="width:100%;min-height:220px;font-family:var(--mono);font-size:12.5px;line-height:1.55;margin-top:6px;padding:10px 12px;resize:vertical;border-radius:6px"
-          placeholder=">contig_name\nATGC...（核酸序列，>header 开头）" data-i18n-ph="tk.phContigSeq"></textarea>
-        <div class="hint" style="margin:4px 0 0" data-i18n="tk.pasteBoxHint" data-page-node-id="hJToOtcrPWVHp0fwq3fuJn">可直接 Ctrl+V 粘贴多行 FASTA / 纯序列；文本框右下角可拖拽放大</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px" data-page-node-id="Gx31ndx6T2xMFZJtuF5ikP">
-          <span class="hint" style="margin:0" data-i18n="tk.engineLbl" data-page-node-id="y7nkAk1uk6Wun06dPezSQk">引擎</span>
-          <select id="cdd_engine" style="min-width:270px" data-page-node-id="5pULJcDjiofKuq0xh8G5lm">
-            <option value="local" selected data-i18n="tk.engLocalCdd" data-page-node-id="j5VOj3XaygfMPDfXJhhC5v">本地 mmseqs2 vs CDD 库（离线，秒级）</option>
-            <option value="online" data-i18n="tk.engOnlineCdd" data-page-node-id="lA5A1WNHnakC5iqf9wHd67">在线 NCBI CD-Search（需联网，分钟级）</option>
-          </select>
-        </div>
-        <div style="margin-top:8px" data-page-node-id="nVKCLL1hNoC4AXaOBpxRzI">
-          <button class="btn small primary" onclick="runCaSeqInput('cdd')" data-i18n="tk.runCdd" data-page-node-id="1uuGUKr263MJiG4QAwfiet">▶ 运行 CDD 域搜索</button>
-          <span class="hint" style="margin-left:8px" data-i18n="tk.cddRunHint" data-page-node-id="h2rhcRiyvUt9VnMJXFbBHE">本地：mmseqs2 translated search vs CDD 库；在线：6-frame 翻译取最长 ORF ≥50aa 提交 NCBI</span>
-        </div>
-      </div>
-    </details>
-    <div id="cddResult" class="card" style="margin-top:12px;display:none" data-page-node-id="7lsB63gH7Vt4xMHV8C9E5L">
-      <div style="display:flex;justify-content:space-between;align-items:center" data-page-node-id="8Ue4PgawLZjDUvi7jiWJw1">
-        <b id="cddTitle" data-page-node-id="DTvosfA787npnBBVSDmfGx">分析结果</b>
-        <button class="btn small" onclick="$('cddResult').style.display='none'" data-page-node-id="24TgJYvHWUAnTIFNTZJvot">✕</button>
-      </div>
-      <div class="scroll-lg" id="cddBody" style="margin-top:8px" data-page-node-id="MQZoupxT4cVz2KeVgWBDfC"></div>
-    </div>
-  </section>
-
   <!-- 同源比对（独立工作区：NCBI BLASTN / BLASTX，逐 contig）
        语义定位：注释阶段——为 GenBank 提交注释提供依据；
        identity 分档仅作最近同源参考，正式定种走 compare 组的 SDT。
-       引物设计另见独立模块 /primer。 -->
+       引物设计另见独立模块 /primer。
+       （原「保守域与功能元件注释（CDD）」工作区已随本地 CDD 库下线，2026-09-29） -->
   <section class="card" id="t-hom" data-page-node-id="FE012tDC6E0kwSCCIJQYYO">
     <h2 data-i18n="tk.homH2" data-page-node-id="OSxFazaAUedLfHK9mt6Fzh">🎯 同源比对（BLASTN · BLASTX）</h2>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0" data-page-node-id="fQssdx84adlTWpn1Eo8NHn">
@@ -1333,8 +1302,7 @@
        （NCBI nt / nr，限病毒），为 GenBank 提交注释提供依据。结果缓存在运行目录
        analysis/ 下可重复查看；命中表为 Metabuli 风格（Accession 可点回
        NCBI、identity 分档着色）。注：identity 分档仅反映最近同源水平，
-       正式物种界定请用「比较基因组分析」组的 SDT；结构域位置见
-       「保守域与功能元件注释（CDD）」卡片。<b data-page-node-id="9F0DqLSqxlikrdfWkkM69O">引物设计</b>请使用独立模块
+       正式物种界定请用「比较基因组分析」组的 SDT。<b data-page-node-id="9F0DqLSqxlikrdfWkkM69O">引物设计</b>请使用独立模块
        「<a href="/primer" data-page-node-id="UN8NB8TL6M9aolD7ktc996">🧪 引物设计（primer3）</a>」。</p>
     <details class="rpt-sec" open data-page-node-id="HI4yi0CO7AYpkKDaB59RwE">
       <summary data-i18n="tk.seqInputSec" data-page-node-id="Hn44YduCETJHi2BuMRt6sS">① 直接输入序列 / 文件</summary>
@@ -1568,14 +1536,17 @@
           <option value="" data-i18n="tk.optPickSampleFirst" data-page-node-id="NSBAqwN65ZkTeqGFi94OfJ">（先选样品）</option></select></div>
     </div>
     <div class="hint" id="alMeta" style="margin-top:6px" data-page-node-id="dE4sYIQyKGaGI8izBxFS8x"></div>
-    <div id="alNav" style="margin-top:8px;display:none" data-page-node-id="w8qCdPzyhToDqgFyExn3MP">
-      <button class="btn small" onclick="alignPage(-1)" data-i18n="rs.prev" data-page-node-id="lrJy9UbKO0DJSO1eWHBlUA">◀ 上一页</button>
-      <span class="hint" id="alPageInfo" data-page-node-id="TQzh425XkQg0S4PnT5JRTB"></span>
-      <button class="btn small" onclick="alignPage(1)" data-i18n="rs.next" data-page-node-id="QUcsjM0BvVum5ZbRJCOO92">下一页 ▶</button>
-      <label class="chk" style="margin-left:8px" data-i18n="rs.cols" data-page-node-id="NvA3At8uB6QXyXLVWzmv1Y">每页列数
+    <div id="alNav" style="margin-top:8px;display:none;flex-wrap:wrap;gap:6px;align-items:center" data-page-node-id="w8qCdPzyhToDqgFyExn3MP">
+      <span class="hint" data-i18n="tk.alDragHint">🖱 在比对区按住拖拽选列（单击=单列）· 每行列数
         <select id="alCols" onchange="alignRender()" data-page-node-id="agiQS46aUVkAMXC5DDzXJ2">
           <option data-page-node-id="h56jkz3526gWv9tY7LUU1a">60</option><option selected data-page-node-id="R2Tvl2uj6AmJfICPBziftG">100</option><option data-page-node-id="ykfwhFpA4uuIrA0rJgRNK9">150</option>
-        </select></label>
+        </select></span>
+      <button class="btn small" id="alTrimDel" style="display:none" onclick="alTrimDel()" data-i18n="tk.alTrimDel">✂ 删除选中列</button>
+      <button class="btn small" id="alTrimKeep" style="display:none" onclick="alTrimKeep()" data-i18n="tk.alTrimKeep">🎯 只保留选中列</button>
+      <button class="btn small" id="alUndo" style="display:none" onclick="alUndo()" data-i18n="tk.alUndo">↩ 撤销</button>
+      <button class="btn small primary" id="alSaveBtn" style="display:none" onclick="alignSave(this)" data-i18n="tk.btnSaveCopy">💾 保存副本</button>
+      <span class="hint" id="alSelInfo"></span>
+      <span class="hint" id="alSaveMsg"></span>
     </div>
     <div id="alLegend" style="margin:6px 0" data-page-node-id="Mp0aGAapSDHieZXDOtUt2g"></div>
     <div class="scroll-vh" id="alBox" style="margin-top:6px" data-page-node-id="Q0ajDmGujLoqx3tCkKgG1h"><p class="hint" data-i18n="c.noData" data-page-node-id="CKSWvALrH2kGY0uSAGvDX1">暂无数据</p></div>
@@ -1848,7 +1819,6 @@
         <button class="btn small" onclick="browse('rtt_input')" data-page-node-id="Bv9nfzqWFdcnkdedwD31Uz">📁</button>
       </div>
       <label data-i18n="tk.rttMetaLbl" data-page-node-id="ew5WnP90Z0UaA8mckngklu">元数据 CSV / TSV（必选：seq_id + 日期列）</label>
-      <button class="btn small" style="margin:4px 0" onclick="pdPickDataset('rtt_input','rtt_meta','date')" data-i18n="tk.pdPickBtn">📦 从数据接入 run 选择</button>
       <div class="filerow" data-page-node-id="0QNWE95eEmDRfPWB3GflPx">
         <input id="rtt_meta" type="text" placeholder="选择元数据 .csv（第一列序列标识）" data-i18n-ph="tk.pgMetaPh" data-page-node-id="fvPQbKpesLHc3VHsiOowxq">
         <button class="btn small" onclick="browse('rtt_meta')" data-page-node-id="9EWYpuZpNmV68cqRJyQ2xe">📁</button>
@@ -1954,13 +1924,51 @@
       <label data-i18n="tk.pgDateTraitLbl">日期列名（近似时间轴用）</label>
       <input id="pg_date_trait" type="text" value="year" style="width:120px">
     </div>
-    <button class="btn small" style="margin-top:8px" onclick="pdPickDataset('pg_input','pg_meta','location')" data-i18n="tk.pdPickBtn">📦 从数据接入 run 选择</button>
     <label data-i18n="tk.pgCoordsLbl" style="margin-top:10px">区域坐标表（可选：区划/纬度/经度 三列；迁移弧线地图用）</label>
     <div class="filerow">
       <input id="pg_coords" type="text" placeholder="选择坐标 .tsv/.csv（Region/Latitude/Longitude，兼容 VirPhyKit Spatial.txt）" data-i18n-ph="tk.pgCoordsPh">
       <button class="btn small" onclick="browse('pg_coords')">📁</button>
     </div>
     <p class="hint" data-i18n="tk.pgCoordsHint">未提供坐标表时，常见国家/大洲用内置质心表（近似）兜底；没有坐标的区划会在图上显式列出，不会静默少画。</p>
+    <!-- ── 轨道 B（BEAST 贝叶斯后验）：本地不跑 MCMC，只做「打包 → 回读」闭环 ──
+         上半程 = 打包作业包（beast_handoff.export_job）拷到服务器跑；
+         下半程 = 服务器产物 .log/.trees 拿回来，随本次分析一起导入
+         （phylogeo.analyze 的 beast_log/beast_trees → import_beast）。
+         两个上半程/下半程都在本卡，避免 i18n 里出现「打包给服务器」这种
+         指向不存在控件的悬空文案。 -->
+    <div style="margin-top:12px;border-top:1px dashed #d5d5d5;padding-top:8px">
+      <label data-i18n="tk.pgBeastLbl">🅑 BEAST 产物导入（轨道 B 下半程：服务器跑完的 .log / .trees，本地只读导入，不跑 MCMC）</label>
+      <div class="filerow">
+        <input id="pg_beast_log" type="text" placeholder="选择 BEAST 后验日志（merged.log）" data-i18n-ph="tk.pgBeastLogPh">
+        <button class="btn small" onclick="browse('pg_beast_log')">📁</button>
+      </div>
+      <div class="filerow">
+        <input id="pg_beast_trees" type="text" placeholder="选择 BEAST 树（merged.trees 后验样本，或 mcc.tree 单树）" data-i18n-ph="tk.pgBeastTreesPh">
+        <button class="btn small" onclick="browse('pg_beast_trees')">📁</button>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin-top:6px">
+        <div class="gp-item">
+          <label data-i18n="tk.pgBeastBurninLbl">Burn-in 比例</label>
+          <input id="pg_beast_burnin" type="number" min="0" max="0.9" step="0.05" value="0.1" style="width:80px">
+        </div>
+        <div class="gp-item">
+          <label data-i18n="tk.pgBeastMinProbLbl">后验概率阈值</label>
+          <input id="pg_beast_min_prob" type="number" min="0" max="1" step="0.05" value="0" style="width:80px">
+        </div>
+        <div class="gp-item">
+          <label data-i18n="tk.pgBeastMaxTreesLbl">最多用树数</label>
+          <input id="pg_beast_max_trees" type="number" min="0" value="2000" style="width:90px">
+        </div>
+      </div>
+      <p class="hint" data-i18n="tk.pgBeastHint">两栏都不填 = 不做 BEAST 面板。导入失败只影响 BEAST 面板，主分析（树 / 迁移矩阵 / 统计）照常。</p>
+      <label data-i18n="tk.pgExportLbl" style="margin-top:8px">📦 还没有 BEAST 产物？先用本卡的输入打包作业包（轨道 B 上半程）</label>
+      <div class="filerow">
+        <button class="btn" onclick="runBeastExport(this)" data-i18n="tk.pgExportBtn">📦 打包 BEAST 作业包</button>
+        <input id="pg_export_tag" type="text" placeholder="作业名（留空取 FASTA 文件名）" data-i18n-ph="tk.pgExportTagPh" style="max-width:220px">
+      </div>
+      <p class="hint" data-i18n="tk.pgExportHint">用本卡的 FASTA + 元数据打包（aln.fasta / metadata.csv / README.txt / job.json）；README 里有粘贴即用的服务器命令。跑完把 merged/{mcc.tree, merged.log, merged.trees} 拷回来，填进上面两栏再运行本卡。</p>
+      <div id="pgExport" style="margin-top:6px"></div>
+    </div>
     <div style="margin-top:10px">
       <button class="btn primary" onclick="runPhylogeo(this)" data-i18n="tk.pgRun" data-page-node-id="LpWpG8aZD1A7V6wH6pln4c">▶ 运行系统地理分析</button>
     </div>
@@ -1984,6 +1992,8 @@
       <div id="pgTransClasses" style="margin-top:10px"></div>
       <!-- 后验权重分带：本平台驱动源只有 RSPP 走廊方向支持率一种口径 -->
       <div id="pgBands" style="margin-top:10px"></div>
+      <!-- BEAST 产物导入（轨道 B 回读）：日志/树诊断 + 走廊数 + 分带口径 -->
+      <div id="pgBeast" style="margin-top:10px"></div>
       <!-- 迁移 GIF 动画（服务端 plotly→kaleido→Pillow 渲染，离线；需 MOTP 分箱 + ≥2 坐标） -->
       <div id="pgGif" style="margin-top:10px"></div>
     </div>
@@ -2181,7 +2191,7 @@
     <p class="hint" data-i18n="tk.pdDesc">一条链跑完 <b>A0 数据准备 → A1 时间推断 → A2 地理迁移 → A3 群体动态 → A4 祖先序列 → A5 汇总溯源</b>。
       阶段之间靠<b>文件接口</b>串联（<code>clock/timetree.nwk</code> 是 A2/A3/A4 的唯一入口），所以可以一键全跑、只跑单阶段、或<b>从上一轮产物续跑</b>。</p>
     <p class="hint" data-i18n="tk.pdTrack" style="color:#1d7a4f">🅐 <b>轨道 A（本卡）</b>：全程本机完成、<b>不跑 MCMC</b>，给的是极大似然/最小二乘的<b>点估计与近似区间</b>。
-      凡涉及<b>后验概率、95% HPD、贝叶斯因子</b>的结论必须走 <b>轨道 B</b>（「系统地理」卡里的「打包给服务器」→「BEAST 产物」导入），两边数字<b>不可混表</b>。</p>
+      凡涉及<b>后验概率、95% HPD、贝叶斯因子</b>的结论必须走 <b>轨道 B</b>（「系统地理」卡里的「📦 打包 BEAST 作业包」→ 服务器跑完 →「BEAST 产物导入」两栏读回），两边数字<b>不可混表</b>。</p>
 
     <!-- 阶段流：既是说明也是进度指示器（运行时按阶段状态着色） -->
     <div class="pd-flow" id="pdFlow"></div>
@@ -2451,17 +2461,9 @@
     </div>
   </section>
 
-
-
-
-
-
-
-
-
-
   <!-- dsRNA 设计全链路：det 选窗 + dsRIP 效价 + 面板脱靶 + 安全评分 + T7 引物 + 成品 QC
-       （引擎 Virus_Platform_Core/dsrna_pipeline.py，2026-09 全链路改造） -->
+       （引擎 Virus_Platform_Core/dsrna_pipeline.py；2026-09 全链路改造，
+       2026-10-03 迁出后恢复接线，默认参数与页面结构随当时 HEAD 版本） -->
   <section class="card" id="t-dsrna" data-page-node-id="LdamOvAFLB4rE5AaQ3JyFD">
     <h2 data-i18n="tk.dsH2" data-page-node-id="KyY7C6F1FOYdn6quyg0AKl">🧬 dsRNA 设计（RNAi 臂序列优化）</h2>
     <p class="hint" data-i18n="tk.dsHint" data-page-node-id="braoaWJIkSWRp077nkhrCp">全链路：dsRNAmax 确定性选窗（多候选按最差目标 maximin 重排，离群株弱覆盖显式告警）→
@@ -2529,6 +2531,77 @@
       </div>
       <div id="dsSummary" style="margin-top:8px" data-page-node-id="GvEenUQ3RkL1N3VAwt4Yd2"></div>
       <div class="scroll-md" id="dsTable" style="margin-top:10px" data-page-node-id="cvUmVWUJaqHoYzRdMd6kVX"></div>
+    </div>
+  </section>
+
+  <!-- 2026-10-06：CRISPR/Cas12a 检测试剂设计（t-crispr）。引擎
+       Virus_Platform_Core/crispr_design.py；规则来源与许可口径见
+       docs/CRISPR检测设计模块规划_20261006.md（AutoCORDSv2/PathoGD/CASPER/
+       RPA-Primer-Design/CRISPRPrimerDesigner 参数净室实现）。 -->
+  <section class="card" id="t-crispr">
+    <h2 data-i18n="tk.crH2">🧬 CRISPR 检测试剂设计（Cas12a crRNA × RPA/PCR 引物）</h2>
+    <p class="hint" data-i18n="tk.crHint">多分离物目标（可多分体，header 含 RNA1/S2 等标签自动分组）→ MAFFT 保守性共识 → TTTV PAM 扫描 + crRNA 漏斗（保守/GC/同聚物/poly-T/RNAfold）→ 位点侧翼引物（primer3 主路 + 枚举兜底）→ 宿主基因组 + 近缘病毒双库特异性 → CASPER 式复合评分 × 群体覆盖率 → 候选表 / 组合表 / 订购表 / L1–L5 验证清单。<b>证据边界</b>：计算设计仅为候选优先级排序，不构成活性与区分度证据，实验结论须按 L1–L5 逐级验证。</p>
+    <label data-i18n="tk.crTargetLbl">目标 FASTA（必选，多分离物；建议 ≥10 株，可用「参考序列获取」整科整属拉取）</label>
+    <div class="filerow">
+      <input id="cr_input" type="text" placeholder="目标病毒分离物 FASTA（如某病毒多国分离物集合）" data-i18n-ph="tk.crTargetPh">
+      <button class="btn small" onclick="browse('cr_input')">📁</button>
+    </div>
+    <label data-i18n="tk.crNearLbl">近缘病毒排除 FASTA（可选；精确命中一票否决、≤1 错配标记区分度风险）</label>
+    <div class="filerow">
+      <input id="cr_near" type="text" placeholder="近缘病毒 FASTA（留空 = 仅用 databases/crispr/near_neighbors/）" data-i18n-ph="tk.crNearPh">
+      <button class="btn small" onclick="browse('cr_near')">📁</button>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin-top:10px">
+      <div class="gp-item"><label data-i18n="tk.crNucLbl">效应酶</label>
+        <select id="cr_nuclease" style="width:170px">
+          <option value="cas12a" selected>LbCas12a（DNA·TTTV）</option>
+          <option value="cas13a">LwaCas13a（RNA·免PAM）</option>
+        </select></div>
+      <div class="gp-item"><label data-i18n="tk.crAmpLbl">扩增方式</label>
+        <select id="cr_amp" style="width:120px">
+          <option value="RPA" selected>RPA（等温）</option>
+          <option value="PCR">PCR</option>
+        </select></div>
+      <div class="gp-item"><label data-i18n="tk.crProbeLbl">RPA 探针（可选）</label>
+        <select id="cr_probe" style="width:150px">
+          <option value="none" selected>无</option>
+          <option value="exo">EXO（荧光）</option>
+          <option value="nfo">NFO（侧流）</option>
+        </select></div>
+      <div class="gp-item"><label data-i18n="tk.crProfileLbl">参数档</label>
+        <select id="cr_profile" style="width:190px">
+          <option value="strict" selected>严格（低变异 / 分型精确）</option>
+          <option value="relaxed">放松（高变异 RNA 病毒）</option>
+        </select></div>
+      <div class="gp-item"><label data-i18n="tk.crSpacerLbl">spacer 长度（Cas12a 20–24 / Cas13a 27–30）</label>
+        <input id="cr_spacer" type="number" value="20" min="20" max="30" style="width:80px"
+               title="按所选效应酶自动钳制到允许区间；Cas13a 默认 30"></div>
+      <div class="gp-item"><label data-i18n="tk.crTopnLbl">输出组合数</label>
+        <input id="cr_topn" type="number" value="20" min="1" max="200" style="width:80px"></div>
+      <div class="gp-item"><label data-i18n="tk.crFlankLbl">侧翼窗口 bp</label>
+        <input id="cr_flank" type="number" value="250" min="100" max="500" style="width:90px"></div>
+      <div class="gp-item" style="display:flex;align-items:center;gap:4px">
+        <input id="cr_use_host" type="checkbox" checked>
+        <label for="cr_use_host" style="margin:0" data-i18n="tk.crHostLbl">宿主基因组筛查（host-db；大基因组自动转 BLAST 路）</label></div>
+      <div class="gp-item" style="display:flex;align-items:center;gap:4px">
+        <input id="cr_group" type="checkbox" checked>
+        <label for="cr_group" style="margin:0" data-i18n="tk.crGroupLbl">按片段标签分组（RNA1/S2…）</label></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn primary" onclick="runCrispr(this)" data-i18n="tk.crRun">▶ 运行 CRISPR 试剂设计</button>
+    </div>
+    <div class="tool-out">
+      <div class="tool-out-head" data-i18n="c.outHead">📤 输出</div>
+      <div class="toolrun" id="toolrun-crispr"></div>
+    </div>
+    <div id="crResult" class="card" style="margin-top:12px;display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b id="crTitle">CRISPR 设计结果</b>
+        <button class="btn small" onclick="$('crResult').style.display='none'">✕</button>
+      </div>
+      <div id="crSummary" style="margin-top:8px"></div>
+      <div id="crTracks" style="margin-top:10px"></div>
+      <div class="scroll-md" id="crTable" style="margin-top:10px"></div>
     </div>
   </section>
 
@@ -2858,13 +2931,14 @@ function showRows() {
 function val(id) { return ($(id)?.value || '').trim(); }
 
 async function runTool(tool, btn) {
-  let params = {}, threads = null;
+  let params = {}, threads = null, outdir = '';
   if (tool === 'fastp') {
-    if (!val('f_r1')) { alert('请选择 R1 FASTQ'); return; }
+    if (!val('f_r1')) { alert(t('ui.tk.needR1')); return; }
     params = { r1: val('f_r1'), r2: val('f_r2'), dedup: !!$('f_dedup').checked };
     threads = +val('f_threads') || null;
+    outdir = val('f_outdir');
   } else if (tool === 'identify') {
-    if (!val('i_input')) { alert('请选择输入文件'); return; }
+    if (!val('i_input')) { alert(t('ui.tk.needInput')); return; }
     params = { input: val('i_input'), input2: val('i_input2'),
                input_type: $('i_type').value,
                confidence: +val('i_conf') || 0,
@@ -2872,27 +2946,31 @@ async function runTool(tool, btn) {
     threads = +val('i_threads') || null;
   } else if (tool === 'assemble') {
     const srna = !!$('a_srna')?.checked;
-    if (!val('a_r1')) { alert('请选择 R1 FASTQ'); return; }
-    if (!val('a_r2') && !srna) { alert('请选择 R2 FASTQ（单端小RNA组装请勾选「小RNA (siRNA)」）'); return; }
+    if (!val('a_r1')) { alert(t('ui.tk.needR1')); return; }
+    if (!val('a_r2') && !srna) { alert(t('ui.tk.needR2')); return; }
     params = { r1: val('a_r1'), r2: val('a_r2'),
                mode: srna ? 'srna' : $('a_mode').value,
                memory: +val('a_mem') || 64, min_len: +val('a_minlen') || 200 };
     threads = +val('a_threads') || null;
   } else if (tool === 'convert') {
-    if (!val('cv_input')) { alert('请选择输入文件'); return; }
-    params = { input: val('cv_input'), target: $('cv_target').value };
+    if (!val('cv_input')) { alert(t('ui.tk.needInput')); return; }
+    // 双端：R2 可选；填写则 R1/R2 分别转换、分别输出
+    params = { input: val('cv_input'), target: $('cv_target').value,
+               input2: val('cv_input2').trim() };
+    outdir = val('cv_outdir');
   } else if (tool === 'prepchain') {
-    if (!val('pc_input')) { alert('请选择输入文件（.sra 或 FASTQ）'); return; }
+    if (!val('pc_input')) { alert(t('ui.tk.needInputSra')); return; }
     params = { input: val('pc_input'), input2: val('pc_input2'),
                dedup: !!$('pc_dedup').checked,
                confidence: +val('pc_conf') || 0 };
     threads = +val('pc_threads') || null;
+    outdir = val('pc_outdir');
   } else if (tool === 'annochain') {
-    if (!val('ac_fasta')) { alert('请选择输入 FASTA'); return; }
+    if (!val('ac_fasta')) { alert(t('ui.tk.needFasta')); return; }
     params = { fasta: val('ac_fasta'), min_aa: +val('ac_minaa') || 100 };
     threads = +val('ac_threads') || null;
   } else {
-    if (!val('c_fa')) { alert('请选择 contigs FASTA'); return; }
+    if (!val('c_fa')) { alert(t('ui.tk.needContigs')); return; }
     params = { contigs: val('c_fa'), min_len: +val('c_minlen') || 200,
                confidence: +val('c_conf') || 0,
                db_virus: libSelVal('c_vdb') || 'virus',
@@ -2902,8 +2980,8 @@ async function runTool(tool, btn) {
   try {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tool, threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+      body: JSON.stringify({ tool, threads, params, out_dir: outdir })});
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     // 工具②启动成功即记住本次运行名（完成后 refreshLastIdentRun 再校正为列表最新）
     if (tool === 'identify' && d.run) lastIdentRun = d.run;
@@ -2916,7 +2994,7 @@ async function runTool(tool, btn) {
       // 工具②运行完成：刷新「最近鉴定运行名」并自动内联展示分类报告
       if (tool === 'identify') { loadToolRuns(); refreshLastIdentRun(); if (lastIdentRun) openIdentReport(); }
     });
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 async function loadToolRuns() {
@@ -2951,7 +3029,7 @@ async function openToolRun(name) {
     await fetch('/api/tool/open', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })});
-  } catch (e) { alert('打开失败: ' + e); }
+  } catch (e) { alert(t('ui.common.openFail') + ': ' + e); }
 }
 
 // ---------------- 工具② 分类报告（内联渲染：fetch report_data + 页内 Plotly，绘制函数与工具④共用） ----------------
@@ -2973,15 +3051,15 @@ async function refreshLastIdentRun() {
 /* 打开工具②的分类报告：拉取 JSON 数据后页内渲染（Sankey + 分类表，不再 iframe 嵌套） */
 async function openIdentReport() {
   const run = ($('identRun') && $('identRun').value.trim()) || lastIdentRun;
-  if (!run) { alert('请先运行一次鉴定，或填写运行名（tool_runs/ 下 identify_* 目录名）'); return; }
+  if (!run) { alert(t('ui.tk.needIdentRun')); return; }
   try {
     const r = await fetch('/api/tool/report_data?run=' + encodeURIComponent(run));
-    if (!r.ok) { alert('报告数据加载失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.tk.reportLoadFail') + ': ' + ((await r.json()).error || '')); return; }
     RPTI = await r.json();
     $('identReport').style.display = '';
     $('identReport')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     renderRptI();
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 // ---------------- 分类报告内联渲染共用函数（工具②④共用：行过滤 / Sankey / 分类表） ----------------
@@ -3388,16 +3466,16 @@ async function embedContigReport(run) {
 /* 📊 分类报告：拉取 report_data JSON 后页内 Plotly 渲染（不再 iframe 嵌套报告页） */
 async function openContigReport() {
   const run = anaCurRun;
-  if (!run) { alert('请先选择一次运行'); return; }
+  if (!run) { alert(t('ui.tk.needRunOnce')); return; }
   try {
     const r = await fetch('/api/tool/report_data?run=' + encodeURIComponent(run));
-    if (!r.ok) { alert('报告数据加载失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.tk.reportLoadFail') + ': ' + ((await r.json()).error || '')); return; }
     RPTC = await r.json();
     _contigReportRun = run;
     $('contigReport').style.display = '';
     $('contigReport')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     renderRptC();
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 /* 从「历史运行」按 run 名直接打开对应分类报告（identify_ → 工具②，contigs_ → 工具④）
@@ -3533,7 +3611,7 @@ function renderViralContigs() {
         tds += `<td class="num">${x.genus_avg_len ? Number(x.genus_avg_len).toFixed(0) : '<span style="color:#ccc">-</span>'}</td>`;
         tds += `<td style="white-space:nowrap">${x.host ? esc(x.host) : '<span style="color:#ccc">-</span>'}</td>`;
         tds += `<td style="white-space:nowrap">${[
-            ['cdd', '🧩 CDD'], ['blastn', '🧬 BLASTN'], ['blastx', '🧬 BLASTX'], ['primer', '🧪 Primer']].map(([a, lb]) =>
+            ['blastn', '🧬 BLASTN'], ['blastx', '🧬 BLASTX'], ['primer', '🧪 Primer']].map(([a, lb]) =>
           `<button class="btn small" style="margin:1px" title="跳转到病毒注释分析并运行 ${a.toUpperCase()}" data-contig="${esc(x.contig)}" onclick="anaJump('${a}',this.dataset.contig)">${lb}</button>`).join('')}</td>`;
         return `<tr style="${style}">${tds}</tr>`;
       }).join('') + '</table>'
@@ -3544,7 +3622,7 @@ function renderViralContigs() {
 /* 点 Contig ID → 复制该序列（FASTA 格式）到剪贴板 */
 async function copyContigSeq(contig) {
   const run = anaCurRun;
-  if (!run) { alert('请先选择运行'); return; }
+  if (!run) { alert(t('ui.tk.needRun')); return; }
   const tryFetch = async f => {
     try {
       const r = await fetch(`/tool_runs/${encodeURIComponent(run)}/${f}`);
@@ -3571,16 +3649,16 @@ async function copyContigSeq(contig) {
 }
 
 /* 分类表动作 → 跳转「病毒注释分析」并自动运行
-   cdd → t-cdd 卡；blastn / blastx → t-hom 卡 */
+   blastn / blastx → t-hom 卡（原 cdd → t-cdd 分支已随 CDD 下线移除） */
 function anaJump(action, contig) {
   const run = anaCurRun;
-  if (!run) { alert('请先选择运行'); return; }
-  const target = action === 'cdd' ? '#t-cdd' : '#t-hom';
-  const scope = action === 'cdd' ? 'cdd' : 'hom';
+  if (!run) { alert(t('ui.tk.needRun')); return; }
+  const target = '#t-hom';
+  const scope = 'hom';
   try { sessionStorage.setItem('vp_anajump',
     JSON.stringify({ action, run, contig, ts: Date.now() })); } catch (e) {}
   if (location.pathname === '/tools') {
-    // t-cdd / t-hom 属于「病毒注释分析」组（annotate），而 contig 明细表在
+    // t-hom 属于「病毒注释分析」组（annotate），而 contig 明细表在
     // 「病毒识别和分类分析」组（virus）。只改 hash 不会跨组；且 renderModuleTree
     // 会用 URL 的 ?g= 覆盖 activeModuleGroup，所以必须把 g 参数也改成 annotate。
     const params = new URLSearchParams(location.search);
@@ -3599,7 +3677,7 @@ async function processAnaJump() {
   try { j = JSON.parse(sessionStorage.getItem('vp_anajump') || 'null'); } catch (e) {}
   if (!j || Date.now() - (j.ts || 0) > 60000) { sessionStorage.removeItem('vp_anajump'); return; }
   sessionStorage.removeItem('vp_anajump');
-  const scope = j.action === 'cdd' ? 'cdd' : 'hom';
+  const scope = 'hom';
   const sc = ANA_SCOPES[scope];
   const sel = $(sc.run);
   if (!sel) return;
@@ -3611,7 +3689,7 @@ async function processAnaJump() {
     sel.value = j.run;
     await loadCaContigs(scope);
     runAnalyze(j.action, j.contig, scope);
-    const card = document.getElementById(scope === 'cdd' ? 't-cdd' : 't-hom');
+    const card = document.getElementById('t-hom');
     if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) { /* 忽略 */ }
 }
@@ -3619,7 +3697,7 @@ async function processAnaJump() {
 /* 分类表「批量验证」→ 跳本组「候选序列验证」卡，自动带上当前 contigs 运行 */
 function jumpVerify() {
   const run = anaCurRun;
-  if (!run) { alert('请先选择运行'); return; }
+  if (!run) { alert(t('ui.tk.needRun')); return; }
   try { sessionStorage.setItem('vp_verifyjump',
     JSON.stringify({ run, ts: Date.now() })); } catch (e) {}
   if (location.pathname === '/tools') {
@@ -3653,19 +3731,19 @@ async function processVerifyJump() {
   } catch (e) { /* 忽略 */ }
 }
 
-/* 四件套分析作用域：ana = 工具④卡片内嵌表格；cdd / hom = 独立模块
-   「保守域与功能元件注释（CDD）」「同源比对（BLASTN · BLASTX）」两卡片。
+/* 分析作用域：ana = 工具④卡片内嵌表格；hom = 独立模块
+   「同源比对（BLASTN · BLASTX）」卡片。
+   （原 cdd 作用域「保守域与功能元件注释（CDD）」已随本地 CDD 库下线移除。）
    两组共用 /api/tool/analyze 与结果缓存，仅 DOM 目标不同。 */
 const ANA_SCOPES = {
   ana: { run: 'anaRun', wrap: 'anaResult', title: 'anaTitle', body: 'anaBody' },
-  cdd: { run: 'cddRun', wrap: 'cddResult', title: 'cddTitle', body: 'cddBody' },
   hom: { run: 'homRun', wrap: 'homResult', title: 'homTitle', body: 'homBody' },
 };
 
 /* 直接输入序列模式：「📋 粘贴」按钮 = 把剪贴板内容填进下方大文本框；
    也兼容「序列被误粘到上方文件路径框」的情况（自动搬下来）。
    文本框本身支持 Ctrl+V 多行粘贴，右下角可拖拽放大。 */
-const CA_SEQ_TEXT = { cddSeqIn: 'cddSeqText', homSeqIn: 'homSeqText' };
+const CA_SEQ_TEXT = { homSeqIn: 'homSeqText' };
 async function caSeqFromPaste(fileId) {
   const inp = $(fileId);
   const ta = $(CA_SEQ_TEXT[fileId]);
@@ -3681,20 +3759,20 @@ async function caSeqFromPaste(fileId) {
   }
   // ② 读剪贴板（localhost/https 下浏览器允许）
   try {
-    const t = ((await navigator.clipboard.readText()) || '').trim();
-    if (!t) { ta.focus(); alert('剪贴板为空，请直接在大文本框内 Ctrl+V 粘贴'); return; }
-    ta.value = ta.value.trim() ? ta.value.replace(/\s*$/, '\n') + t : t;
-    toast('已粘贴剪贴板内容', t.replace(/\s/g, '').length + ' 字符', { ttl: 2500 });
+    const txt = ((await navigator.clipboard.readText()) || '').trim();
+    if (!txt) { ta.focus(); alert(t('ui.tk.clipEmpty')); return; }
+    ta.value = ta.value.trim() ? ta.value.replace(/\s*$/, '\n') + txt : txt;
+    toast('已粘贴剪贴板内容', txt.replace(/\s/g, '').length + ' 字符', { ttl: 2500 });
     ta.focus();
   } catch (e) {
     ta.focus();
-    alert('浏览器不允许读取剪贴板，请直接在下方大文本框内 Ctrl+V 粘贴');
+    alert(t('ui.tk.clipDenied'));
   }
 }
 function runCaSeqInput(scope, presetAction) {
-  const seqId = scope === 'cdd' ? 'cddSeqText' : 'homSeqText';
+  const seqId = 'homSeqText';
   const seqRaw = ($(seqId)?.value || '').trim();
-  const fileIn = scope === 'cdd' ? 'cddSeqIn' : 'homSeqIn';
+  const fileIn = 'homSeqIn';
   const filePath = $(fileIn)?.value?.trim() || '';
   let seq = seqRaw
     || (filePath ? null : '');   // 文本优先；否则看文件
@@ -3702,7 +3780,7 @@ function runCaSeqInput(scope, presetAction) {
     // 从文件加载：读取内容第一种记录作为序列
     seq = '__LOAD_FILE__';
   }
-  if (!seq) { alert('请输入核酸序列或选择序列文件'); return; }
+  if (!seq) { alert(t('ui.tk.needSeq')); return; }
   // 解析 FASTA 首条记录 → contig 名 + 序列
   let name = 'input_seq', body = '';
   if (seq === '__LOAD_FILE__') {
@@ -3714,9 +3792,9 @@ function runCaSeqInput(scope, presetAction) {
       else body += ln.trim();
     }
   }
-  if (!body) { alert('未解析到序列（需 >header 开头的 FASTA）'); return; }
-  const action = presetAction || 'cdd';
-  const engine = (scope === 'cdd' ? val('cdd_engine') : val('hom_engine')) || 'local';
+  if (!body) { alert(t('ui.tk.seqParseFail')); return; }
+  const action = presetAction || 'blastn';
+  const engine = val('hom_engine') || 'local';
   runAnalyzeDirect(action, name, body, scope, engine);
 }
 function runAnalyzeDirect(action, contig, seq, scope, engine) {
@@ -3730,7 +3808,7 @@ function runAnalyzeDirect(action, contig, seq, scope, engine) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ run: '_seq_input', contig: contig, action: action, seq: seq, engine: engine })
   }).then(r => r.json()).then(d => {
-    if (d.error) { alert('启动失败: ' + d.error); return; }
+    if (d.error) { alert(t('ui.common.startFail') + ': ' + d.error); return; }
     if (d.cached) { laDirectCached(action, contig, seq, sc, engine); return; }
     const tid = d.task; taskLogOpen.add(tid);
     const timer = setInterval(async () => {
@@ -3747,7 +3825,7 @@ function runAnalyzeDirect(action, contig, seq, scope, engine) {
         }
       } catch (e) { /* 继续 */ }
     }, 3000);
-  }).catch(e => alert('无法连接平台服务: ' + e));
+  }).catch(e => alert(t('ui.common.connFail') + ': ' + e));
 }
 async function laDirectCached(action, contig, seq, sc, engine) {
   await laDirectResult(action, contig, seq, sc, engine);
@@ -3767,20 +3845,20 @@ const anaPending = new Set();
 async function runAnalyze(action, contig, scope) {
   const sc = ANA_SCOPES[scope || 'ana'];
   const run = sc.run === 'anaRun' ? anaCurRun : val(sc.run);
-  if (!run) { alert('请先选择运行'); return; }
+  if (!run) { alert(t('ui.tk.needRun')); return; }
   const key = run + '/' + contig + '/' + action;
   try {
     // 已有缓存直接展示
     const c = await fetch(`/api/tool/analysis?run=${encodeURIComponent(run)}&contig=${encodeURIComponent(contig)}&action=${action}`);
     if (c.ok) { showAnaResult(action, contig, await c.json(), sc); return; }
   } catch (e) { /* 忽略，走提交 */ }
-  if (anaPending.has(key)) { alert('该分析已在运行中'); return; }
+  if (anaPending.has(key)) { alert(t('ui.tk.alreadyRunning')); return; }
   try {
     const r = await fetch('/api/tool/analyze', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ run, contig, action })});
     const d = await r.json();
-    if (!r.ok) { alert('启动失败: ' + (d.error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + (d.error || '')); return; }
     if (d.cached) { showCached(action, contig, sc); return; }
     anaPending.add(key);
     const tid = d.task;
@@ -3809,11 +3887,11 @@ async function runAnalyze(action, contig, scope) {
           clearInterval(timer); anaPending.delete(key);
           const runBox2 = document.getElementById('anarun-' + tid);
           if (runBox2) runBox2.textContent += '\n[失败] ' + (snap.error || snap.status);
-          alert(`分析失败: ${snap.error || snap.status}`);
+          alert(t('ui.tk.analysisFail') + ': ' + (snap.error || snap.status));
         }
       } catch (e) { /* 轮询继续 */ }
     }, 5000);
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 async function showCached(action, contig, sc) {
@@ -3830,7 +3908,6 @@ function anaResultHtml(action, res) {
   const trHover = 'onmouseover="this.style.background=\'#f8fbff\'" onmouseout="this.style.background=\'\'"';
   const ncbiNuc = a => 'https://www.ncbi.nlm.nih.gov/nuccore/' + encodeURIComponent(a);
   const ncbiProt = a => 'https://www.ncbi.nlm.nih.gov/protein/' + encodeURIComponent(a);
-  const ncbiCdd = a => 'https://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid=' + encodeURIComponent(a);
 
   if (action === 'primer') {
     const ps = res.primers || [];
@@ -3862,45 +3939,7 @@ function anaResultHtml(action, res) {
       }).join('') +
       '</tbody></table>';
   }
-  if (action === 'cdd') {
-    const hs = res.hits || [];
-    const isNt = res.coord === 'nt';                  // 本地：query 核酸坐标；在线：ORF aa 坐标
-    const L = (isNt ? (res.query_len || 1) : (res.orf_len_aa || 1));
-    const spanTxt = isNt ? `序列长 ${res.query_len || '-'} bp` : `最长 ORF ${res.orf_len_aa} aa`;
-    const engTxt = res.engine === 'local'
-      ? t('tk.engLocalShort', '本地 mmseqs2 vs CDD 库')
-      : t('tk.engOnlineShort', 'NCBI 在线 CD-Search');
-    if (!hs.length) return `<p class="hint">${engTxt} · ${spanTxt} · ${t('tk.noDomainHit', '未命中保守域')}</p>`;
-    const palette = ['#1a9850', '#66bd63', '#a6d96a', '#d9ef8b', '#fee08b',
-                     '#fdae61', '#f46d43', '#d73027', '#762a83', '#4575b4'];
-    const segs = hs.slice(0, 10).map((h, i) => {
-      const from = Math.min(parseInt(h.from) || 0, L);
-      const to = Math.min(parseInt(h.to) || L, L);
-      const left = 100 * from / L, w = Math.max(100 * (to - from) / L, 1.5);
-      const col = palette[i % palette.length];
-      return `<div class="mb-seg" title="${esc(h.short_name)} ${esc(h.from)}-${esc(h.to)} E=${esc(h.evalue)}"
-        style="position:absolute;left:${left.toFixed(1)}%;width:${w.toFixed(1)}%;height:100%;
-        background:${col};color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;
-        justify-content:center;overflow:hidden;white-space:nowrap;cursor:default">${esc(h.short_name)}</div>`;
-    }).join('');
-    const nViral = hs.filter(h => h.viral).length;
-    return `<div class="ok" style="font-weight:600;margin-bottom:6px">Conserved Domains · ${spanTxt} · ${hs.length} 个命中${nViral ? `（病毒相关 ${nViral}）` : ''} <span class="hint" style="font-weight:400">· ${engTxt}</span></div>` +
-      `<div style="position:relative;height:26px;border-radius:4px;overflow:hidden;background:#eee;margin:6px 0 10px;border:1px solid #ddd">${segs}</div>` +
-      `<table style="${tblCss}"><thead><tr>
-        <th style="${thCss}">#</th><th style="${thCss}">Accession</th><th style="${thCss}">Short Name</th>
-        <th style="${thCss}">E-value</th><th style="${thCss}">Bit Score</th>
-        <th style="${thCss}">From</th><th style="${thCss}">To</th><th style="${thCss}">Superfamily</th></tr></thead><tbody>` +
-      hs.map((h, i) => `<tr ${trHover}>
-        <td style="${tdCss}">${i + 1}</td>
-        <td style="${tdCss}"><a href="${ncbiCdd(h.accession)}" target="_blank" rel="noopener" style="color:#1a5276">${esc(h.accession)}</a></td>
-        <td style="${tdCss};font-weight:600" title="${esc(h.description || '')}">${esc(h.short_name)}${h.viral ? ' <span class="hint" style="color:#1a9850">病毒</span>' : ''}</td>
-        <td style="${tdCss};font-family:monospace">${esc(h.evalue)}</td>
-        <td style="${tdCss};font-family:monospace">${esc(h.bit_score || '-')}</td>
-        <td style="${tdCss};text-align:right">${esc(h.from)}</td>
-        <td style="${tdCss};text-align:right">${esc(h.to)}</td>
-        <td style="${tdCss}"><span class="hint">${esc(h.superfamily)}</span></td></tr>`).join('') +
-      '</tbody></table>';
-  }
+  // （原 cdd 命中表/域图渲染分支已随 CDD 下线移除）
   // blastn / blastx（metabuli 口径命中表）
   const hs = res.hits || [];
   const engTxt = res.engine === 'local'
@@ -3938,9 +3977,9 @@ function showAnaResult(action, contig, res, sc) {
   $(sc.body).innerHTML = anaResultHtml(action, res);
 }
 
-// ---------------- 保守域注释（cdd）/ 同源比对（hom）独立工作区 ----------------
-// 复用四件套 API：cdd 卡只出 CDD 按钮，hom 卡只出 BLASTN/BLASTX 按钮。
-const CA_ACTIONS = { cdd: ['cdd'], hom: ['blastn', 'blastx'] };
+// ---------------- 同源比对（hom）独立工作区 ----------------
+// 复用分析 API：hom 卡只出 BLASTN/BLASTX 按钮（原 cdd 卡已随 CDD 下线移除）。
+const CA_ACTIONS = { hom: ['blastn', 'blastx'] };
 
 async function loadCaRuns(scope, auto) {
   const sc = ANA_SCOPES[scope];
@@ -4006,15 +4045,14 @@ async function caExample(scope) {
   const sc = ANA_SCOPES[scope];
   await loadCaRuns(scope, true);
   const sel = $(sc.run);
-  if (!sel || !sel.value) { alert('暂无 contigs_ 运行——请先在工具④运行一次 contig 分类'); }
+  if (!sel || !sel.value) { alert(t('ui.tk.noContigsRun')); }
 }
 
 loadAnaRuns();
 setTimeout(processAnaJump, 900);   // 分类表「跳转注释分析」跨页/刷新续接
 setInterval(loadAnaRuns, 30000);
-loadCaRuns('cdd');
 loadCaRuns('hom');
-setInterval(() => { loadCaRuns('cdd'); loadCaRuns('hom'); }, 30000);
+setInterval(() => { loadCaRuns('hom'); }, 30000);
 
 /* ---------------- 已知病毒识别与定量（t-kvsuite） ---------------- */
 let KV_DATA = null;
@@ -4025,8 +4063,7 @@ let KV_DATA = null;
    （那些属于全流程卡 t-kvchain），这里只补识别结果的可视化图表。 */
 const KV_IDS = {
   summary: 'kvSummary', identify: 'kvIdentifyTable',
-  filtered: 'kvFilteredTable',
-  abundance: 'kvAbundanceChart', heatmap: 'kvHeatmapChart',
+  filtered: 'kvFilteredTable', charts: 'kvCharts',
 };
 
 /* 样品多选弹窗。targetId 指定回填的输入框：
@@ -4088,10 +4125,10 @@ async function runVariant(btn) {
     no_snpgenie: !$('vr_snpgenie').checked || undefined,
   };
   if (mode === 'bam') {
-    if (!val('vr_bam_dir')) { alert('请填 BAM 目录'); return; }
+    if (!val('vr_bam_dir')) { alert(t('ui.tk.needBamDir')); return; }
     params.bam_dir = val('vr_bam_dir');
   } else if (mode === 'vcf') {
-    if (!val('vr_vcf')) { alert('请填 VCF 文件'); return; }
+    if (!val('vr_vcf')) { alert(t('ui.tk.needVcf')); return; }
     params.input_vcf = val('vr_vcf');
   } else {
     // 与上游衔接：指定 run 则把该 run 的 bam 目录当输入；留空交给后端默认逻辑
@@ -4103,12 +4140,12 @@ async function runVariant(btn) {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'kvsuite', threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     watchTaskBtn(d.task, btn, '⏳ 变异分析中…', () => loadVariantResult(d.run));
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 async function loadVariantResult(run) {
@@ -4215,7 +4252,7 @@ function renderVariant(d) {
 /* ---------- 一键分析：病毒识别和分类（②③④） ---------- */
 async function runVirchain(btn) {
   const input = val('vc_input');
-  if (!input) { alert('请选择去宿主序列（FASTA）'); return; }
+  if (!input) { alert(t('ui.tk.needHostSeq')); return; }
   const params = {
     input,
     input2: val('vc_input2') || undefined,
@@ -4233,12 +4270,12 @@ async function runVirchain(btn) {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'virchain', threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     watchTaskBtn(d.task, btn, '⏳ 一键流程中…', () => loadChainResult('virchain', d.run));
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 /* ---------- 一键分析：病毒定量与共识（kvsuite 全流程） ----------
@@ -4246,86 +4283,189 @@ async function runVirchain(btn) {
    字段，而那张卡在别的模块页里，用户看不到也改不了（2026-09-11 实测
    「没有输入、没有输出、没有参数」）。需要沿用那张卡的参数时走
    kvchainPullKvsuite() 显式搬一次，避免两套表单静默漂移。 */
-/* ── dsRNA 设计（dsRNAmax 本地卡）── */
 
-(function () {
-  const pf = takePrefill('phylodyn');
-  if (pf && pf.fa) {
-    const pre = () => {
-      // 2026-09-18：清掉已摘卡片的输入框 id（pdtt_input=t-pdtreetime 已归档、
-      // pdsub_input=t-pdsub 已并入数据准备）——留着是死引用，只会让人误以为还有那两张卡。
-      for (const id of ['rdp_input', 'rtt_input', 'pg_input', 'pd_input']) {
-        const el = $(id);
-        if (el) el.value = pf.fa;
-      }
-      if (typeof toast === 'function') {
-        toast(t('tk.pdH2', '进化动力学分析'),
-          (pf.n ? t('tk.selectedN', '已选 {n} 条').replace('{n}', pf.n) + ' · ' : '')
-          + pf.fa, { ttl: 6000 });
-      }
-    };
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', pre);
-    } else { pre(); }
-  }
-})();
-
-/* pdTab() 已随 t-phylodyn 三页签拆分（→ t-rdp / t-rtt / t-phylogeo）一并移除：
-   它依赖的 pd_rec / pd_rtt / pd_geo / pd_tab_* 元素已不存在，留着是死代码。 */
-
-async function runRtt(btn) {
-  if (!val('rtt_input')) { alert('请选择比对好的 FASTA'); return; }
-  if (!val('rtt_meta')) { alert('请选择元数据 CSV（含日期列）'); return; }
+/* ---------- CRISPR 检测试剂设计（t-crispr 卡，引擎 crispr_design.py） ---------- */
+async function runCrispr(btn) {
+  if (!val('cr_input')) { alert(t('ui.tk.needFasta')); return; }
+  const nuc = val('cr_nuclease') || 'cas12a';
   const params = {
-    input: val('rtt_input'), meta: val('rtt_meta'),
-    date_trait: val('rtt_trait') || 'year',
-    method: val('rtt_method') || 'nj',
+    input: val('cr_input'),
+    nuclease: nuc,
+    spacer_len: nuc === 'cas13a' && !val('cr_spacer') ? 30
+      : (+val('cr_spacer') || 20),
+    near_fasta: val('cr_near') || undefined,
+    use_host: $('cr_use_host').checked ? '1' : '0',
+    group_by_segment: $('cr_group').checked ? '1' : '0',
+    amp_mode: val('cr_amp') || 'RPA',
+    probe_type: val('cr_probe') || 'none',
+    profile: val('cr_profile') || 'strict',
+    spacer_len: +val('cr_spacer') || 20,
+    top_n: +val('cr_topn') || 20,
+    flank: +val('cr_flank') || 250,
   };
-  return _submitTool('rtt', params, null, btn,
-    '⏳ 建树与根到尾回归中…', loadRttResult);
+  return _submitTool('crispr', params, null, btn,
+    '⏳ CRISPR 试剂设计中…', loadCrisprResult);
 }
 
-async function loadRttResult(run) {
+async function loadCrisprResult(run) {
   if (!run) return;
-  let d;
+  let rep;
   try {
-    d = await (await fetch('/tool_runs/' + encodeURIComponent(run)
-      + '/rtt/summary.json')).json();
+    rep = await (await fetch('/tool_runs/' + encodeURIComponent(run)
+      + '/crispr/report.json')).json();
   } catch (e) { return; }
-  $('rttResult').style.display = '';
-  $('rttTitle').textContent = '时间信号结果 · ' + run;
-  window._rttLastRun = run;
-  const strong = d.strong_signal;
-  $('rttSummary').innerHTML =
-    '<span class="hint">样本 ' + d.n + ' · 建树 ' + esc(d.method) +
-    ' · R² = <b>' + d.r2 + '</b>' +
-    (strong ? '（时间信号较强）' : '（时间信号弱：建议检查采样年份跨度）') +
-    ' · 斜率 = ' + d.slope + ' 替换/位点/年' + '</span>' +
-    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">' +
-    '<button class="btn small primary" onclick="rttToGeo()">→ 接力 系统地理分析（回填比对/元数据/定年树）</button></div>';
-  const pts = d.points || [];
-  if (typeof Plotly !== 'undefined' && pts.length) {
-    Plotly.newPlot('rttPlot', [{
-      x: pts.map(p => p.year), y: pts.map(p => p.dist),
-      mode: 'markers', type: 'scatter',
-      marker: { size: 8, color: '#2e86c1' },
-      text: pts.map(p => p.name),
-      hovertemplate: '%{text}<br>%{x}年 · 距根 %{y}<extra></extra>',
-    }, {
-      x: [pts[0].year, pts[pts.length - 1].year],
-      y: [d.slope * pts[0].year + d.intercept,
-          d.slope * pts[pts.length - 1].year + d.intercept],
-      mode: 'lines', type: 'scatter',
-      line: { color: '#e74c3c', dash: 'dash' },
-      hoverinfo: 'skip',
-    }], {
-      margin: { l: 60, r: 20, t: 10, b: 40 },
-      xaxis: { title: '采样年份' },
-      yaxis: { title: '距根遗传距离' },
-      showlegend: false,
-    }, { displayModeBar: false, responsive: true });
+  if (!rep || !rep.sets) return;
+  $('crResult').style.display = '';
+  $('crTitle').textContent = 'CRISPR 设计结果 · ' + run;
+  const segs = Object.entries(rep.segments || {}).map(([k, v]) =>
+    esc(k) + '：' + v.n_isolates + ' 株 / 共识 ' + v.consensus_len + 'bp / PAM ' +
+    v.n_pam_sites + ' → 漏斗后 ' + v.n_after_funnel + ' → 组合 ' + v.n_designed)
+    .join('；');
+  const excl = (rep.exclusions || []).map(x =>
+    esc(x.name || x.key) + (x.skipped ? '（跳过：' + esc(x.skipped) + '）'
+      : (x.route ? '（' + esc(x.route) + '）' : ''))).join('、');
+  $('crSummary').innerHTML = '<span class="hint">' + segs + '<br>排除库：' +
+    (excl || '（无）') + '<br>⚠ ' + esc(rep.evidence_note || '') + '</span>';
+  const cols = [['rank', '#'], ['score', '评分'], ['segment', '片段'],
+    ['spacer', 'crRNA spacer'], ['pam', 'PAM'], ['strand', '链'],
+    ['site', '位点'], ['cons_score', '保守'], ['coverage_pct', '覆盖%'],
+    ['f_seq', 'Forward 引物'], ['r_seq', 'Reverse 引物'],
+    ['product', '产物bp'], ['route', '路线'], ['probe', '探针'],
+    ['flags', '标记']];
+  window.__crRep = rep;
+  let html = '<table class="tb" id="crTbl" style="font-size:12px;width:100%"><thead><tr>' +
+    cols.map(c => '<th>' + c[1] + '</th>').join('') + '</tr></thead><tbody>';
+  for (let i = 0; i < rep.sets.length; i++) {
+    const s = rep.sets[i];
+    html += '<tr style="cursor:pointer" onclick="crToggleDetail(this,' + i + ')">' +
+      cols.map(c => {
+        let v = s[c[0]];
+        if (v === null || v === undefined) v = '—';
+        if (c[0] === 'route') {
+          v = v === 'primer3' ? 'P3' : (v === 'enumerate' ? '枚举' : v);
+          return '<td style="white-space:nowrap">' + esc(String(v)) + '</td>';
+        }
+        if (c[0] === 'probe') {
+          v = v ? (v.marked ? '✓' : ('跳过')) : '—';
+          return '<td>' + v + '</td>';
+        }
+        return '<td>' + esc(String(v)) + '</td>';
+      }).join('') + '</tr>';
   }
+  html += '</tbody></table>' +
+    '<p class="hint" style="margin-top:4px">点击行展开评分分解与订购序列</p>';
+  renderCrisprTracks(rep);
+  const base = '/tool_runs/' + encodeURIComponent(run) + '/crispr/';
+  html += '<p class="hint" style="margin-top:8px">产物：<a href="' + base +
+    'ranked_sets.tsv" target="_blank">组合表 TSV</a> · <a href="' + base +
+    'crrna_candidates.tsv" target="_blank">候选 crRNA 表</a> · <a href="' +
+    base + 'order_sheet.xlsx" target="_blank">订购表 XLSX</a> · <a href="' +
+    base + 'validation_checklist.md" target="_blank">L1–L5 验证清单</a> · ' +
+    '<a href="' + base + 'report.html" target="_blank">完整报告</a></p>';
+  $('crTable').innerHTML = html;
 }
+function renderCrisprTracks(rep) {
+  const host = $('crTracks');
+  if (!rep || !rep.segments) { host.innerHTML = ''; return; }
+  const CAT_COLORS = {'脱靶': '#d62728', '二聚体': '#ff7f0e', '3′端稳定': '#8c564b',
+    'Tm 平衡': '#e377c2', 'GC 含量': '#17becf', '种子与结构': '#2ca02c',
+    '交叉干扰': '#7f7f7f'};
+  const W = 960, PAD = 8;
+  let html = '<div class="hint" style="margin-bottom:4px">📍 位点轨道：灰色▲▽ = 漏斗存活位点，红色 = 入选组合（条带 = 扩增子区间，悬停查看）</div>';
+  for (const [seg, d] of Object.entries(rep.segments)) {
+    const L = Math.max(1, d.consensus_len || 1);
+    const topSets = (rep.sets || []).filter(s => s.segment === seg).slice(0, 12);
+    const laneH = 14, topH = 46;
+    const H = topH + topSets.length * laneH + 6;
+    const sx = bp => PAD + (bp - 1) / L * (W - 2 * PAD);
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;font-size:10px" xmlns="http://www.w3.org/2000/svg">';
+    // 基线
+    svg += '<text x="' + PAD + '" y="12" fill="#555">' + esc(seg) + ' · ' +
+      d.n_isolates + ' 株 · ' + L + 'bp · 漏斗后 ' + d.n_after_funnel + ' 位点</text>';
+    svg += '<line x1="' + PAD + '" y1="34" x2="' + (W - PAD) + '" y2="34" stroke="#c8d4e0" stroke-width="6" stroke-linecap="round"/>';
+    // 保守性剖面（简单折线，0.8-1 映射到 y 22-33）
+    const prof = d.conservation_profile || [];
+    if (prof.length > 1) {
+      let pts = '';
+      const yOf = v => 34 - Math.min(1, Math.max(0, (v - 0.75) / 0.25)) * 12;
+      for (let i = 0; i < prof.length; i++) {
+        const x = PAD + (i + 0.5) / prof.length * (W - 2 * PAD);
+        pts += (i ? 'L' : 'M') + x.toFixed(1) + ',' + yOf(prof[i]).toFixed(1);
+      }
+      svg += '<path d="' + pts + '" fill="none" stroke="#4a78a8" stroke-width="1"/>';
+    }
+    // 存活位点
+    for (const s of (d.sites || [])) {
+      const x = sx((s.s + s.e) / 2);
+      const isTop = s.top > 0;
+      const fill = s.veto ? 'none' : (isTop ? '#d62728' : '#9aa5b1');
+      const tri = s.strand === '+' ?
+        'M' + x + ',24 L' + (x + 4) + ',31 L' + (x - 4) + ',31 Z' :
+        'M' + x + ',32 L' + (x + 4) + ',25 L' + (x - 4) + ',25 Z';
+      svg += '<path d="' + tri + '" fill="' + fill + '" stroke="' +
+        (s.veto ? '#999' : 'none') + '" stroke-width="1"><title>#' +
+        (s.top || '—') + ' ' + esc(s.spacer) + ' ' + esc(s.pam) +
+        (s.veto ? '（已否决）' : '') + '</title></path>';
+    }
+    // top 组合扩增子泳道
+    topSets.forEach((s, i) => {
+      const m = String(s.site).split('-');
+      const a0 = sx(+m[0]), a1 = sx(+m[1] + 1);
+      const y = topH + i * laneH;
+      svg += '<rect x="' + a0.toFixed(1) + '" y="' + y + '" width="' +
+        Math.max(2, a1 - a0).toFixed(1) + '" height="9" rx="2" fill="#4a78a8" opacity="0.5"><title>#' +
+        s.rank + ' ' + esc(s.spacer) + ' · 产物 ' + s.product + 'bp · 评分 ' +
+        s.score + '</title></rect>';
+      svg += '<text x="' + (W - PAD) + '" y="' + (y + 8) + '" text-anchor="end" fill="#888">#' + s.rank + '</text>';
+    });
+    svg += '</svg>';
+    html += svg;
+  }
+  host.innerHTML = html;
+}
+
+function crToggleDetail(tr, i) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('cr-det')) { next.remove(); return; }
+  document.querySelectorAll('#crTbl tr.cr-det').forEach(r => r.remove());
+  const s = (window.__crRep || {}).sets || [];
+  if (!s[i]) return;
+  const CAT_COLORS = {'脱靶': '#d62728', '二聚体': '#ff7f0e', '3′端稳定': '#8c564b',
+    'Tm 平衡': '#e377c2', 'GC 含量': '#17becf', '种子与结构': '#2ca02c',
+    '交叉干扰': '#7f7f7f'};
+  const cats = s[i].category_scores || {};
+  let bars = Object.entries(cats).map(([k, v]) =>
+    '<div style="display:flex;align-items:center;gap:6px;margin:2px 0">' +
+    '<span style="width:74px;text-align:right;color:#666">' + esc(k) + '</span>' +
+    '<div style="flex:1;background:#f0f2f5;border-radius:4px;height:12px">' +
+    '<div style="width:' + v + '%;height:12px;border-radius:4px;background:' +
+    (CAT_COLORS[k] || '#999') + '"></div></div>' +
+    '<span style="width:36px;color:#666">' + v + '</span></div>').join('');
+  const of = s[i].order_formats || {};
+  const row = document.createElement('tr');
+  row.className = 'cr-det';
+  row.innerHTML = '<td colspan="14" style="background:#fafbfd">' +
+    '<div style="display:flex;gap:18px;flex-wrap:wrap">' +
+    '<div style="flex:1;min-width:300px"><b>评分分解</b>（条形 = 类别效用' +
+    ' 0–100；各类在总分中的权重占比见报告②图）' + bars + '</div>' +
+    '<div style="flex:1;min-width:300px"><b>订购序列</b>' +
+    '<div class="hint" style="margin-top:4px">crRNA spacer：' + esc(of.crRNA_spacer_DNA || '') + '</div>' +
+    '<div class="hint">DR+spacer：' + esc(of.crRNA_DR_spacer_DNA || '') + '</div>' +
+    '<div class="hint">T7 模板：' + esc(of.T7_template_DNA || '') + '</div>' +
+    '<div class="hint">' + esc(of.T7_note || '') + '</div>' +
+    (s[i].f_t7 ?
+      '<div class="hint" style="color:#1565c0">🧬 Cas13a 前向引物+T7：' +
+      esc(s[i].f_t7) + '（DNA 扩增后体外转录出靶标 RNA）</div>' : '') +
+    (s[i].probe && s[i].probe.marked ?
+      '<div class="hint" style="margin-top:4px;color:#824">🔍 探针：' +
+      esc(s[i].probe.marked) + '（Tm ' + (s[i].probe.tm || '—') + '，' +
+      esc(s[i].probe.note || '') + '）</div>' : '') +
+    (s[i].imm ?
+      '<div class="hint" style="margin-top:4px;color:#a0522d">⚠ IMM：' +
+      esc(s[i].imm.text) + '</div>' : '') + '</div></div></td>';
+  tr.after(row);
+}
+
 
 async function loadDsrnaPanel() {
   try {
@@ -4347,7 +4487,7 @@ async function loadDsrnaPanel() {
 }
 
 async function runDsrna(btn) {
-  if (!val('ds_input')) { alert('请选择目标 FASTA'); return; }
+  if (!val('ds_input')) { alert(t('ui.tk.needFasta')); return; }
   const panel = Array.from(document.querySelectorAll('.ds-panel-cb:checked'))
     .map(cb => cb.value);
   const dsMm = parseInt(val('ds_mm'), 10);
@@ -4433,8 +4573,12 @@ async function loadDsrnaResult(run) {
     const bw = r.best_window || {};
     const hits = (a.target_stats || [])
       .map(t => esc(t.target) + ':' + esc(t.kmer_matches)).join('，');
+    /* 最优窗坐标：优先显示臂（sense）帧 sense_nt_*（2026-10-03 起引擎同时给出；
+       旧运行只有 guide 帧 nt_*，回退显示）。引物按臂帧切片，故表格用臂帧。 */
+    const ws = (bw.sense_nt_start != null ? bw.sense_nt_start : bw.nt_start);
+    const we = (bw.sense_nt_end != null ? bw.sense_nt_end : bw.nt_end);
     return '<tr><td><b>' + esc(a.name) + '</b></td><td>' + esc(a.length) +
-      '</td><td>' + esc(a.gc) + '</td><td>' + esc(bw.nt_start) + '–' + esc(bw.nt_end) +
+      '</td><td>' + esc(a.gc) + '</td><td>' + esc(ws) + '–' + esc(we) +
       '</td><td>' + (bw.mean_combined != null ? esc(bw.mean_combined.toFixed(1)) : '-') +
       '</td><td>' + esc(r.median_score) + '</td><td class="hint">' + (hits || '-') +
       '</td></tr>' +
@@ -4442,7 +4586,7 @@ async function loadDsrnaResult(run) {
       esc(a.seq) + '</td></tr>';
   }).join('');
   html += '<table class="tbl"><thead><tr><th>臂</th><th>长度</th><th>GC%</th>' +
-    '<th>最优窗(nt)</th><th>combined</th><th>效价中位</th><th>目标 21-mer 命中</th>' +
+    '<th>最优窗(nt·臂坐标)</th><th>combined</th><th>效价中位</th><th>目标 21-mer 命中</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>';
   const otRows = Object.entries(otSum).map(([arm, d]) => {
     const top = Object.entries(d.per_species || {})
@@ -4496,12 +4640,72 @@ async function _submitTool(tool, params, threads, btn, busyText, onDone) {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool, threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     watchTaskBtn(d.task, btn, busyText, () => onDone(d.run));
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
+}
+
+/* ---- ⏱ 时间信号与定年（t-rtt 卡）---- */
+async function runRtt(btn) {
+  if (!val('rtt_input')) { alert(t('ui.tk.needAlnFasta')); return; }
+  if (!val('rtt_meta')) { alert(t('ui.tk.needMetaCsv')); return; }
+  const params = {
+    input: val('rtt_input'), meta: val('rtt_meta'),
+    date_trait: val('rtt_trait') || 'year',
+    method: val('rtt_method') || 'nj',
+  };
+  return _submitTool('rtt', params, null, btn,
+    '⏳ 建树与根到尾回归中…', loadRttResult);
+}
+
+async function loadRttResult(run) {
+  if (!run) return;
+  let d;
+  try {
+    d = await (await fetch('/tool_runs/' + encodeURIComponent(run)
+      + '/rtt/summary.json')).json();
+  } catch (e) { return; }
+  $('rttResult').style.display = '';
+  $('rttTitle').textContent = '时间信号结果 · ' + run;
+  const strong = d.strong_signal;
+  $('rttSummary').innerHTML =
+    '<span class="hint">样本 ' + d.n + ' · 建树 ' + esc(d.method) +
+    ' · R² = <b>' + d.r2 + '</b>' +
+    (strong ? '（时间信号较强）' : '（时间信号弱：建议检查采样年份跨度）') +
+    ' · 斜率 = ' + d.slope + ' 替换/位点/年' + '</span>';
+  const pts = d.points || [];
+  if (typeof Plotly !== 'undefined' && pts.length) {
+    Plotly.newPlot('rttPlot', [{
+      x: pts.map(p => p.year), y: pts.map(p => p.dist),
+      mode: 'markers', type: 'scatter',
+      marker: { size: 8, color: '#2e86c1' },
+      text: pts.map(p => p.name),
+      hovertemplate: '%{text}<br>%{x}年 · 距根 %{y}<extra></extra>',
+    }, {
+      x: [pts[0].year, pts[pts.length - 1].year],
+      y: [d.slope * pts[0].year + d.intercept,
+          d.slope * pts[pts.length - 1].year + d.intercept],
+      mode: 'lines', type: 'scatter',
+      line: { color: '#e74c3c', dash: 'dash' },
+      hoverinfo: 'skip',
+    }], {
+      margin: { l: 60, r: 20, t: 10, b: 40 },
+      xaxis: { title: '采样年份' },
+      yaxis: { title: '距根遗传距离' },
+      showlegend: false,
+    }, { displayModeBar: false, responsive: true });
+  }
+}
+
+/* ---- ⬇ Plotly 图导出（png/pdf；plotly.js ≥2.35 原生支持 pdf）---- */
+function pdExportPlot(divId, name, fmt) {
+  const gd = document.getElementById(divId);
+  if (!gd || typeof Plotly === 'undefined' || !gd.data) { alert(t('ui.tk.noChart')); return; }
+  Plotly.downloadImage(gd, { format: fmt || 'png', filename: name || divId,
+                             width: 1200, height: 800, scale: 2 });
 }
 
 /* 预筛开关联动：关掉时把参考 ID / 长度比置灰，避免「填了却不生效」的错觉 */
@@ -4514,7 +4718,7 @@ function rdpQcToggle() {
 }
 
 async function runRdp(btn) {
-  if (!val('rdp_input')) { alert('请选择比对好的 FASTA'); return; }
+  if (!val('rdp_input')) { alert(t('ui.tk.needAlnFasta')); return; }
   const params = { input: val('rdp_input') };
   const qcBox = $('rdp_qc');
   if (qcBox && qcBox.checked) {
@@ -4530,9 +4734,9 @@ async function runRdp(btn) {
 
 async function rdpMaskExport() {
   const run = ($('rdpMaskBtn') || {}).dataset && $('rdpMaskBtn').dataset.run;
-  if (!run) { alert('请先完成一次重组分析'); return; }
+  if (!run) { alert(t('ui.tk.needRecombRun')); return; }
   const r = await fetch('/api/tool/rdp_masked?run=' + encodeURIComponent(run));
-  if (!r.ok) { alert((await r.json()).error || '掩蔽导出失败'); return; }
+  if (!r.ok) { alert((await r.json()).error || t('ui.tk.maskExportFail')); return; }
   const blob = await r.blob();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -4700,14 +4904,14 @@ async function _pdFetchSummary(tool, run) {
 async function rdpToRtt() {
   const d = await _pdFetchSummary('rdp', window._rdpLastRun);
   const aln = d && (d.input || '');
-  if (!aln) { alert('RDP 运行里没有可接力的比对产物'); return; }
+  if (!aln) { alert(t('ui.tk.rdpNoAln')); return; }
   if ($('rtt_input')) $('rtt_input').value = aln;
   showModule('t-rtt');
 }
 async function rdpToGeo() {
   const d = await _pdFetchSummary('rdp', window._rdpLastRun);
   const aln = d && (d.input || '');
-  if (!aln) { alert('RDP 运行里没有可接力的比对产物'); return; }
+  if (!aln) { alert(t('ui.tk.rdpNoAln')); return; }
   if ($('pg_input')) $('pg_input').value = aln;
   showModule('t-phylogeo');
 }
@@ -4940,6 +5144,69 @@ function pgBandsHtml(d) {
         + ' 条走廊在树上出现、但所有复本里都没出现（支持率 0）'))
       + '</div>';
   }
+  return h;
+}
+
+/* BEAST 产物导入面板（轨道 B 回读）。d.beast 为 null = 本次没导入 → 不渲染。
+   三种状态都要说清，不静默：
+     · error   → 导入失败，原文透出（主分析不受影响）；
+     · log     → 后验样本数 / burn-in 丢弃 / ESS 诊断；
+     · trees   → 模式（sample 后验样本 / mcc 单树）/ 用了多少棵 / 走廊数；
+     · state_check 有元数据但零交集 → 明说弧线分带不采用 BEAST 驱动。 */
+function pgBeastHtml(d) {
+  const b = d.beast;
+  if (!b) return '';
+  let h = '<div><b>' + t('tk.pgBeastTitle', 'BEAST 后验导入（轨道 B）') + '</b>';
+  if (b.error) {
+    return h + '　<span class="hint" style="color:#a33">'
+      + t('tk.pgBeastFail', '导入失败（主分析不受影响）') + '：'
+      + esc(b.error) + '</span></div>';
+  }
+  const lg = b.log || null, tr = b.trees || null;
+  const head = [];
+  if (b.log_file) head.push(t('tk.pgBeastLog', '日志') + ' ' + esc(b.log_file));
+  if (b.trees_file) head.push(t('tk.pgBeastTrees', '树') + ' ' + esc(b.trees_file));
+  h += (head.length ? '　<span class="hint">' + head.join(' · ') + '</span>' : '')
+    + '</div>';
+  if (lg) {
+    h += '<div class="hint">' + t('tk.pgBeastLogStat', '后验样本') + ' '
+      + (lg.n_samples || 0) + '/' + (lg.n_total || 0)
+      + '（burn-in 丢 ' + (lg.n_skipped || 0)
+      + '，列 ' + (lg.n_columns || 0) + '）'
+      + (lg.ess_min != null
+         ? '　·　ESS min ' + esc(String(lg.ess_min))
+           + (lg.n_low_ess ? '（' + lg.n_low_ess + ' 列偏低）' : '')
+         : '')
+      + '</div>';
+  }
+  if (tr) {
+    h += '<div class="hint">' + t('tk.pgBeastTreeStat', '树') + '：'
+      + (tr.mode === 'sample' ? t('tk.pgBeastModeSample', '后验样本')
+                              : t('tk.pgBeastModeMcc', 'MCC 单树'))
+      + '　用 ' + (tr.n_trees_used || 0) + '/' + (tr.n_trees || 0) + ' 棵'
+      + '　走廊 ' + ((tr.corridors || []).length) + ' 条'
+      + '</div>';
+  }
+  const sc = b.state_check || null;
+  if (sc && (sc.meta_states || []).length && !sc.n_matched) {
+    h += '<div class="hint" style="color:#a33">⚠ '
+      + t('tk.pgBeastStateMismatch',
+          'BEAST 状态名与元数据区划没有交集 —— 弧线分带不采用 BEAST 驱动')
+      + '</div>';
+  }
+  h += '<div class="hint">' + t('tk.pgBeastDriver', '弧线分带口径') + '：'
+    + (b.driver ? esc(b.driver_label || b.driver)
+       : t('tk.pgBeastNoDriver', '未采用 BEAST 分带（退回 RSPP / 计数口径）'))
+    + '　·　' + t('tk.pgBeastCorr', '走廊') + ' ' + (b.n_corr || 0) + ' 条'
+    + '</div>';
+  if ((b.artifacts || []).length) {
+    h += '<div class="hint">' + t('tk.pgBeastArtifacts', '全量产物') + '：'
+      + b.artifacts.map(a => '<span class="mono">phylogeo/' + esc(a) + '</span>')
+          .join('、') + '</div>';
+  }
+  (b.warnings || []).forEach(w => {
+    h += '<div class="hint" style="color:#8a6d1f">⚠ ' + esc(w) + '</div>';
+  });
   return h;
 }
 
@@ -5302,7 +5569,7 @@ async function pgGifExport(btn, force) {
 }
 
 async function runPhylogeo(btn) {
-  if (!val('pg_input')) { alert('请选择比对好的 FASTA'); return; }
+  if (!val('pg_input')) { alert(t('ui.tk.needAlnFasta')); return; }
   const params = {
     input: val('pg_input'),
     meta: val('pg_meta') || undefined,
@@ -5326,10 +5593,67 @@ async function runPhylogeo(btn) {
     params.date_trait = val('pg_date_trait') || 'year';
     if (val('pg_dated_tree')) params.dated_tree = val('pg_dated_tree');
   }
+  /* BEAST 产物（轨道 B 回读）：给了才带参数 —— 没给就是「不做 BEAST 面板」，
+     别把 burnin/min_prob 这类只对导入有意义的参数塞进普通运行。 */
+  const useBeast = !!(val('pg_beast_log') || val('pg_beast_trees'));
+  if (useBeast) {
+    if (val('pg_beast_log')) params.beast_log = val('pg_beast_log');
+    if (val('pg_beast_trees')) params.beast_trees = val('pg_beast_trees');
+    params.beast_burnin =
+      String(parseFloat(($('pg_beast_burnin') || {}).value || '0.1') || 0.1);
+    params.beast_min_prob =
+      String(parseFloat(($('pg_beast_min_prob') || {}).value || '0') || 0);
+    const mt = parseInt(($('pg_beast_max_trees') || {}).value || '2000', 10);
+    params.beast_max_trees = String(isFinite(mt) ? mt : 2000);
+  }
   return _submitTool('phylogeo', params, +val('pg_threads') || null, btn,
-    (useRrt || useRssp || useMotp)
-      ? '⏳ 建树 + 迁移重构 + 统计检验中…' : '⏳ 建树与迁移重构中…',
+    useBeast ? '⏳ 建树 + 迁移重构 + BEAST 产物导入中…'
+      : ((useRrt || useRssp || useMotp)
+         ? '⏳ 建树 + 迁移重构 + 统计检验中…' : '⏳ 建树与迁移重构中…'),
     loadPhylogeoResult);
+}
+
+/* BEAST 作业包导出（轨道 B 上半程）：本地只打包，不跑 MCMC。
+   输入复用本卡的 FASTA / 元数据；产物落 tool_runs/<run>/beastexport/。 */
+async function runBeastExport(btn) {
+  if (!val('pg_input')) { alert(t('ui.tk.needAlnFasta')); return; }
+  const params = {
+    input: val('pg_input'),
+    meta: val('pg_meta') || undefined,
+    trait: val('pg_trait') || 'region',
+    date_trait: val('pg_date_trait') || 'year',
+    virus_tag: val('pg_export_tag') || undefined,
+  };
+  return _submitTool('beastexport', params, null, btn,
+    '⏳ 打包 BEAST 作业包中…', loadBeastExportResult);
+}
+
+async function loadBeastExportResult(run) {
+  const el = $('pgExport');
+  if (!run || !el) return;
+  let d;
+  try {
+    const r = await fetch('/tool_runs/' + encodeURIComponent(run)
+      + '/beastexport/summary.json');
+    if (!r.ok) return;
+    d = await r.json();
+  } catch (e) { return; }
+  const cmds = d.commands || {}, files = d.files || {};
+  el.innerHTML =
+    '<div><b>' + t('tk.pgExportDone', 'BEAST 作业包已导出') + '</b>　'
+    + '<span class="hint mono">tool_runs/' + esc(run) + '/beastexport/</span></div>'
+    + '<div class="hint">' + t('tk.pgExportFiles', '产物') + '：'
+    + ['aln', 'metadata', 'readme'].filter(k => files[k])
+        .map(k => '<span class="mono">' + esc(k) + '</span>').join('、')
+    + '</div>'
+    + '<div class="hint">'
+    + t('tk.pgExportServer', '服务器命令（也写在 README.txt 里）') + '：<br>'
+    + '<span class="mono">' + esc(cmds.run || '') + '</span><br>'
+    + '<span class="mono">' + esc(cmds.status || '') + '</span><br>'
+    + '<span class="mono">' + esc(cmds.merge || '') + '</span></div>'
+    + '<div class="hint">' + t('tk.pgExportBring', '跑完回传') + '：'
+    + (d.bring_back || []).map(x => '<span class="mono">' + esc(x) + '</span>')
+        .join('、') + '</div>';
 }
 
 async function loadPhylogeoResult(run) {
@@ -5363,6 +5687,7 @@ async function loadPhylogeoResult(run) {
     '</tbody></table>') : '';
   $('pgTransClasses').innerHTML = pgTcHtml(d, run);
   $('pgBands').innerHTML = pgBandsHtml(d);
+  $('pgBeast').innerHTML = pgBeastHtml(d);
   $('pgGif').innerHTML = pgGifHtml(d, run);
   /* 静态弧线地图放在 GIF 之前：先看结论（哪些方向、多强），再看时间演化。
      它只读 d.coords / d.matrix / d.corridor_classes / d.rssp，缺哪一项就
@@ -5420,7 +5745,7 @@ function pdPrepToA0() {
   const a = _pdPrepAbs || {};
   const seq = a.sub_seq || a.qc_clean || a.seq;
   const meta = a.sub_meta || a.meta;
-  if (!seq) { alert('还没有可用的数据集，先跑一次导入'); return; }
+  if (!seq) { alert(t('ui.tk.noDataset')); return; }
   if ($('pd_input')) $('pd_input').value = seq;
   if ($('pdyn_meta')) $('pdyn_meta').value = meta || '';
   if (a.coords && $('pd_coords')) $('pd_coords').value = a.coords;
@@ -6183,7 +6508,7 @@ async function runPhylodynOneClick(btn) {
 }
 
 async function runPhylodyn(btn) {
-  if (!val('pd_input')) { alert('请选择比对 FASTA'); return; }
+  if (!val('pd_input')) { alert(t('ui.tk.needAlnFastaSimple')); return; }
   const mode = ($('pd_mode') || {}).value || 'pipeline';
   const on = id => (($(id) || {}).checked ? 'on' : 'off');
   const params = {
@@ -6222,8 +6547,7 @@ async function runPhylodyn(btn) {
     params.stage = ($('pd_stage') || {}).value || 'phylogeo';
     params.from_run = val('pd_from_run') || undefined;
     if (params.from_run && (params.stage === 'prep' || params.stage === 'clock')) {
-      alert('续跑时 prep / clock 由上一轮提供，本次阶段请选 A2 及之后'
-        + '（或把「续跑上一轮」留空）');
+      alert(t('ui.tk.resumeNote'));
       return;
     }
   }
@@ -6231,14 +6555,13 @@ async function runPhylodyn(btn) {
   // 别让用户白等一轮；顺手也挡住 "6e-5" 这类写错格式的输入。
   const _cr = String(params.clock_rate || '').trim();
   if (_cr && Number(params.relax_sigma) > 0) {
-    alert('「固定分子钟速率」与「松弛钟 σ > 0」互斥：前者假定全树单一速率，'
-      + '后者假定速率逐枝变化。请二选一。');
+    alert(t('ui.tk.clockMutex'));
     return;
   }
   if (_cr) {
     const _n = Number(_cr);
     if (!isFinite(_n) || _n <= 0) {
-      alert('固定速率不是合法正数：' + _cr + '（例：6e-5）');
+      alert(t('ui.tk.rateInvalid').replace('{v}', _cr));
       return;
     }
   }
@@ -6341,7 +6664,7 @@ async function runKvchain(btn) {
   const samples = val('kvc_samples');
   const reads = [val('kvc_reads_r1'), val('kvc_reads_r2')].filter(Boolean).join(',');
   if (!samples && !reads) {
-    alert('请先选样品（📋 按钮可多选），或填入测序数据 R1（双端再填 R2）路径'); return;
+    alert(t('ui.tk.needSampleOrR1')); return;
   }
   const params = {
     samples: samples || undefined,
@@ -6368,12 +6691,12 @@ async function runKvchain(btn) {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'kvchain', threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     watchTaskBtn(d.task, btn, '⏳ 全流程运行中…', () => loadChainResult('kvchain', d.run));
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 /* 一键全流程卡 ← 「已知病毒识别与定量」卡：把当前表单值整份搬过来。
@@ -6413,9 +6736,9 @@ async function loadChainResult(chain, run) {
     let url = '/api/tool/chain_result?chain=' + encodeURIComponent(chain);
     if (run) url += '&run=' + encodeURIComponent(run);
     const r = await fetch(url);
-    if (!r.ok) { alert('读取失败'); return; }
+    if (!r.ok) { alert(t('ui.common.readFail')); return; }
     const d = await r.json();
-    if (!d.run) { alert('暂无该一键流程的运行记录'); return; }
+    if (!d.run) { alert(t('ui.tk.noOnestepRun')); return; }
     const isVc = chain === 'virchain';
     const box = isVc ? 'vcResult' : 'kvChainResult';
     const btn  = isVc ? 'vcTitle'  : 'kvcTitle';
@@ -6426,7 +6749,7 @@ async function loadChainResult(chain, run) {
     renderChainSteps($(steps), d.meta, d.run);
     renderChainEntries($(ent), d.entries, d.run, d.out_dir);
     if (!isVc) kvchainLoadInline(d);
-  } catch (e) { alert('读取失败: ' + e); }
+  } catch (e) { alert(t('ui.common.readFail') + ': ' + e); }
 }
 
 function renderChainSteps(el, meta, run) {
@@ -6560,7 +6883,7 @@ loadKvLibOptions();
 
 async function runKvsuite(btn) {  const samples = val('kv_samples');
   const reads = [val('kv_reads_r1'), val('kv_reads_r2')].filter(Boolean).join(',');
-  if (!samples && !reads) { alert('请选择样品，或填入测序数据 R1（双端再填 R2）'); return; }
+  if (!samples && !reads) { alert(t('ui.tk.needSampleOrR1Simple')); return; }
   const params = {
     samples: samples || undefined,
     reads: reads || undefined,
@@ -6581,12 +6904,12 @@ async function runKvsuite(btn) {  const samples = val('kv_samples');
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'kvsuite', threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     watchTaskBtn(d.task, btn, '⏳ 识别定量中…', () => loadKvsuiteResult(d.run));
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 
 async function loadKvsuiteResult(run) {
@@ -6601,16 +6924,47 @@ async function loadKvsuiteResult(run) {
   } catch (e) { /* 忽略 */ }
 }
 
+/* 结果表（带点击表头排序）：原始值存每个 td 的 data-v（排序用，
+   页面显示仍是 toLocaleString 后的文本）；数字列按数值排、其余按
+   自然字符串排，空值恒排最后；再点同一列切换升/降序。 */
 function kvTable(rows, cols, empty) {
   if (!rows || !rows.length) return `<p class="hint">${empty || t('c.noRecord','无记录')}</p>`;
-  const th = cols.map(c => `<th>${esc(c[0])}</th>`).join('');
+  const th = cols.map(c =>
+    `<th class="sortable" title="点击排序" onclick="kvSortTable(this)">${esc(c[0])}<span class="sort-ind"></span></th>`
+  ).join('');
   const tr = rows.map(r => '<tr>' + cols.map(c => {
     let v = r[c[1]];
     if (v === undefined || v === null || v === '') v = '';
     else if (typeof v === 'number') v = v.toLocaleString();
-    return `<td title="${esc(String(v))}">${esc(String(v))}</td>`;
+    return `<td data-v="${esc(v)}" title="${esc(v)}">${esc(v)}</td>`;
   }).join('') + '</tr>').join('');
   return `<table class="tbl"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+}
+function kvSortTable(th) {
+  const table = th.closest('table');
+  const idx = Array.from(th.parentNode.children).indexOf(th);
+  const asc = th.dataset.sort !== 'asc';
+  table.querySelectorAll('th.sortable').forEach(h => {
+    if (h !== th) { h.dataset.sort = ''; const s = h.querySelector('.sort-ind'); if (s) s.textContent = ''; }
+  });
+  th.dataset.sort = asc ? 'asc' : 'desc';
+  const ind = th.querySelector('.sort-ind');
+  if (ind) ind.textContent = asc ? ' ▲' : ' ▼';
+  const tbody = table.tBodies[0];
+  const isNum = Array.from(tbody.rows).every(tr => {
+    const v = tr.cells[idx] ? tr.cells[idx].dataset.v : '';
+    return v === '' || !isNaN(Number(v));
+  });
+  const rowsArr = Array.from(tbody.rows).sort((a, b) => {
+    const va = a.cells[idx] ? a.cells[idx].dataset.v : '';
+    const vb = b.cells[idx] ? b.cells[idx].dataset.v : '';
+    if (!va || !vb) return va === vb ? 0 : (va ? -1 : 1);   // 空值恒最后
+    let cmp = isNum
+      ? (parseFloat(va) || 0) - (parseFloat(vb) || 0)
+      : va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+    return asc ? cmp : -cmp;
+  });
+  rowsArr.forEach(r => tbody.appendChild(r));
 }
 
 /* ids：结果容器映射。默认写 t-kvsuite 卡的 kv* 容器（识别/定量 + 可视化图表）；
@@ -6673,7 +7027,7 @@ function renderKvsuite(d, ids) {
     ['reads', 'Uniq_Reads'], ['EM reads', 'EM_Reads']];
   if (g('filtered')) g('filtered').innerHTML = kvTable(d.filtered, fCols, '无通过过滤的记录');
 
-  if (g('abundance') || g('heatmap')) renderKvCharts(d, ids);
+  if (g('charts')) renderKvCharts(d, ids);
 
   if (!hasFull) return;   // t-kvsuite 卡到此为止（识别/定量 + 图表）
 
@@ -6732,61 +7086,43 @@ function renderKvsuite(d, ids) {
   }
 }
 
-/* 识别/定量结果可视化：① 每样品病毒丰度柱状图（EM reads 堆叠柱）
-   ② 样品 × 物种 检出热图（覆盖率 / 平均深度切换）。数据全部来自
-   identify/all_viruses.summary.tsv 回传行，前端直接用页面已有 Plotly 画。 */
-let KV_CHART_METRIC = 'Coverage(%)';
-let KV_CHART_CTX = null;      // {d, ids}：热图指标切换后整体重画
+/* 识别/定量结果可视化 —— 服务端按参考管线（MMPV-RNA virome_analysis_pipeline
+   batch_plot_virus_depth.py 的 freq / coabundance 模块）出图，这里只做内联
+   展示（点图放大 / PDF 下载）。绘图对象 = 通过过滤（确认存在）的结果，
+   由 kvsuite_result 接口按需生成并缓存（后端 kv_fig.py）。 */
+const KV_FIG_GROUPS = [
+  ['① 病毒丰度分布（MeanDepth / RPM / FPKM / TPM 箱线+散点，log10 轴，按中位数排序，标签含检出率）',
+   [['freq_multi_metrics', 'Comprehensive Multi-metric Virus Abundance 综合面板']]],
+  ['② 共丰度（log10(TPM+1) 热图 · 相对丰度堆叠柱 · 共现率 · Spearman 相关，需 ≥2 样品）',
+   [['coabundance_abundance_heatmap', 'log10(TPM+1) 丰度热图'],
+    ['coabundance_relabund_stacked', '相对丰度堆叠柱'],
+    ['coabundance_cooccurrence_heatmap', '病毒共现率'],
+    ['coabundance_spearman_heatmap', 'Spearman 相关']]],
+];
+
 function renderKvCharts(d, ids) {
-  ids = ids || KV_IDS;
-  KV_CHART_CTX = { d, ids };
-  const rows = d.identify || [];
-  const abBox = $(ids.abundance), hmBox = $(ids.heatmap);
-  if (!rows.length) {
-    if (abBox) abBox.innerHTML = '<p class="hint">无鉴定结果，无可视化图表</p>';
-    if (hmBox) hmBox.innerHTML = '';
-    return;
-  }
-  const samples = [...new Set(rows.map(r => r.Sample || '—'))];
-  const species = [...new Set(rows.map(r => r.Species || r.Accession || '未知'))];
-  const cell = (sm, sp) =>
-    rows.find(r => (r.Sample || '—') === sm && (r.Species || r.Accession || '未知') === sp);
-  // ① 丰度柱状图：x = 样品，每病毒一段（堆叠），y = EM_Reads 定量值
-  if (abBox) {
-    const traces = species.map(sp => ({
-      name: sp, type: 'bar',
-      x: samples,
-      y: samples.map(sm => { const h = cell(sm, sp); return h ? (+h.EM_Reads || 0) : 0; }),
-    }));
-    Plotly.newPlot(abBox, traces, {
-      barmode: 'stack', margin: { t: 30, b: 120, l: 60, r: 20 },
-      xaxis: { tickangle: -30 }, yaxis: { title: 'EM reads（定量）' },
-      legend: { orientation: 'h', y: -0.45 },
-    }, { responsive: true, displaylogo: false });
-  }
-  // ② 检出热图：样品 × 物种，值 = 覆盖率% 或 平均深度（可切换）
-  if (hmBox) {
-    const metric = KV_CHART_METRIC;
-    const z = species.map(sp => samples.map(sm => {
-      const h = cell(sm, sp);
-      return h ? (+h[metric] || 0) : 0;
-    }));
-    Plotly.react(hmBox, [{
-      type: 'heatmap', z, x: samples, y: species,
-      colorscale: 'YlGnBu',
-      colorbar: { title: metric === 'Coverage(%)' ? '覆盖%' : '深度' },
-      hovertemplate: '样品 %{x}<br>物种 %{y}<br>' +
-        (metric === 'Coverage(%)' ? '覆盖 %%{z}<extra></extra>' : '深度 %{z}<extra></extra>'),
-    }], {
-      margin: { t: 60, b: 40, l: 220, r: 20 },
-      xaxis: { tickangle: -30, side: 'top' },
-      yaxis: { automargin: true },
-    }, { responsive: true, displaylogo: false });
-  }
-}
-function kvChartMetric(metric) {
-  KV_CHART_METRIC = metric;
-  if (KV_CHART_CTX) renderKvCharts(KV_CHART_CTX.d, KV_CHART_CTX.ids);
+  const box = $(ids.charts);
+  if (!box) return;
+  const figs = d.figures || [];
+  const url = f => `/tool_runs/${encodeURIComponent(d.run)}/kvsuite/figures/${encodeURIComponent(f)}`;
+  const parts = [];
+  KV_FIG_GROUPS.forEach(([title, items]) => {
+    const shown = items.filter(([stem]) => figs.includes(stem + '.png'));
+    if (!shown.length) return;
+    parts.push(`<div class="hint" style="margin:14px 0 6px">${title}</div>`);
+    shown.forEach(([stem, label]) => {
+      parts.push(`<div style="margin-bottom:14px">
+        <div class="mono" style="font-size:11px;margin-bottom:4px">${esc(label)}</div>
+        <img src="${url(stem + '.png')}" alt="${esc(label)}"
+             style="width:100%;max-width:1400px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:zoom-in"
+             onclick="window.open('${url(stem + '.png')}','_blank')">
+        <div style="margin-top:3px"><a class="mono" style="font-size:10.5px" href="${url(stem + '.pdf')}" target="_blank">${t('tl.pdf', 'PDF')}</a></div>
+      </div>`);
+    });
+  });
+  box.innerHTML = parts.join('')
+    || '<p class="hint">无可视化图表：绘图对象为「通过过滤（确认存在）」的结果，'
+       + '且共丰度图需 ≥2 样品、≥2 个多样品病毒。重新运行后自动生成。</p>';
 }
 
 /* 按病毒分组渲染小节表：titleOf(row) 返回分组标题（病毒物种+accession），
@@ -7075,7 +7411,7 @@ async function runConsensus(btn) {
   const kvrun = val('cs_kvrun');
   const kvrefs = csKvSelected();
   if (!run && !fa && !kvrefs.length) {
-    alert('请选择 contig 分类运行、kvsuite 运行参考，或输入参考 FASTA');
+    alert(t('ui.tk.needContigRunRef'));
     return;
   }
   const params = {
@@ -7097,12 +7433,12 @@ async function runConsensus(btn) {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'consensus', threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     watchTaskBtn(d.task, btn, '⏳ 回贴分析中…', () => loadConsensusResult(d.run));
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 async function loadConsensusResult(run) {
   if (!run) return;
@@ -7215,7 +7551,7 @@ async function loadVerifyRuns() {
 async function runVerify(btn) {
   const run = val('vf_run');
   const fa = val('vf_fa');
-  if (!run && !fa) { alert('请选择一次 contig 分类运行，或输入 FASTA'); return; }
+  if (!run && !fa) { alert(t('ui.tk.needContigRun')); return; }
   const params = {
     run: run || undefined,
     fasta: fa || undefined,
@@ -7228,12 +7564,12 @@ async function runVerify(btn) {
     const r = await fetch('/api/tool/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool: 'verify', threads, params })});
-    if (!r.ok) { alert('启动失败: ' + ((await r.json()).error || '')); return; }
+    if (!r.ok) { alert(t('ui.common.startFail') + ': ' + ((await r.json()).error || '')); return; }
     const d = await r.json();
     taskLogOpen.add(d.task);
     startPolling();
     watchTaskBtn(d.task, btn, '⏳ 验证中…', () => loadVerifyResult(d.run));
-  } catch (e) { alert('无法连接平台服务: ' + e); }
+  } catch (e) { alert(t('ui.common.connFail') + ': ' + e); }
 }
 async function loadVerifyResult(run) {
   if (!run) return;
@@ -7326,8 +7662,8 @@ function vfRenderTable() {
     const m = metaOf(r.call);
     const blastx = r.blastx_target
       ? `${esc(r.blastx_target)} <span class="hint">(${r.blastx_pident}% · cov ${r.blastx_scov || '—'}% · e=${esc(r.blastx_evalue)} · ${r.blastx_nhits}hit)</span>` : '—';
-    const cdd = r.cdd_domains
-      ? `${esc(r.cdd_domains)} <span class="hint">(tier ${esc(r.cdd_tier || '?')} · e=${esc(r.cdd_best_evalue)} · ${r.cdd_nhits}hit)</span>${r.cdd_descriptions ? `<br><span class="hint" style="font-size:11px">${esc(r.cdd_descriptions)}</span>` : ''}` : '—';
+    const bfvd = r.bfvd_domains
+      ? `${esc(r.bfvd_descriptions || r.bfvd_domains)} <span class="hint">(e=${esc(r.bfvd_best_evalue)} · ${r.bfvd_nhits}hit)</span>` : '—';
     const viroid = r.viroid_target
       ? `${esc(r.viroid_target)} <span class="hint">(${r.viroid_pident}% · cov ${r.viroid_cov}% · e=${esc(r.viroid_evalue)})</span>` : '—';
     const on = VF_STATE.sel.has(r.contig);
@@ -7340,7 +7676,7 @@ function vfRenderTable() {
       <td>${esc(r.host_source || '—')}</td>
       <td style="min-width:220px;font-size:11.5px">${esc(vfLineage(r))}</td>
       <td>${blastx}</td>
-      <td>${cdd}</td>
+      <td>${bfvd}</td>
       <td>${viroid}</td>
     </tr>`;
   }).join('');
@@ -7365,7 +7701,7 @@ function vfRenderTable() {
         ${th('contig', 'Contig')}${th('branch', t('tl.thClade'))}${th('call', t('tl.thVerdict'))}
         ${th('len', t('tl.thLength'), true)}${th('host_source', t('tl.thHost'))}
         ${th('species', t('tl.thLineage'))}
-        ${th('blastx_pident', t('tl.thBlastx'))}${th('cdd_best_evalue', t('tl.thCdd'))}${th('viroid_pident', t('tl.thViroid'))}
+        ${th('blastx_pident', t('tl.thBlastx'))}${th('bfvd_best_evalue', t('tl.thBfvd'))}${th('viroid_pident', t('tl.thViroid'))}
       </tr></thead>
       <tbody>${body}</tbody></table>
     </div>
@@ -7386,7 +7722,7 @@ function vfExportFasta() {
       a.click();
       URL.revokeObjectURL(a.href);
     })
-    .catch(e => alert('导出失败: ' + e.message));
+    .catch(e => alert(t('ui.tk.exportFail') + ': ' + e.message));
 }
 function vfExportCsv() {
   const sel = [...VF_STATE.sel];
@@ -7395,7 +7731,7 @@ function vfExportCsv() {
   const K = ['contig', 'branch', 'call', 'len', 'host_source',
              'realm', 'kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species',
              'blastx_target', 'blastx_pident', 'blastx_scov', 'blastx_evalue',
-             'cdd_domains', 'cdd_tier', 'cdd_best_evalue',
+             'bfvd_domains', 'bfvd_best_evalue',
              'viroid_target', 'viroid_pident', 'viroid_cov'];
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const csv = '\ufeff' + K.join(',') + '\n' +

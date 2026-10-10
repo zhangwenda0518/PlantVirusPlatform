@@ -22,11 +22,12 @@
 
 ## ✨ 平台一览
 
-- **一条流水线跑到底**：14 步级联分析（⓪~⑩），每步输出自动作为下一步输入，断点续跑、强制重跑、可选步骤自动降级一应俱全。
+- **一条流水线跑到底**：⓪~⑩ 共 15 个阶段（默认分析序 13 步；⓪ 质控与子采样为可选），每步输出自动作为下一步输入，断点续跑、强制重跑、可选步骤自动降级一应俱全。
 - **本地优先，离线可用**：所有外部工具（kunpeng / SPAdes / MAFFT / RAxML-NG / DIAMOND / salmon / primer3 …）随平台内置或自动探测；数据库本地建、本地查，下载仅限 NCBI/ENA/NGDC 官方域名白名单。
 - **图形界面 + 命令行双入口**：pywebview 桌面窗口或浏览器网页（中英双语一键切换），同一套引擎支撑 `main.py` 全量 CLI，可脚本化批处理。
 - **进化分析不止于建树**：内置 TreeTime 最大似然分子钟、离散性状地理重构（mugration）、天际线、RTT/DRT 回归、BSP、BEAST 交接与 Markov-jump 解析、系统地理迁移动画（GIF）——植物病毒流行病学一站式完成。
 - **越用越聪明**：每阶段历史耗时自学习，任务卡实时显示全局进度与预计剩余时间；重任务并发闸门、磁盘水位横幅、资源预估日志齐备。
+- **AI 助手（对话驱动智能代理）**：总览页常驻对话坞，对分析结果做解读、答当前任务状态、给下一步建议——AI 只读落盘产物（顾问层），关键数字由代码从结果文件算出注入，不由模型编造；OpenAI 兼容端点通吃 DeepSeek / GLM / 通义 / Kimi / OpenAI，选本地 Ollama 可完全离线；默认只发送统计摘要与表格行，不发送序列本体。并有主动驱动三层：**阶段讲解**（静态知识库，零消耗）→ **结果播报**（关键节点自动解读推送）→ **决策闸门**（关键阶段收尾后 AI 评估并等确认，默认关闭）。AI 能真正**驱动找数据**：对话里说"查某物种的转录组/基因组数据"，AI 直接检索 SRA+GSA（复用公共数据检索引擎，完成后自动播报），再以执行单把选中的 run 下载进平台——能力感知来自平台模块清单，不再把用户推去外部数据库。执行权三级分级放开：**执行单**（AI 起草、人批准，参数 diff 可见）→ **自动重试**（失败后原参数重跑 1 次，默认关）→ **自动调参闭环**（限定键边界内提参自动重跑，需手动开启）；删除类/全局重置类动作永不进入白名单。
 - **研究闭环**：公共数据检索（NCBI SRA + NGDC GSA）→ 批量下载 → 分析 → LOGAN 全量 SRA 溯源 → NCBI GenBank/BioSample 提交准备，全链路不出平台。
 
 ## 🧭 分析工作流
@@ -39,7 +40,7 @@ flowchart LR
     D --> D2["③b/③c 验证<br/>共识与变异"]
     D2 --> E["④ 宿主预测<br/>ICTV 级联"]
     E --> F["⑥ ORF 预测<br/>pyrodigal"]
-    F --> G["⑥b 功能注释<br/>DIAMOND · Pfam · CDD"]
+    F --> G["⑥b 功能注释<br/>DIAMOND · Pfam HMM · BFVD"]
     G --> H["⑦ 进化树/SDT<br/>MAFFT · FastTree/RAxML"]
     H --> I["⑧ 引物设计<br/>primer3"]
     I --> J["⑨ 基因组图<br/>gbdraw / DFV"]
@@ -59,14 +60,14 @@ flowchart LR
 | ⓪b FASTQ→FASTA（可选） | 同上 | seqkit fq2fa | conv_R1/R2.fa.gz（分类提速） |
 | ① 宿主去除 | 同上 | kunpeng（宿主库） | kept_R1/R2、宿主占比 |
 | ②b 已知病毒识别与定量 | [Kvsuite](https://github.com/zhangwenda0518/VirusPlatform/wiki/Kvsuite) | salmon（EM 定量）/ minibwa | 鉴定表、定量表、BAM+深度、病毒 reads |
-| ③ 组装与分类 | [Assembly](https://github.com/zhangwenda0518/VirusPlatform/wiki/Assembly-Verify-Consensus) | SPAdes metaviral/rna + BLAST | contigs、病毒 contig 注释表 |
-| ③b 候选序列验证 | 同上 | 宿主筛选→长度分流→blastx/CDD/类病毒 | 验证通过的候选集 |
+| ③ 组装与分类 | [Assembly](https://github.com/zhangwenda0518/VirusPlatform/wiki/Assembly) | SPAdes metaviral/rna + BLAST | contigs、病毒 contig 注释表 |
+| ③b 候选序列验证 | 同上 | 宿主筛选→长度分流→blastx/BFVD/类病毒 | 验证通过的候选集 |
 | ③c 共识序列与变异 | 同上 | reads 回贴参考 → 逐位置计数 | 共识序列、变异表 |
 | ④ 宿主预测 | [Host-Prediction](https://github.com/zhangwenda0518/VirusPlatform/wiki/Host-Prediction) | kunpeng + ICTV 宿主概率级联 | host_prediction.tsv、桑基/旭日图 |
-| ⑥ ORF 预测 | [ORF](https://github.com/zhangwenda0518/VirusPlatform/wiki/ORF-Annotation) | pyrodigal + pyrodigal-rv | faa/ffn/gff |
-| ⑥b ORF 功能注释 | 同上 | DIAMOND/MMseqs2/blastp × RefSeq 病毒蛋白 + Pfam HMM + CDD | orf_annotation.tsv、GFF3、功能示意图 |
-| ⑦ 进化树与 SDT | [Phylo](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylo-SDT) | MAFFT + trimAl + FastTree/RAxML-NG/NJ；SDT 精确引擎 | tree.nwk、identity 矩阵+热图 |
-| ⑧ 引物设计 | [Primer](https://github.com/zhangwenda0518/VirusPlatform/wiki/Primer-Design) | primer3（保守区/全长）+ 热力学评分 | primers.tsv |
+| ⑥ ORF 预测 | [ORF](https://github.com/zhangwenda0518/VirusPlatform/wiki/ORF) | pyrodigal + pyrodigal-rv | faa/ffn/gff |
+| ⑥b ORF 功能注释 | 同上 | DIAMOND/MMseqs2/blastp × RefSeq 病毒蛋白 + Pfam HMM + BFVD 病毒域 | orf_annotation.tsv、GFF3、功能示意图 |
+| ⑦ 进化树与 SDT | [Phylo](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylo) | MAFFT + trimAl + FastTree/RAxML-NG/NJ；SDT 精确引擎 | tree.nwk、identity 矩阵+热图 |
+| ⑧ 引物设计 | [Primer](https://github.com/zhangwenda0518/VirusPlatform/wiki/Primer) | primer3（保守区/全长）+ 热力学评分 | primers.tsv |
 | ⑨ 基因组图 | [Genome-Plots](https://github.com/zhangwenda0518/VirusPlatform/wiki/Genome-Plots) | gbdraw / dna_features_viewer | 圈图 + 线图 SVG |
 | ⑩ 可视化报告 | [Report](https://github.com/zhangwenda0518/VirusPlatform/wiki/Report) | plotly + pycirclize + matplotlib | report.html |
 
@@ -75,21 +76,21 @@ flowchart LR
 | 模块 | Wiki | 说明 |
 |---|---|---|
 | 进化动力学工具组 | [Phylodynamics](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylodynamics) | TreeTime ML 分子钟/地理重构/天际线/祖先序列、RTT·DRT 回归、BSP、MCC 树解析、时空降采样、元数据治理、比对 QC |
-| BEAST 接口 | [BEAST](https://github.com/zhangwenda0518/VirusPlatform/wiki/BEAST-Interface) | 服务器 BEAST 作业包生成/回读核验、Markov-jump XML 注入与日志解析、MCC 状态解析 |
+| BEAST 接口 | [BEAST](https://github.com/zhangwenda0518/VirusPlatform/wiki/BEAST) | 服务器 BEAST 作业包生成/回读核验、Markov-jump XML 注入与日志解析、MCC 状态解析 |
 | 系统地理 | [Phylogeography](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylogeography) | 时间/地理元数据驱动的迁移重构 + 迁移弧线动画 GIF；RDP5 重组分析；重组前序列预筛 |
-| 公共数据检索与下载 | [Public-Data](https://github.com/zhangwenda0518/VirusPlatform/wiki/Public-Data) | SRA+GSA 双引擎检索、统一元数据 Core14/Full、SCI 级元数据图组、aria2c 批量下载 + 内置 sracha 转 FASTQ、宿主基因组下载 |
+| 公共数据检索与下载 | [Public-Data](https://github.com/zhangwenda0518/VirusPlatform/wiki/Public-Data) | SRA+GSA 双引擎检索、统一元数据 Core14/Full、SCI 级元数据图组、aria2c 批量下载 + 内置 sracha 转 FASTQ、宿主基因组三源下载（NCBI taxon / accession·染色体过滤 / gget·Ensembl Plants）、NCBI datasets CLI 全模式封装（genome/gene/taxonomy/virus+宿主过滤，virus 直通建库）|
 | 专项工具箱 | [Toolbox](https://github.com/zhangwenda0518/VirusPlatform/wiki/Toolbox) | dsRNA 全链路设计（选窗→效价→脱靶→引物）、miRNA 靶标预测（5 引擎）、NCBI 参考下载、GenBank 集合与 CDS/PEP 提取、MSA 查看、contig 深度注释、单步工具 |
 | NCBI 提交准备 | [Submission](https://github.com/zhangwenda0518/VirusPlatform/wiki/NCBI-Submission) | unified_metadata.csv 一表驱动：在线编辑→校验→生成 source.src / miuvig / assembly / BioSample / template.sbt / 提交报告 |
-| LOGAN 溯源 | [Logan](https://github.com/zhangwenda0518/VirusPlatform/wiki/Logan-Trace) | 病毒 contig 提交 Logan-Search（覆盖 ~2340 万公开 SRA 样本），批量提交 + SSE 实时进度 + 溯源报告 |
+| LOGAN 溯源 | [Logan](https://github.com/zhangwenda0518/VirusPlatform/wiki/Logan) | 病毒 contig 提交 Logan-Search（覆盖 ~2340 万公开 SRA 样本），批量提交 + SSE 实时进度 + 溯源报告 |
 
 ### 平台设施
 
 | 模块 | Wiki | 说明 |
 |---|---|---|
-| 数据库与参考库 | [Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases) | Taxonomy、kunpeng 分类库、病毒参考/鉴定库、注释库（RefSeq 蛋白/Pfam/CDD）、建树库（plant_tree.db / ictv VMR）、宿主概率表、宿主库构建 |
+| 数据库与参考库 | [Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases) | Taxonomy、kunpeng 分类库、病毒参考/鉴定库、注释库（RefSeq 蛋白/Pfam）、建树库（plant_tree.db / ictv VMR）、宿主概率表、宿主库构建 |
 | 分析流程编排 | [Pipeline](https://github.com/zhangwenda0518/VirusPlatform/wiki/Pipeline-Overview) | 依赖调度、断点续跑、加权进度与剩余时间自学习、资源预估、并发闸门 |
-| 设置·任务中心·运维 | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | 中英双语、17 项默认参数、磁盘水位、环境自检、tool_runs 归档清理、数据库迁移、打包分发 |
-| CLI 完整参考 | [CLI-Reference](https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference) | 30+ 子命令全参数速查 |
+| 设置·任务中心·运维 | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | 中英双语、19 项默认参数、磁盘水位、环境自检、tool_runs 归档清理、数据库迁移、打包分发 |
+| CLI 完整参考 | [CLI-Reference](https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference) | 40 个子命令全参数速查 |
 | FAQ 与已知事项 | [FAQ](https://github.com/zhangwenda0518/VirusPlatform/wiki/FAQ) | 常见问题、中文路径兼容、大基因组建库、设计说明 |
 
 ## 🚀 快速开始
@@ -102,8 +103,7 @@ cd VirusPlatform
 python -m pip install -r requirements.txt
 ```
 
-- 需要 **Windows 10+ 与 Python 3.12+**；**外部工具已全量随仓库分发**（`3rd/`，约 2GB：单文件工具 + 工具套件 + 内置 Python 运行时，克隆即用）。
-- **SPAdes** 需单独安装（`SPAdes-Windows-4.3.0-dev-Setup.exe`，`spades.bat` 加入 PATH）。
+- 需要 **Windows 10+ 与 Python 3.12+**；**外部工具已全量随仓库分发**（`3rd/`，约 2GB：单文件工具 + 工具套件 + 内置 Python 运行时，克隆即用，30 件工具全在库）。
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
 - 仅两个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
   `3rd/tools/rdp5/3seqTable`（105MB）与 `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`（168MB）。
@@ -115,6 +115,7 @@ python -m pip install -r requirements.txt
 |---|---|---|
 | 独立桌面窗口 | `python app.py --gui` | pywebview/WebView2 壳住本地页面，无地址栏 |
 | 网页模式 | `python app.py --web` | 默认浏览器打开，可复制地址到其他设备浏览器 |
+| 默认（auto） | `python app.py` | 优先桌面窗口，失败自动回退浏览器 |
 
 端口从 8765 起自动顺延探测，**以控制台打印的地址为准**；只监听 `127.0.0.1`，不对外网开放。
 
@@ -122,7 +123,7 @@ python -m pip install -r requirements.txt
 
 1. **数据库页** → 下载 NCBI Taxonomy（~57MB）；
 2. **数据库页** → 选宿主基因组 FASTA + 宿主 TaxID（如 4081 番茄）→ 构建宿主库（病毒库平台已预置，无需构建）；
-3. **设置页** → 线程数、邮箱、17 项分析默认参数按需调整（默认即可用）。
+3. **设置页** → 线程数、邮箱、19 项分析默认参数按需调整（默认即可用）。
 
 ### 4. 跑第一个样品
 
@@ -195,7 +196,7 @@ set GOPROXY=https://goproxy.cn,direct
 
 顶部导航即工作流顺序（🌐 中英一键切换，任务中心带运行中角标）：
 
-**总览**（封面 + 数据库状态 + 工作流入口）· **分析流程**（14 步级联卡片）· **结果中心**（报告/专项结果/SDT·MSA·树查看器）· **专项分析**（单步工具 + 参考数据）· **数据下载**（SRR/CRR/URL 批量）· **公共数据检索** · **数据库**（Taxonomy/宿主库）· **公共病毒组** · **LOGAN 溯源** · **提交准备** · **任务中心** · **设置** · **手册**
+**总览**（封面 + 数据库状态 + 工作流入口）· **分析流程**（⓪~⑩ 15 阶段级联卡片）· **结果中心**（报告/专项结果/SDT·MSA·树查看器）· **专项分析**（单步工具 + 参考数据）· **数据下载**（SRR/CRR/URL 批量）· **公共数据检索** · **数据库**（Taxonomy/宿主库）· **公共病毒组** · **LOGAN 溯源** · **提交准备** · **任务中心** · **设置** · **手册**
 
 亮点：
 - 每个任务结束自动展开**结果预览面板**（关键数字 + 产物清单 + 打开报告），后台时发系统通知；
@@ -208,8 +209,8 @@ set GOPROXY=https://goproxy.cn,direct
 ```
 VirusPlatform/
 ├─ app.py                    Web GUI 服务（仅监听本机）
-├─ main.py                   CLI 入口（30+ 子命令）
-├─ Virus_Platform_Core/      核心 pipeline 包（GUI 与 CLI 共用，70+ 模块）
+├─ main.py                   CLI 入口（40 个子命令）
+├─ Virus_Platform_Core/      核心 pipeline 包（GUI 与 CLI 共用，130+ 模块）
 │  ├─ web/                   Flask 蓝图（页面/API/任务）
 │  ├─ known_virus_suite/     ②b 已知病毒识别与定量引擎
 │  ├─ ncbi_submit/           NCBI 提交准备引擎
@@ -220,7 +221,7 @@ VirusPlatform/
 ├─ dev_tools/                打包与建库脚本（package.py 等）
 ├─ docs/                     开发文档与模块功能清单
 ├─ wiki/                     本仓库 Wiki 的源 Markdown（与线上 Wiki 同步）
-├─ examples/                 内置示例数据（✨示例按钮共用，~8MB）
+├─ examples/                 内置示例数据（✨示例按钮共用，~9MB）
 ├─ 3rd/                      外部依赖（bin/ tools/ python/ open-virome/，全量入库；
 │                            仅 3seqTable 与 _polars_runtime.pyd 两个 >100MB 文件
 │                            经 Release 分发）
@@ -284,7 +285,7 @@ FASTQ / FASTQ.gz（双端选 R1/R2，单端只选 R1）；FASTA / FASTA.gz；Gen
 - **kunpeng** — 超低内存宏基因组分类器（宿主去除 / 病毒分类核心）
 - **SPAdes**（metaviral/rna）、**salmon**、**minibwa**、**fastp**、**seqkit**、**crabz**
 - **pyrodigal / pyrodigal-rv / orfipy**（ORF 预测）、**DIAMOND / MMseqs2 / BLAST+**（同源搜索）
-- **pyhmmer × Pfam**、NCBI **CDD**（结构域注释）、NCBI **RefSeq Viral**（蛋白库）
+- **pyhmmer × Pfam**、NCBI **RefSeq Viral**（蛋白库）、**BFVD** 病毒域库（与 NCBI 提交链 suvtk 同库同命名）。（原 NCBI CDD 结构域注释因本地库 prefilter 索引 ~5GB 在小内存机器反复 OOM，2026-09-29 起由 BFVD 顶替）
 - **MAFFT / trimAl / Gblocks / FastTree / RAxML-NG / IQ-TREE 3**（进化）、**TreeTime**（分子钟）
 - **BEAST 1.x**（Markov jump 计数口径，本地不做 MCMC）、**Logan-Search**（Chikhi et al. 2025, bioRxiv 10.1101/2024.07.30.605881）
 - **ICTV VMR / MSL**（分类元数据）、NCBI **Taxonomy / SRA / GenBank / BioSample**、NGDC **GSA**

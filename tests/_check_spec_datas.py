@@ -23,6 +23,7 @@ import ast
 import fnmatch
 import os
 import sys
+import tempfile
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
@@ -96,8 +97,48 @@ check('备份文件（*.bak*）不在 datas 里', not bak_leak,
 # 2026-09-27 起源码树不再有 *.bak_*（71 个手工备份移 archive/_bak_20260927，
 # 规则见 .gitignore §8）——反向断言：若再出现，说明有人又复制了手工备份，
 # 应归档而不是提交；此时「不在 datas 里」的排除逻辑重新变得可证伪。
-check('源码树已无 .bak 手工备份（若再现请归档 archive/_bak_*）', not bak_src,
-      f'出现 {sorted(bak_src)[:3]}')
+#
+# 2026-10-07 审查 P2 修正：这条断言原先只统计 **webapp/** 下的 bak（`bak_src`
+# 来自上面的 `os.walk(webapp)`），标签却写"源码树" —— 覆盖面小于字面印象，
+# 于是源码树里 17 个 .bak*（tests/ 12 个、Virus_Platform_Core/ 2 个、
+# docs/ 1 个…）长期存在而本条始终绿灯。现改为扫**整棵源码树**，并加
+# 「范围自证」+「灵敏度自测」，防止再次变成假绿。
+TREE_EXCLUDE = {'archive', '3rd', 'dist', 'run', '.git', '__pycache__',
+                'build', '.mimosa', '.pytest_cache', 'node_modules',
+                'uploads', 'fastq', 'host-db', 'databases'}
+TREE_SRC_DIRS = {'Virus_Platform_Core', 'tests', 'docs', 'webapp', 'dev_tools'}
+
+
+def _scan_bak(root):
+    """扫 root 下全部 *.bak*，返回 (相对 root 的命中列表, 文件数, 顶层目录集)。"""
+    hits, n, tops = [], 0, set()
+    for cur, dns, files in os.walk(root):
+        dns[:] = [d for d in dns if d not in TREE_EXCLUDE]
+        rel = os.path.relpath(cur, root)
+        tops.add(rel.split(os.sep)[0] if rel != os.curdir else os.curdir)
+        for fnm in files:
+            n += 1
+            if _is_bak(fnm):
+                hits.append(os.path.relpath(os.path.join(cur, fnm), root)
+                            .replace('\\', '/'))
+    return sorted(hits), n, tops
+
+
+tree_bak, tree_n, tree_tops = _scan_bak(ROOT)
+check(f'源码树已无 .bak 手工备份（若再现请归档 archive/_bak_*）'
+      f'（扫 {tree_n} 个文件）', not tree_bak,
+      f'出现 {len(tree_bak)} 个：{tree_bak[:3]}' if tree_bak else '')
+# 范围自证：必须真的走到了 webapp/ 之外的源码目录，否则上面那条是假绿
+check('范围自证：扫描覆盖 webapp/ 之外的源码目录',
+      TREE_SRC_DIRS <= tree_tops,
+      f'未覆盖 {sorted(TREE_SRC_DIRS - tree_tops)}（已覆盖 {sorted(tree_tops)}）')
+# 灵敏度自测：临时目录里放一个 .bak，必须被扫到（否则判据本身失灵）
+with tempfile.TemporaryDirectory(prefix='vp_bak_probe_') as _td:
+    open(os.path.join(_td, 'probe.py.bak_19700101_selftest'),
+         'w', encoding='utf-8').close()
+    _h, _n, _t = _scan_bak(_td)
+check('灵敏度：临时目录里的 .bak 能被扫到', len(_h) == 1,
+      f'扫到 {len(_h)} 个（应 1）')
 
 # --- 残留确实被排掉（正面对照，避免"两边都错"）-------------------------
 residue = [s for s, _d in datas if '.mimosa' in s or '__pycache__' in s]

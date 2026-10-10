@@ -21,7 +21,7 @@ if not exist "%PKG%\VirusPlatform.exe" (
 set "DST=%PKG%\run\fastq"
 if exist "%DST%" (
   echo 已存在: %DST%
-  echo（若这里面看不到你的测序数据，说明之前挂到了别处，可删除该目录后重跑）
+  echo （若这里面看不到你的测序数据，说明之前挂到了别处，可删除该目录后重跑）
 ) else (
   mklink /J "%DST%" "%SRC%" >nul
   if errorlevel 1 (
@@ -34,6 +34,6 @@ if exist "%DST%" (
 )
 
 echo.
-echo 之后在分发版平台「分析管道」新建样品时，点 📁 进入 fastq 目录
+echo 之后在分发版平台「分析管道」新建样品时，点 ■ 进入 fastq 目录
 echo 即可直接选用源码平台里的测序数据（不占用额外磁盘空间）。
 pause

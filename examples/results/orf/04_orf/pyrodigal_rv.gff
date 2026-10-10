@@ -1,10 +1,8 @@
 ##gff-version 3
 example_contig_1	pyrodigal_rv	CDS	175	2139	.	+	0	ID=example_contig_1_1
 example_contig_1	pyrodigal_rv	CDS	2484	3431	.	+	0	ID=example_contig_1_2
-example_contig_1	pyrodigal_rv	CDS	3493	3582	.	-	0	ID=example_contig_1_3
-example_contig_1	pyrodigal_rv	CDS	3630	4250	.	+	0	ID=example_contig_1_4
-example_contig_1	pyrodigal_rv	CDS	4431	5828	.	+	0	ID=example_contig_1_5
-example_contig_1	pyrodigal_rv	CDS	5877	6095	.	-	0	ID=example_contig_1_6
-example_contig_2	pyrodigal_rv	CDS	217	648	.	+	0	ID=example_contig_2_7
-example_contig_2	pyrodigal_rv	CDS	645	1052	.	+	0	ID=example_contig_2_8
-example_contig_2	pyrodigal_rv	CDS	1049	6541	.	+	0	ID=example_contig_2_9
+example_contig_1	pyrodigal_rv	CDS	3630	4250	.	+	0	ID=example_contig_1_3
+example_contig_1	pyrodigal_rv	CDS	4431	5828	.	+	0	ID=example_contig_1_4
+example_contig_2	pyrodigal_rv	CDS	217	648	.	+	0	ID=example_contig_2_5
+example_contig_2	pyrodigal_rv	CDS	645	1052	.	+	0	ID=example_contig_2_6
+example_contig_2	pyrodigal_rv	CDS	1049	6541	.	+	0	ID=example_contig_2_7

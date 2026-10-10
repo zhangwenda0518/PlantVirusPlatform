@@ -205,10 +205,16 @@ class BcftoolsCaller:
     @staticmethod
     def build_filter_expr(dp: int, saf: int, qual: float = 3.5,
                           min_freq: float = 0.05) -> str:
-        """过滤表达式，字段名已按 BcftoolsCaller.FIELD_MAP 换过。"""
+        """过滤表达式，字段名已按 BcftoolsCaller.FIELD_MAP 换过。
+
+        链支持口径恢复自原管线 batch_virus_variants.py:482：
+        **正向链与反向链各自**至少 saf 条（DP4[2] / DP4[3] 分别 >= saf），
+        而不是两链之和 >= saf——之和口径会把「单链 0 条、另一链恰好 saf 条」
+        的纯单向支持位点放行（原管线两链各自门槛更严）。
+        """
         return (f'QUAL>={qual} && INFO/DP>={dp} '
                 f'&& INFO/AD[1]/INFO/DP>={min_freq} '
-                f'&& (INFO/DP4[2]+INFO/DP4[3])>={saf}')
+                f'&& INFO/DP4[2]>={saf} && INFO/DP4[3]>={saf}')
 
     @staticmethod
     def dynamic_thresholds(mean_depth: float) -> tuple[int, int]:
@@ -219,12 +225,56 @@ class BcftoolsCaller:
             return 20, 3
         return 100, 10
 
+    @classmethod
+    def build_filter_expr_by_depth(cls, chrom_depth: dict, qual: float = 3.5,
+                                   min_freq: float = 0.05) -> str:
+        """逐参考深度分档的过滤表达式（每条参考用自己档位的 dp/saf）。
+
+        原管线是逐病毒取 Recalc_MeanDepth 分档；此前平台实现拿「全 BAM 的
+        samtools depth -a 全局均值」套一个档（-a 把全库零覆盖位算进均值 →
+        恒落最低档，且多 BAM 时只读第一列）。这里按参考深度分档：
+        按 dynamic_thresholds 把 chrom 分档，最低档（dp 最小）作**其余
+        chrom（含未在深度表里的）的兜底**，更高档的 chrom 从兜底里显式
+        排除、再按本档表达式判定：
+
+            (最低档表达式 && CHROM!=高档chrom...) || (高档表达式 && CHROM==高档chrom...)
+        """
+        bands: dict = {}
+        for chrom, depth in (chrom_depth or {}).items():
+            if not str(chrom).strip():
+                continue
+            bands.setdefault(cls.dynamic_thresholds(float(depth or 0.0)),
+                             []).append(str(chrom))
+        if not bands:
+            return cls.build_filter_expr(*cls.dynamic_thresholds(0.0),
+                                         qual, min_freq)
+        default = min(bands, key=lambda t: t[0])          # 最低档作默认兜底
+        default_expr = cls.build_filter_expr(*default, qual, min_freq)
+        non_default = sorted({c for band, chroms in bands.items()
+                              if band != default for c in chroms})
+        if non_default:
+            excl = ' && '.join(f'CHROM!="{c}"' for c in non_default)
+            expr = f'(({default_expr}) && ({excl}))'
+        else:
+            expr = f'({default_expr})'
+        for band in sorted(bands):
+            if band == default:
+                continue
+            chrom_sel = ' || '.join(
+                f'CHROM=="{c}"' for c in sorted(set(bands[band])))
+            expr += (f' || (({cls.build_filter_expr(*band, qual, min_freq)})'
+                     f' && ({chrom_sel}))')
+        return expr
+
     def call(self, ref_fa: Path, bams: list[Path], out_vcf: Path,
-             mean_depth: float, qual: float = 3.5,
+             mean_depth, qual: float = 3.5,
              min_freq: float = 0.05, min_depth_mpileup: int = 100000,
              work_dir: Path | None = None,
              log_file: Path | None = None) -> tuple[Path, str]:
         """跑完整 caller 链路，返回（过滤后 VCF 路径, 过滤表达式）。
+
+        mean_depth：float=全局均值（旧口径）或 dict={chrom: 平均深度}
+        （逐参考分档，优先）。
 
         产物：
           <out_vcf>           未经 FILTER 标记的原始变异
@@ -250,8 +300,13 @@ class BcftoolsCaller:
                   'call', log_file)
         self._run(['view', '-Ov', '-o', str(raw), str(callb)], 'view', log_file)
 
-        dp, saf = self.dynamic_thresholds(mean_depth)
-        expr = self.build_filter_expr(dp, saf, qual, min_freq)
+        if isinstance(mean_depth, dict):
+            # 逐参考分档（identify 表 MeanDepth，主路径）
+            expr = self.build_filter_expr_by_depth(mean_depth, qual, min_freq)
+        else:
+            # 全局均值单档（旧口径回退路径，调用方已 WARN）
+            dp, saf = self.dynamic_thresholds(mean_depth)
+            expr = self.build_filter_expr(dp, saf, qual, min_freq)
         self._run(['filter', '-s', 'FAIL', '-i', expr, '-Ov',
                    '-o', str(soft), str(raw)], 'filter', log_file)
         self._run(['filter', '-i', 'FILTER=="PASS"', '-Ov',
@@ -698,7 +753,21 @@ class VariantStage:
             caller = BcftoolsCaller(cfg.get('bcftools') or 'bcftools',
                                    threads=cfg.get('threads', 4), logger=self.log,
                                    env=cfg.get('env'))
-            mean_depth = self._mean_depth(list(bams.values()))
+            # 动态 dp/saf：优先逐参考从 identify 表 MeanDepth 分档（原管线
+            # 口径）；表不可用时回退全局 samtools depth -a 均值（旧口径，
+            # -a 含零覆盖位、多 BAM 只读首列，仅作回退）。
+            ref_depths = self._ref_depths_from_identify(out_dir)
+            if ref_depths:
+                self.log.info(
+                    '动态 dp/saf 按参考深度分档（identify 表 MeanDepth，%d 条）',
+                    len(ref_depths))
+                mean_depth = ref_depths
+            else:
+                mean_depth = self._mean_depth(list(bams.values()))
+                self.log.warning(
+                    'identify 表不可用（缺 MeanDepth 列/文件）——动态 dp/saf '
+                    '回退到 samtools depth -a 全局均值（含全库零覆盖位，'
+                    '恒落最低档；多 BAM 已改为逐列取均值）')
             # caller.call 返回 (仅 PASS 的 VCF, 过滤表达式)；
             # all.variants.vcf 本体是未打 FILTER 的原始变异，另存供追溯。
             filtered_vcf, expr = caller.call(
@@ -707,7 +776,7 @@ class VariantStage:
                 min_freq=cfg.get('min_minor_freq', 0.05),
                 work_dir=vcf_dir,
                 log_file=out_dir / 'logs' / 'bcftools.log')
-            self.log.info('平均深度 %.1f -> 过滤表达式: %s', mean_depth, expr)
+            self.log.info('动态过滤表达式: %s', expr)
 
         if not Path(filtered_vcf).is_file():
             self.log.error('过滤后 VCF 不存在: %s（过滤步骤可能失败）', filtered_vcf)
@@ -858,8 +927,64 @@ class VariantStage:
         return results
 
     # ── 辅助 ─────────────────────────────────────────────────────
+    def _ref_depths_from_identify(self, out_dir: Path) -> dict:
+        """从 identify/filter 结果表取 {accession: MeanDepth}（逐参考分档用）。
+
+        表列（identify/all_viruses.summary.tsv 或 filter/filtered.tsv）：
+        Accession + MeanDepth（老表或有 Recalc_MeanDepth/Rep_MeanDepth）。
+        返回空 dict 表示表不可用（调用方回退全局均值口径）。
+        """
+        cands = [out_dir / 'identify' / 'all_viruses.summary.tsv',
+                 out_dir / 'filter' / 'filtered.tsv']
+        for path in cands:
+            try:
+                if not Path(path).is_file():
+                    continue
+                head: list[str] = []
+                depth_i = acc_i = -1
+                out: dict = {}
+                for line in read_text_lossless(Path(path)).splitlines():
+                    if not line.strip():
+                        continue
+                    cols = line.split('\t')
+                    if not head:
+                        head = [c.strip().lstrip('\ufeff') for c in cols]
+                        low = [c.lower() for c in head]
+                        acc_i = next((i for i, c in enumerate(low)
+                                      if c in ('accession', 'virus',
+                                               'rep_accession')), -1)
+                        depth_i = next((i for i, c in enumerate(low)
+                                        if c in ('meandepth', 'recalc_meandepth',
+                                                 'rep_meandepth', 'depth')), -1)
+                        if acc_i < 0 or depth_i < 0:
+                            break
+                        continue
+                    if len(cols) <= max(acc_i, depth_i):
+                        continue
+                    acc = cols[acc_i].strip()
+                    try:
+                        dep = float(cols[depth_i])
+                    except ValueError:
+                        continue
+                    if not acc:
+                        continue
+                    out[acc] = dep
+                    out.setdefault(acc.split('.')[0], dep)
+                if out:
+                    self.log.info('读参考深度表: %s（%d 个 accession）',
+                                  Path(path).name, len(out))
+                    return out
+            except OSError as e:
+                self.log.warning('读 %s 失败: %s', path, e)
+        return {}
+
     def _mean_depth(self, bams: list[Path]) -> float:
-        """用 samtools depth 估算平均深度（照原管线动态阈值用）。"""
+        """用 samtools depth 估算全局平均深度（**回退口径**，见调用处 WARN）。
+
+        多 BAM 时 samtools depth 每列一库（第 3 列起逐列），此前只读第 2 列
+        （即第一个 BAM）——这里对每行各列取均值。仍有 -a 把全库零覆盖位算进
+        均值的固有偏差，故仅作 identify 表缺失时的回退。
+        """
         samtools = self.cfg.get('samtools') or 'samtools'
         try:
             p = subprocess.run([str(samtools), 'depth', '-a'] + [str(b) for b in bams],
@@ -868,18 +993,21 @@ class VariantStage:
         except OSError as e:
             self.log.warning('samtools depth 失败（%s），按 dp=10/saf=2 处理', e)
             return 0.0
-        vals = []
+        total, n = 0, 0
         for line in (p.stdout or '').splitlines():
             f = line.split('\t')
-            if len(f) >= 3:
+            if len(f) < 3:
+                continue
+            for v in f[2:]:                 # 每个 BAM 一列，逐列取均值
                 try:
-                    vals.append(int(f[2]))
+                    total += int(v)
+                    n += 1
                 except ValueError:
                     continue
-        if not vals:
+        if not n:
             self.log.warning('samtools depth 无输出，按 dp=10/saf=2 处理')
             return 0.0
-        return sum(vals) / len(vals)
+        return total / n
 
     @staticmethod
     def _count_variants(vcf: Path) -> int:

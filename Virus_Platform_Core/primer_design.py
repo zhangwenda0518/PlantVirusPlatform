@@ -374,10 +374,12 @@ def build_track(seq_len, pairs, seq=''):
 # 主入口
 # ============================================================
 def run_design(fasta_text='', fasta_path='', ptype='PCR',
-               core=None, adv=None, max_seqs=5):
+               core=None, adv=None, max_seqs=5, specificity=False, logger=None):
     """设计入口。
 
     fasta_text 与 fasta_path 二选一；fasta_path 优先。
+    specificity=True 时对设计的扩增子跑宿主基因组 blastn 脱靶检查
+    （primer.check_specificity_blast，需已配置 host-db；默认关）。
     返回 {'records': [...], 'tracks': [...], 'summary': {...}}
     """
     ptype = 'qPCR' if str(ptype).lower() == 'qpcr' else 'PCR'
@@ -392,9 +394,12 @@ def run_design(fasta_text='', fasta_path='', ptype='PCR',
     for name, seq in seqs[:max_seqs]:
         try:
             r = design_for_sequence(name, seq, ptype, core, adv)
-        except OSError as e:
+        except (OSError, RuntimeError) as e:
+            # RuntimeError：primer3 不可用（_p3() 抛）——原只接 OSError，
+            # 交互页会整体 500 而不是逐序列软跳过（2026-10-03 修复 P3-21）
             r = {'name': name, 'length': len(seq), 'pairs': [],
-                 'explain': 'primer3 参数不合法: %s' % e, 'design_length': len(seq),
+                 'explain': 'primer3 不可用或参数不合法: %s' % e,
+                 'design_length': len(seq),
                  'region_offset': 0, 'p3_opts': {}}
         records.append({
             'name': r['name'], 'length': r['length'],
@@ -409,6 +414,63 @@ def run_design(fasta_text='', fasta_path='', ptype='PCR',
         tracks.append(tr)
         n_pairs += len(r['pairs'])
 
+    # 特异性检查（可选，默认关；2026-10-03 修复 P2-14④ 接入交互路径）
+    spec_checked = False
+    spec_note = '未做脱靶特异性检查：未勾选特异性检查'
+    if specificity:
+        amp_fa = None
+        try:
+            import tempfile
+            from .config import current_host_genome
+            from .primer import check_specificity_blast
+            host = current_host_genome()
+            if not host or not os.path.isfile(host):
+                # 宿主库缺失时 check_specificity_blast 会"跳过并返回空"，
+                # 与"检查了但无命中"不可区分 → 先自行判定，如实标注未检查
+                spec_note = ('未做脱靶特异性检查：未配置宿主基因组（host-db）'
+                             '或未构建 BLAST 库')
+                if logger:
+                    logger.log(spec_note, 'WARN')
+            else:
+                fd, amp_fa = tempfile.mkstemp(prefix='vp_pd_amp_', suffix='.fa')
+                os.close(fd)
+                n_amp = 0
+                amp_names = {}      # 扩增子 ID → 引物对 dict（回填 host_hit）
+                with io.open(amp_fa, 'w', encoding='utf-8', newline='\n') as f:
+                    seqmap = {nm: (sq or '').upper() for nm, sq in seqs[:max_seqs]}
+                    for rec in records:
+                        up = seqmap.get(rec['name'], '')
+                        for p in rec['pairs']:
+                            a0 = int(p.get('amp_start') or 0)
+                            a1 = int(p.get('amp_end') or 0)
+                            amp = up[a0 - 1:a1] if 0 < a0 <= a1 <= len(up) else ''
+                            if not amp:
+                                continue
+                            pid = '%s_P%s' % (rec['name'],
+                                              p.get('idx') or (n_amp + 1))
+                            f.write('>%s\n%s\n' % (pid, amp))
+                            amp_names[pid] = p
+                            n_amp += 1
+                if n_amp:
+                    hits = check_specificity_blast(amp_fa, logger=logger) or {}
+                    spec_checked = True
+                    spec_note = (f'宿主基因组 blastn 脱靶检查：{len(hits)}/{n_amp} '
+                                 f'对扩增子命中宿主')
+                    for pid, p in amp_names.items():
+                        p['host_hit'] = 'YES' if pid in hits else 'NO'
+                else:
+                    spec_note = '未做脱靶特异性检查：没有可用的扩增子序列'
+        except Exception as e:
+            spec_note = f'脱靶特异性检查失败（{type(e).__name__}）：未检查'
+            if logger:
+                logger.log(spec_note + f': {e}', 'WARN')
+        finally:
+            if amp_fa and os.path.isfile(amp_fa):
+                try:
+                    os.remove(amp_fa)
+                except OSError:
+                    pass
+
     scores = [p['score'] for rec in records for p in rec['pairs']]
     summary = {
         'type': ptype,
@@ -420,5 +482,9 @@ def run_design(fasta_text='', fasta_path='', ptype='PCR',
         'n_usable': sum(1 for s in scores if pt.USABLE_MIN <= s < pt.RECOMMENDED_MIN),
         'base_score': pt.QPCR_BASE_SCORE if ptype == 'qPCR' else pt.PCR_BASE_SCORE,
         'probe_present': any(p['probe_seq'] for rec in records for p in rec['pairs']),
+        # 恒写特异性声明（true=检查真的跑成；false=未检查，不代表无脱靶）
+        'specificity_requested': bool(specificity),
+        'specificity_checked': bool(spec_checked),
+        'specificity_note': spec_note,
     }
     return {'records': records, 'tracks': tracks, 'summary': summary}

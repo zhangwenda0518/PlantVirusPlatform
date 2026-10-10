@@ -161,9 +161,11 @@ def check_specificity_blast(amplicons_fasta, host_genome=None, logger=None):
         run_cmd([makeblastdb, '-in', host, '-dbtype', 'nucl', '-out', prefix],
                 logger=logger)
     out_tsv = os.path.join(db_dir, 'amp_hits.tsv')
+    # -max_target_seqs 1 → 10：宿主基因组高度重复时 1 条命中可能不是最强
+    # 的那条，只留 1 条会低估脱靶（2026-10-03 修复 P2-14③）
     run_cmd([blastn, '-query', amplicons_fasta, '-db', prefix,
              '-outfmt', '6 qseqid sseqid pident length', '-evalue', '1e-5',
-             '-max_target_seqs', '1', '-out', out_tsv], logger=logger)
+             '-max_target_seqs', '10', '-out', out_tsv], logger=logger)
     hits = {}
     with safe_open(out_tsv) as f:
         for line in f:
@@ -232,6 +234,12 @@ def design_primers(sample_dir, mode='conserved', num_return=3,
             for start in range(0, max(len(s) - 400, 1), step_len):
                 sub = s[start:start + win]
                 if len(sub) < 600:
+                    # 丢弃的末端窗口必须留痕（2026-10-03 修复 P3-20）：
+                    # 原先静默 break，用户以为全长已覆盖
+                    if logger:
+                        logger.log(f"{cid}: 末端窗口 {start + 1}-{len(s)}bp "
+                                   f"仅 {len(sub)}bp（< 最短设计长度 600bp），"
+                                   f"该窗口已丢弃", 'WARN')
                     break
                 pairs = design_primers_for_seq(f"{cid}_W{idx}", sub,
                                                num_return=max(1, num_return - 1))
@@ -244,7 +252,11 @@ def design_primers(sample_dir, mode='conserved', num_return=3,
         msg = "未设计出引物（保守区不足或序列问题）"
         if logger:
             logger.log(msg, "WARN")
-        summary = {'stage': step, 'n_primers': 0, 'reason': msg}
+        summary = {'stage': step, 'n_primers': 0, 'reason': msg,
+                   # 恒写特异性声明（2026-10-03 修复 P2-14①）：无产物也要
+                   # 如实标注，避免下游把「没跑」当成「已检查且通过」
+                   'specificity_checked': bool(do_specificity),
+                   'specificity_amplicon': 'skipped'}
         with safe_open(summary_file, 'wt') as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
         mark_step_done(out_dir, step)
@@ -253,6 +265,13 @@ def design_primers(sample_dir, mode='conserved', num_return=3,
     # 特异性检查（可选）
     spec_hits = {}
     amp_mode = 'skipped'
+    spec_ok = False        # 检查是否真正跑成（失败时产物须标 FAILED 而非 NO）
+    if not do_specificity and logger:
+        # 默认关时必须留痕（2026-10-03 修复 P2-14②）：产物 host_hit=NA /
+        # summary specificity_checked=false 之外，日志再 WARN 一次，
+        # 防止把「未检查」误读成「已检查且无脱靶」
+        logger.log("未做脱靶特异性检查（do_specificity=False）：primers.tsv 的 "
+                   "host_hit 列全为 NA，不代表无脱靶", "WARN")
     if do_specificity:
         from .utils import write_fasta_record
         amp_fa = os.path.join(out_dir, 'amplicons.fa')
@@ -276,6 +295,7 @@ def design_primers(sample_dir, mode='conserved', num_return=3,
                        f"BLAST 结果只反映引物区结合性、不代表完整扩增子", 'WARN')
         try:
             spec_hits = check_specificity_blast(amp_fa, logger=logger)
+            spec_ok = True
         except Exception as e:
             if logger:
                 logger.log(f"特异性检查失败（{type(e).__name__}）: {e}", "WARN")
@@ -291,9 +311,11 @@ def design_primers(sample_dir, mode='conserved', num_return=3,
                 "penalty\tself_dimer_Th\tself_hairpin_Th\t"
                 "score\trecommendation\thost_hit\n")
         for p in all_pairs:
-            host_hit = 'NA'
+            host_hit = 'NA'          # 未检查（不代表无脱靶）
             if do_specificity:
-                host_hit = 'YES' if p['name'] in spec_hits else 'NO'
+                # 检查失败 → FAILED（如实），不得写成 NO 冒充"已检查无脱靶"
+                host_hit = (('YES' if p['name'] in spec_hits else 'NO')
+                            if spec_ok else 'FAILED')
             f.write(f"{p['name']}\t{p.get('target', '')}\t{p['F_seq']}\t{p['F_pos']}\t"
                     f"{p['F_tm']}\t{p['F_gc']}\t{p['R_seq']}\t{p['R_pos']}\t"
                     f"{p['R_tm']}\t{p['R_gc']}\t{p['product']}\t{p['penalty']}\t"
@@ -303,7 +325,7 @@ def design_primers(sample_dir, mode='conserved', num_return=3,
 
     summary = {'stage': step, 'mode': mode, 'n_primers': len(all_pairs),
                'tsv': 'primers.tsv',
-               'specificity_checked': bool(do_specificity),
+               'specificity_checked': bool(do_specificity and spec_ok),
                'specificity_amplicon': amp_mode,
                'groups': groups_used}
     with safe_open(summary_file, 'wt') as f:

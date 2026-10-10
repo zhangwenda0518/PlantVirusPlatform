@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """病毒注释分析组集成测试：ORF 预测 → 功能注释 → 基因组图谱 → 引物设计
-→ 工具④ contig 分类与逐 contig 分析（本地 primer + 在线 NCBI blastn/CDD）。
+→ 工具④ contig 分类与逐 contig 分析（本地 primer + 在线 NCBI blastn）。
 
 全部走 /api/tool/* Web API（Flask test client），任务经 TaskManager 轮询，
 示例数据用 examples/ 内置文件（离线可复跑；在线部分失败自动跳过）。
@@ -188,7 +188,7 @@ names = [x['name'] for x in r.get_json()]
 for want in (gp_run, pr_run, sc_run, ctg_run):
     check(want in names, f'运行列表含 {want}')
 
-# ---------- 8. 在线分析（NCBI blastn / CDD；无网络自动跳过） ----------
+# ---------- 8. 在线分析（NCBI blastn；无网络自动跳过） ----------
 # 该段耗时完全由 NCBI 网络往返决定（实测 200s~400s+，限流时更久），
 # 是整套测试里唯一的不确定项。用 VP_SKIP_ONLINE=1 可跳过（CI/快速回归），
 # 超时也从 1500s 收到 240s——在线服务不可达时没必要干等 25 分钟。
@@ -196,7 +196,7 @@ _online_off = os.environ.get('VP_SKIP_ONLINE', '').strip() in ('1', 'true', 'yes
 if _online_off:
     print('--- 8. 在线 NCBI 分析：VP_SKIP_ONLINE=1，跳过 ---')
 else:
-    print('--- 8. 在线 NCBI 分析（blastn / CDD，失败自动跳过） ---')
+    print('--- 8. 在线 NCBI 分析（blastn，失败自动跳过） ---')
     r = c.post('/api/tool/analyze',
                json={'run': ctg_run, 'contig': ctg_id, 'action': 'blastn'})
     if r.status_code == 200:

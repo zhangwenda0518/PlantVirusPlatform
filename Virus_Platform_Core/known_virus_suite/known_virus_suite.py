@@ -85,6 +85,9 @@ def _extra_tool_dirs(base=None):
         root / '3rd' / 'bin',                       # minibwa 等单文件 exe
         root / '3rd' / 'tools' / 'minimap2',
         root / '3rd' / 'tools' / 'salmon2',
+        # mafft-win/ms/bin（MSYS 运行时里的 mafft）：目录已随 2026-10 瘦身移除，
+        # 候选保留仅为向后兼容老包/自装 MSYS 的机器 —— 下方 exists() 会静默过滤，
+        # 不存在时自动跳过（不影响实际探测结果）。
         root / '3rd' / 'tools' / 'mafft-win' / 'ms' / 'bin',
         Path('/usr/local/bin'), Path('/usr/bin'),
     ]
@@ -152,13 +155,14 @@ def build_parser():
         sp.add_argument('--batch-size', dest='batch_size', type=int, default=1,
                         help='每批处理样本数（断点续跑粒度）')
         sp.add_argument('--min-mapq-identify', dest='min_mapq_identify', type=int, default=10,
-                        help='鉴定段比对 MAPQ 下限（默认 10；仅对内置/samtools 后端生效，'
-                             'pandepth 后端严格照原管线为 0）')
+                        help='（已弃用/保留兼容）鉴定段比对 MAPQ 下限：pandepth 后端'
+                             '照原管线 MAPQ 0 起算、本参数无消费者，仅内部保留传参')
         sp.add_argument('--coverage-tool', dest='coverage_tool', default='pandepth',
                         choices=['pandepth', 'samtools', 'builtin'],
                         help='覆盖度/深度统计后端。默认 pandepth：严格照 '
                              'virome_analysis_pipeline 的方式（samtools view -F 0x04 '
-                             '建 BAM + pandepth -a，不传 -q）。缺件时自动降级。')
+                             '建 BAM + pandepth -a，不传 -q）。缺件时自动降级。'
+                             'builtin 已弃用（自研解析器已删除，收到即告警回退 pandepth）')
         sp.add_argument('--index-dir', dest='index_dir', default=None,
                          help='比对索引目录（默认 <out>/index）；指向已有索引可跨运行复用，'
                               '避免每次重建 8 千条参考的索引')
@@ -193,7 +197,9 @@ def build_parser():
         g.add_argument('--min-tpm', dest='min_tpm', type=float, default=1.0, help='最低 TPM (默认 1.0)')
         g.add_argument('--min-poisson', dest='min_poisson', type=float, default=0.3, help='泊松比值下限 (默认 0.3)')
         g.add_argument('--ratio', type=float, default=0.3, help='双轨 A 轨泊松比 (默认 0.3)')
-        g.add_argument('--min-ani', dest='min_ani', type=float, default=0.0, help='最低 ANI (默认 0=不启用)')
+        g.add_argument('--min-ani', dest='min_ani', type=float, default=0.0,
+                       help='（已弃用/保留兼容）最低 ANI：当前无消费者'
+                            '（ANI 分种用 --ani-thresh），收到非 0 值即告警并忽略')
         g.add_argument('--ani-thresh', dest='ani_thresh', type=float, default=95.0, help='ANI 分种阈值 (默认 95)')
         g.add_argument('--genes-cov', dest='genes_cov', help='基因覆盖表 TSV，启用 B 轨')
         g.add_argument('--min-gene-total-cov', dest='min_gene_total_cov', type=float, default=80.0)
@@ -205,7 +211,7 @@ def build_parser():
         g = sp.add_argument_group('共识参数（照搬 batch_virus_variants.py 默认值）')
         g.add_argument('--vc-qual', dest='vc_qual', type=int, default=20,
                        help='最低碱基质量 Phred 值 (默认 20，对齐原管线 -q)')
-        g.add_argument('--vc-depth', dest='vc_depth', type=int, default=1,
+        g.add_argument('--vc-depth', dest='vc_depth', type=int, default=5,
                        help='最低覆盖深度 (默认 5，对齐原管线 -d；传 0 则按 MeanDepth/2 动态算)')
         g.add_argument('--vc-freq', dest='vc_freq', type=float, default=0.5,
                        help='变异最低频率阈值 (默认 0.5，对齐原管线 -f)')
@@ -384,6 +390,19 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger, _ = setup_logger(out_dir, verbose=args.verbose, tag='known_virus_suite')
+
+    # 弃用参数告警（audit 第 16 项）：参数保留兼容（web 层/旧脚本可能还在传），
+    # 但收到即显式告警，不再让它们静默失效。
+    if getattr(args, 'coverage_tool', '') == 'builtin':
+        logger.warning('--coverage-tool builtin 已弃用（自研 SAM 解析器已删除），'
+                       '本次回退 pandepth（缺件时自动降级 samtools）')
+    if float(getattr(args, 'min_ani', 0.0) or 0.0) > 0:
+        logger.warning('--min-ani 已弃用（无消费者；ANI 分种请用 --ani-thresh）：'
+                       '传入值 %s 被忽略', args.min_ani)
+    if int(getattr(args, 'min_mapq_identify', 10)) != 10:
+        logger.warning('--min-mapq-identify 已弃用（pandepth 后端不消费，'
+                       '照原管线 MAPQ 0 起算）：传入值 %s 被忽略',
+                       args.min_mapq_identify)
 
     print("=" * 64)
     print(" 已知病毒五段整合模块  known_virus_suite")

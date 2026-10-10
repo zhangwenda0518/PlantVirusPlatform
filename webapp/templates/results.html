@@ -509,7 +509,7 @@ async function openRunDir(name) {
     await fetch('/api/tool/open', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })});
-  } catch (e) { alert('打开失败: ' + e); }
+  } catch (e) { alert(t('ui.common.openFail') + ': ' + e); }
 }
 loadSpecialRuns();
 
@@ -591,11 +591,11 @@ function mmSort(name, which, col) {
   mmTable(name, which, 1);
 }
 async function mmDel(name) {
-  if (!confirm(`删除检索项目 "${name}" ？该项目的检索结果 / 元数据 / 图表将一并删除。`)) return;
+  if (!confirm(t('ui.res.delConfirm').replace('{name}', name))) return;
   try {
     await fetch(`/api/meta/collection/${encodeURIComponent(name)}/delete`, {method: 'POST'});
     mmLoad();
-  } catch (e) { alert('删除失败: ' + e); }
+  } catch (e) { alert(t('ui.common.delFail') + ': ' + e); }
 }
 function timeAgo(ts) {
   if (!ts) return '';

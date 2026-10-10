@@ -23,7 +23,7 @@
 | **RAxML-NG** | GTR+G，ML 搜索 + 100 次 FBP 自举支持值；固定种子可复现、线程自动封顶 8 | 发表级 |
 | **NJ** | 距离法 | 探索 |
 
-- 序列 <4 条或比对全 N 时自动降级 FastTree 保树（降级写入任务日志）；最优模型与对数似然写入 05_phylo summary.json。
+- 序列 <4 条时 RAxML-NG 自动降级 NJ（RAxML-NG 自举要求 ≥4 条）；比对无信息（所有列全 N / 全 gap）导致 RAxML-NG 底层断言崩溃时降级 FastTree 兜底保树——两类降级原因都写入任务日志；最优模型与对数似然写入 05_phylo summary.json。
 - 实测口径（209 条 × 966 nt）：RAxML-NG 含自举 730.6s；IQ-TREE 3（GTR+G + 1000 UFBoot）1049s——RAxML 端到端快约 1.4 倍。
 
 ## SDT 同一性分析

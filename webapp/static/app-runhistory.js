@@ -324,14 +324,14 @@ async function rhLoadContigDetail(run) {
   } catch (e) { box.innerHTML = '<p class="hint">明细加载失败</p>'; }
 }
 async function rhDel(btn, name) {
-  if (!confirm(`删除运行 ${name}（目录与全部产物，不可恢复）？`)) return;
+  if (!confirm(t('ui.rh.delConfirm').replace('{name}', name))) return;
   try {
     const r = await fetch(`/api/tool/runs/${encodeURIComponent(name)}/delete`,
                           { method: 'POST' });
-    if (!r.ok) { alert((await r.json()).error || '删除失败'); return; }
+    if (!r.ok) { alert((await r.json()).error || t('ui.common.delFail')); return; }
     RH_OPEN.delete(name);
     rhRefresh();
-  } catch (e) { alert('无法连接: ' + e); }
+  } catch (e) { alert(t('ui.common.connShort') + ': ' + e); }
 }
 function rhGo(btn, runName, boxId, idx) {
   const def = RH_DEFS.find(d => d.box === boxId);

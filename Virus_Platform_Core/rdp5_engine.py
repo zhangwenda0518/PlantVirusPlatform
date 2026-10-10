@@ -21,14 +21,24 @@ mask（吸收 virome_phylo_pipeline/mask_recombination.py）：
 """
 
 import os
+import queue
 import re
 import shutil
 import subprocess
+import threading
+import time
+import uuid
 
 from Virus_Platform_Core.config import PLATFORM_ROOT
 from Virus_Platform_Core.utils import decode_output, to_utf8_file
 
 PLATFORM_TOOLS = ('3rd/tools/rdp5',)
+
+# ⚠️ 模块级锁：RDP5CL 固定把产物写到**自己所在的目录**（bin_dir），而平台可以
+# 并发发起多个 RDP5 任务 → 两个调用会互相删除/覆盖对方的输入与产物
+# （2026-10-03 修复，双保险之一；另一个是每次调用的独立前缀）。进程内串行化
+# 代价可接受：RDP5CL 本身是单机重任务，并发跑两个只会互相拖慢。
+_RDP5_LOCK = threading.Lock()
 
 # RDP5 主表九方法 p 值列（紧跟 recombinant/minor/major 之后）
 RDP5_METHODS = ['RDP', 'GENECONV', 'Bootscan', 'Maxchi', 'Chimaera',
@@ -51,22 +61,57 @@ def find_rdp5cl():
     return None
 
 
+def _cleanup_rdp5_products(bin_dir, run_prefix):
+    """删除本次调用在 RDP5 目录留下的文件（临时输入 + 半成品产物）。
+
+    只匹配本次调用的完整前缀（含 uuid），不会碰到别的任务的文件。
+    """
+    try:
+        names = os.listdir(bin_dir)
+    except OSError:
+        return
+    for fn in names:
+        if fn.startswith(run_prefix):
+            try:
+                os.remove(os.path.join(bin_dir, fn))
+            except OSError:
+                pass
+
+
 def run_rdp5cl(fasta, out_dir, prefix='rdp5', timeout=3600, logger=None,
                cancel=None):
     """运行 RDP5CL。返回主结果 CSV 路径（失败抛 RuntimeError）。
 
     做法对齐服务器封装：把输入复制进 RDP5 目录、cd 到该目录运行
     （RDP5CL 把产物写在当前目录），结束后把 <prefix>* 产物拷回 out_dir。
+
+    ⚠️ 并发安全（2026-10-03 修复）：
+      · 进程内用模块级 `_RDP5_LOCK` 串行化（RDP5CL 的产物落在共享目录，
+        并发调用会互删/互覆）；
+      · 每次调用用 **`rdp5_<uuid4 前 8 位>_` 独立前缀**（输入与产物名全带它），
+        回拷只搬本前缀的文件 —— 即使锁被绕过（多进程并发）也不会串件；
+      · 拷回 out_dir 时去掉 uuid 段，产物名仍是调用方给的 `<prefix>*`
+        （如 `rdp5.csv`），下游命名契约不变。
     """
+    with _RDP5_LOCK:
+        return _run_rdp5cl_impl(fasta, out_dir, prefix=prefix, timeout=timeout,
+                                logger=logger, cancel=cancel)
+
+
+def _run_rdp5cl_impl(fasta, out_dir, prefix='rdp5', timeout=3600,
+                     logger=None, cancel=None):
     exe = find_rdp5cl()
     if not exe:
         raise RuntimeError('未找到 RDP5CL.exe（3rd/tools/rdp5/）')
     bin_dir = os.path.dirname(exe)
     os.makedirs(out_dir, exist_ok=True)
-    local_fa = os.path.join(bin_dir, f'{prefix}_input.fasta')
+    # 每次调用独立前缀（uuid4 前 8 位）：并发/多进程下输入与产物互不覆盖
+    run_prefix = f'{prefix}_{uuid.uuid4().hex[:8]}_'
+    input_name = f'{run_prefix}input.fasta'
+    local_fa = os.path.join(bin_dir, input_name)
     shutil.copyfile(fasta, local_fa)
 
-    cmd = [exe, '-f', f'{prefix}_input.fasta', '-ofp', prefix, '-ds', '-rbdp']
+    cmd = [exe, '-f', input_name, '-ofp', run_prefix, '-ds', '-rbdp']
     if logger:
         logger.log('$ ' + ' '.join(cmd) + f'   (cwd={bin_dir})')
     # 按字节迭代再 decode_output（utf-8→GBK 兜底）：RDP5CL 把含中文路径的
@@ -74,25 +119,71 @@ def run_rdp5cl(fasta, out_dir, prefix='rdp5', timeout=3600, logger=None,
     proc = subprocess.Popen(cmd, cwd=bin_dir, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT)
     deadline = time.time() + timeout
-    for line in proc.stdout:
-        if logger:
+    # ⚠️ cancel/超时不能只在"读到新输出行"时检查（2026-10-03 修复）：
+    #    RDP5CL 可能长时间**静默**（大比对 / 捆绑工具计算中），旧实现下
+    #    cancel 与 timeout 双双失效。改为：stdout 交给独立读取线程（Windows
+    #    下 select 不能用于管道），主线程按 0.5s 轮询排队，静默期间也照常
+    #    检查 cancel/超时 —— 命中立刻 kill 并报错。
+    #    （不依赖 kill 关闭管道：RDP5CL 派生的孙进程可能仍攥着 stdout 句柄。）
+    lines = queue.Queue()
+    _EOF = object()
+
+    def _drain():
+        try:
+            for ln in proc.stdout:
+                lines.put(ln)
+        except Exception:
+            pass
+        finally:
+            lines.put(_EOF)
+
+    reader = threading.Thread(target=_drain, daemon=True, name='rdp5-stdout')
+    reader.start()
+    while True:
+        try:
+            line = lines.get(timeout=0.5)
+        except queue.Empty:
+            line = None
+        if line is _EOF:
+            break
+        if line is not None and logger:
             logger.log(decode_output(line).rstrip('\n'))
         if cancel is not None and cancel.is_set():
             proc.kill()
+            _cleanup_rdp5_products(bin_dir, run_prefix)
             raise RuntimeError('用户取消')
         if time.time() > deadline:
             proc.kill()
+            _cleanup_rdp5_products(bin_dir, run_prefix)
             raise RuntimeError(f'RDP5 超时（>{timeout}s）')
+        if line is None and proc.poll() is not None:
+            # 进程已退出但管道没关（孙进程还攥着句柄）：把余下行读净后收尾，
+            # 不再空等 EOF（否则会把正常退出的任务拖到超时）。
+            time.sleep(0.1)
+            while True:
+                try:
+                    rest = lines.get_nowait()
+                except queue.Empty:
+                    break
+                if rest is _EOF:
+                    break
+                if logger:
+                    logger.log(decode_output(rest).rstrip('\n'))
+            break
     rc = proc.wait()
+    reader.join(timeout=2)
     # 产物拷回（文本产物顺带就地规范为 UTF-8：RDP5 按系统 ANSI 自写，
-    # 与平台其余产物统一；二进制/纯 ASCII 文件 to_utf8_file 原样跳过）
+    # 与平台其余产物统一；二进制/纯 ASCII 文件 to_utf8_file 原样跳过）。
+    # 只搬**本次前缀**的文件；拷回时去掉 uuid 段，保持 `<prefix>*` 命名契约。
     for fn in os.listdir(bin_dir):
-        if fn.startswith(prefix) and fn != f'{prefix}_input.fasta':
+        if fn.startswith(run_prefix) and fn != input_name:
             src = os.path.join(bin_dir, fn)
             if os.path.isfile(src):
-                shutil.copyfile(src, os.path.join(out_dir, fn))
-                if fn.lower().endswith(('.csv', '.txt')):
-                    to_utf8_file(os.path.join(out_dir, fn))
+                tgt_name = prefix + fn[len(run_prefix):]
+                tgt = os.path.join(out_dir, tgt_name)
+                shutil.copyfile(src, tgt)
+                if tgt_name.lower().endswith(('.csv', '.txt')):
+                    to_utf8_file(tgt)
                 try:
                     os.remove(src)
                 except OSError:
@@ -254,8 +345,5 @@ def mask_from_events(fasta_path, events, mask_char='N'):
     merged = merge_intervals(intervals, aln_len)
     records, n_masked = mask_alignment(fasta_path, merged, mask_char)
     return records, n_masked, merged
-
-
-import time  # noqa: E402  （run_rdp5cl 用）
 
 

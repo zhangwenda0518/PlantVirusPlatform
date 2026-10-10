@@ -37,6 +37,7 @@ import sys
 import json
 import time
 import html as _htmlmod
+import threading
 
 from .config import DIRS
 from .utils import (check_path, safe_open, iter_fasta, write_fasta_record,
@@ -592,6 +593,22 @@ def batch_submit(name, emails, group='Fast_No_human', headless=True,
         return pct, txt
 
     try:
+        # 取消看门狗（2026-10-03 修复 P3-18）：原先只在「有新输出行」时才检查
+        # cancel——子进程静默挂起（等服务器、卡网络）时取消永不触发。看门狗
+        # 线程轮询 cancel，置位即 kill → 阻塞的读循环立刻拿到 EOF（与
+        # utils.run_cmd 的超时看门狗同款模式）。
+        _stop_wd = threading.Event()
+
+        def _cancel_watchdog():
+            while not _stop_wd.wait(1.0):
+                if cancel is not None and cancel.is_set():
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    return
+        _wd = threading.Thread(target=_cancel_watchdog, daemon=True)
+        _wd.start()
         for line in proc.stdout:
             line = line.rstrip()
             if not line:
@@ -620,6 +637,10 @@ def batch_submit(name, emails, group='Fast_No_human', headless=True,
                 break
         code = proc.wait(timeout=60)
     finally:
+        try:
+            _stop_wd.set()
+        except NameError:
+            pass
         if proc.poll() is None:
             proc.kill()
     if cancel is not None and cancel.is_set():
@@ -798,8 +819,19 @@ def build_report(name):
 
     # 交叉对照表（平台 ④宿主预测 vs LOGAN 物种）
     cross = _host_cross(meta, {s['contig'] for s in segs})
-    cross_top = {s['contig']:
-                 [o for o in list(organisms)[:5]] for s in segs}
+    # 每个 contig 的 LOGAN 实测 Top 物种：按该 contig 各片段**已导入的结果行**
+    # 统计（2026-10-03 修复 P2-7：原先把全局 Top5 物种塞给每个 contig，与 s
+    # 无关——contig 之间互不相同也显示同一列，属冒充 per-contig 归属）。
+    cross_top = {}
+    if cross:
+        per_contig = {}
+        for s in segs:
+            cnt = per_contig.setdefault(s['contig'], {})
+            for r in agg['per_seg'].get(s['index'], []):
+                o = r.get('organism') or '（未知物种）'
+                cnt[o] = cnt.get(o, 0) + 1
+        cross_top = {c: [o for o, _ in sorted(cnt.items(), key=lambda x: -x[1])][:5]
+                     for c, cnt in per_contig.items()}
 
     def _seg_table(seg):
         rows = sorted(agg['per_seg'].get(seg['index'], []),
@@ -860,10 +892,11 @@ def build_report(name):
                 f"<td>{_esc_html('、'.join(cross_top.get(c['contig'], [])) or '—')}</td></tr>")
         cross_html = (
             "<h2 class='sec'>交叉对照：平台 ④ICTV 宿主预测 × LOGAN 实测物种</h2>"
-            "<p>左侧为本平台基于分类学的宿主预测，右侧为 LOGAN 在公共样本中"
-            "实测到该序列的 Top 物种（宿主物种名出现即提示其感染宿主/携带者）。</p>"
+            "<p>左侧为本平台基于分类学的宿主预测，右侧为**该 contig 对应查询"
+            "片段**导入结果中的 Top 物种（按匹配样本计数；无导入结果显示 —）。"
+            "宿主物种名出现即提示其感染宿主/携带者。</p>"
             "<table class='rtable'><thead><tr><th>Contig</th><th>病毒种</th>"
-            "<th>科</th><th>平台宿主预测</th><th>LOGAN Top 物种</th></tr></thead>"
+            "<th>科</th><th>平台宿主预测</th><th>LOGAN Top 物种（本 contig）</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>")
 
     js = _plotly_js_path(jdir) or ''

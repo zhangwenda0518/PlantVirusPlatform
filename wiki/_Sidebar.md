@@ -21,6 +21,7 @@
 
 **扩展分析**
 - [Phylodynamics](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylodynamics)
+- [CRISPR-Design](https://github.com/zhangwenda0518/VirusPlatform/wiki/CRISPR-Design)
 - [BEAST](https://github.com/zhangwenda0518/VirusPlatform/wiki/BEAST)
 - [Phylogeography](https://github.com/zhangwenda0518/VirusPlatform/wiki/Phylogeography)
 - [Public-Data](https://github.com/zhangwenda0518/VirusPlatform/wiki/Public-Data)
@@ -33,3 +34,4 @@
 - [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops)
 - [CLI-Reference](https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference)
 - [FAQ](https://github.com/zhangwenda0518/VirusPlatform/wiki/FAQ)
+- [AI-Assistant](https://github.com/zhangwenda0518/VirusPlatform/wiki/AI-Assistant)

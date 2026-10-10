@@ -689,8 +689,27 @@ def _check_host_ip(hostname):
             raise RuntimeError(f'域名解析到保留地址，已拒绝: {ip}')
 
 
+class _IctvRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """重定向**逐跳**复检白名单与解析 IP。
+
+    urlopen 的默认行为是跟完重定向后再看最终 URL（事后判定）——中间任何
+    一跳都可以把请求带去任意主机（含内网）。此处改在 redirect_request 里
+    每跳校验，模式同 orf_annot._WhitelistRedirectHandler（2026-10-03 审计 P3）。
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        u = urllib.parse.urlparse(str(newurl))
+        if u.scheme != 'https' or (u.hostname or '').lower() not in ICTV_HOSTS:
+            raise RuntimeError(f'重定向域名不在白名单: {u.hostname}')
+        _check_host_ip(u.hostname.lower())
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_ICTV_OPENER = urllib.request.build_opener(_IctvRedirectHandler)
+
+
 def _open_ictv(url, timeout=120, retries=3):
-    """白名单域名的 HTTPS GET（自动重定向，但最终必须仍在 ictv.global）。
+    """白名单域名的 HTTPS GET（重定向逐跳校验，最终必须仍在 ictv.global）。
 
     返回 (字节内容, 最终 URL)。响应必须是 xlsx，超过大小上限即中止。
     """
@@ -703,7 +722,7 @@ def _open_ictv(url, timeout=120, retries=3):
             _check_host_ip(u.hostname.lower())
             req = urllib.request.Request(url, headers={
                 'User-Agent': 'PlantVirusPlatform/1.0 (+ictv-db-updater)'})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with _ICTV_OPENER.open(req, timeout=timeout) as r:
                 final = urllib.parse.urlparse(r.geturl() or url)
                 if (final.hostname or '').lower() not in ICTV_HOSTS:
                     raise RuntimeError(f'重定向跳出白名单域: {r.geturl()}')

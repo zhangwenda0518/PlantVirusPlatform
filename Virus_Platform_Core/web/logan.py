@@ -40,9 +40,14 @@ def page_logan_report(name):
 def page_logan_report_file(name, filename):
     """溯源报告目录内静态文件（plotly.min.js / 原始结果表 / 查询 FASTA）。"""
     from Virus_Platform_Core.logan_trace import _job_dir
-    p = check_path(os.path.join(_job_dir(name), filename),
+    # base 归一 + 前缀包含校验：filename 传绝对路径时 os.path.join 会整段
+    # 替换 base，check_path(in_platform=True) 拦不住读平台内其它文件。
+    base = os.path.abspath(_job_dir(name))
+    p = check_path(os.path.join(base, filename),
                    must_exist=True, in_platform=True)
-    return send_file(check_path(p, must_exist=True, in_platform=True))
+    if not p.startswith(base + os.sep):
+        abort(400, '非法路径')
+    return send_file(p)
 
 
 @bp.route('/api/logan/samples')

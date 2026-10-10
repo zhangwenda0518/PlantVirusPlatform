@@ -60,27 +60,53 @@ def _id_patterns(ids, pe_suffix=''):
     return [f'{i}{pe_suffix}' for i in ids]
 
 
-def detect_pe_suffix(fastq_path):
-    """探测 FASTQ 首条记录的头后缀，返回 ''/'/1'/'/2'。
+def detect_pe_suffix(fastq_path, logger=None, sample_n=100):
+    """探测 FASTQ 记录头的配对后缀，返回 ''/'/1'/'/2'。
 
     MGI/华大：@LH00278:...:26992/1（单 token 带后缀）
     Illumina 新版：@A00123:... 1:N:0:...（后缀在第二 token，首 token 无）
     SRA 下载：@SRR39909438.9 A00459:.../1（首 token 无，后缀在第二 token）
     后两种取首 token 时天然无后缀，返回 ''即精确匹配原 ID。
+
+    采样前 sample_n 条记录（只取每条记录的头行，跳过序列/质量行——质量串
+    里也可能出现 "/1" 结尾）统计后缀分布：正常数据全一致；混杂时 WARN，
+    但仍按首条结果返回（保持既有探测口径兼容，避免突然换行为）。
     """
+    counts = {}
+    first_suffix = ''
     try:
         with safe_open(fastq_path) as f:
+            heads = 0
+            idx = 0                      # 非空行序号：FASTQ 头落在 0,4,8…
             for line in f:
-                line = line.rstrip('\n')
-                if not line:
+                s = line.rstrip('\n')
+                if not s:
                     continue
-                tok = line.split(None, 1)[0]
-                if tok.endswith('/1') or tok.endswith('/2'):
-                    return tok[-2:]
-                return ''
-    except Exception:
+                if idx % 4 == 0:
+                    tok = s.split(None, 1)[0]
+                    suf = tok[-2:] if (tok.endswith('/1') or
+                                       tok.endswith('/2')) else ''
+                    if heads == 0:
+                        first_suffix = suf
+                    counts[suf] = counts.get(suf, 0) + 1
+                    heads += 1
+                    if heads >= sample_n:
+                        break
+                idx += 1
+    except Exception as e:
+        # 读失败必须有痕迹：静默返回空后缀会退化成「无后缀精确匹配」，
+        # 宿主过滤 0 条的最终告警才兜得住（2026-10-04 审查 P3）
+        if logger:
+            logger.log(f"配对后缀探测失败（按无后缀处理）: "
+                       f"{type(e).__name__}: {e}", "WARN")
         return ''
-    return ''
+    if logger and len(counts) > 1:
+        dist = '，'.join(f'{k or "(无)"} ×{v}' for k, v in counts.items())
+        logger.log(f"配对后缀探测：{os.path.basename(str(fastq_path))} 前 "
+                   f"{sum(counts.values())} 条记录后缀不一致（{dist}），"
+                   f"按首条取 {first_suffix or '(无)'}——请确认 R1/R2 文件"
+                   f"配对正确", "WARN")
+    return first_suffix
 
 
 def collect_host_read_ids(kraken_out):
@@ -132,7 +158,7 @@ def _seqkit_filter(seqkit, r1, r2, out_r1, out_r2, ids, threads, work_dir,
     pats_made = []
     try:
         for i, (src, dst) in enumerate(srcs):
-            suf = detect_pe_suffix(src)
+            suf = detect_pe_suffix(src, logger=logger)
             if progress:
                 progress(0.15 + i * 0.4,
                          f"seqkit 反选 {os.path.basename(str(src))}")
@@ -315,7 +341,7 @@ def filter_single_fastq(r1, out_r1, drop_ids, logger=None, progress=None):
 def remove_host(sample_dir, r1, r2, db_host, threads=None, confidence=0.0,
                 logger=None, force=False, chunk_dir=None,
                 classify_r1=None, classify_r2=None, allow_convert=True,
-                progress=None):
+                progress=None, min_hit_groups=2):
     """执行宿主去除（双端或单端）。返回阶段结果 dict（含 kept fastq 路径与统计）。
 
     classify_r1/classify_r2: 预处理阶段产出的 FASTA（可选）——分类步骤直接用
@@ -331,10 +357,43 @@ def remove_host(sample_dir, r1, r2, db_host, threads=None, confidence=0.0,
     kept_r1 = os.path.join(out_dir, 'kept_R1.fastq.gz')
     kept_r2 = os.path.join(out_dir, 'kept_R2.fastq.gz') if r2 else None
     if is_step_done(out_dir, step) and not force:
+        # 复用校验（审查 P1-1）：旧实现只看 .done 就返回旧 stats——分类
+        # 输入、宿主库、confidence/min_hit_groups 任一变化都必须重跑，
+        # 否则换库/换输入后仍沿用上一轮的宿主占比与 kept reads。
+        try:
+            with safe_open(stats_file) as f:
+                prev = json.load(f)
+            _cur_fp = [_finfo(p) for p in
+                       (classify_r1 or r1, classify_r2 or r2) if p]
+            _cur_params = {'confidence': confidence,
+                           'min_hit_groups': min_hit_groups}
+            _prev_params = prev.get('classify_params') or {}
+            _prev_db = (prev.get('host_db') or {}).get('path')
+            # 口径对齐：stats 里记的是 host_db_info 的 abspath 规范化路径，
+            # 本次入参可能是相对路径——两种写法都认，否则相对路径配置下
+            # 永远判"库已切换"、每次都重跑（断点续跑被废）。
+            _db_variants = {str(db_host),
+                            os.path.normpath(os.path.abspath(str(db_host)))}
+            _fp_ok = (prev.get('classify_inputs') == _cur_fp)
+            _pm_ok = all(_prev_params.get(k) == v
+                         for k, v in _cur_params.items())
+            _db_ok = (_prev_db in (None, '',) or _prev_db in _db_variants)
+        except (OSError, ValueError):
+            _fp_ok = _pm_ok = _db_ok = False
+        if _fp_ok and _pm_ok and _db_ok:
+            if logger:
+                logger.log("阶段①宿主去除已完成（输入/库/参数未变化），跳过")
+            return prev
         if logger:
-            logger.log("阶段①宿主去除已完成，跳过")
-        with safe_open(stats_file) as f:
-            return json.load(f)
+            _why = []
+            if not _fp_ok:
+                _why.append('分类输入已变化')
+            if not _pm_ok:
+                _why.append('confidence/min_hit_groups 已变化')
+            if not _db_ok:
+                _why.append(f'宿主库已切换（{_prev_db} → {db_host}）')
+            logger.log('阶段①存在断点，但' + '、'.join(_why)
+                       + '——重跑本阶段（不复用旧结果）', 'WARN')
 
     cls_in = [p for p in (classify_r1 or r1, classify_r2 or r2) if p]
     # 宿主库身份：记录 + 前置告警。
@@ -366,7 +425,8 @@ def remove_host(sample_dir, r1, r2, db_host, threads=None, confidence=0.0,
             progress(0.05 + pct * 0.83, f'① 宿主去除：{msg}')
 
     res = classify(db_host, cls_in, out_dir, paired=bool(r2),
-                   threads=threads, confidence=confidence, logger=logger,
+                   threads=threads, confidence=confidence,
+                   min_hit_groups=min_hit_groups, logger=logger,
                    chunk_dir=chunk_dir, allow_convert=allow_convert,
                    progress=_cls_prog)
 
@@ -401,7 +461,7 @@ def remove_host(sample_dir, r1, r2, db_host, threads=None, confidence=0.0,
         # 但 stats 只写 input_r1，事后无法看出分母分子错配）。
         'classify_inputs': [_finfo(p) for p in cls_in],
         'classify_params': {'confidence': confidence, 'threads': threads,
-                            'min_hit_groups': 2},
+                            'min_hit_groups': min_hit_groups},
         'kraken_out': os.path.basename(res['kraken']) if res['kraken'] else None,
         'kreport': os.path.basename(res['kreport']) if res['kreport'] else None,
         # 宿主库溯源：谁被用来做宿主去除。原先 stats 里完全没有这项，

@@ -2,7 +2,7 @@
  "stage": "phylogeo",
  "ok": true,
  "error": null,
- "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo",
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo",
  "trait": "region",
  "warnings": [
   "2/14 个内部节点的ML 最大边际概率 < 0.7（最低 0.43）—— 涉及这些节点的迁移方向不可靠，做方向性结论前先看置信分布"
@@ -11,15 +11,15 @@
   "坐标：0 个区划来自用户坐标表，3 个用内置**近似质心**兜底（不是精确地理中心，引用时须写明出处）"
  ],
  "outputs": {
-  "ml_gtr": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml\\GTR.txt",
-  "ml_confidence_csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml\\confidence.csv",
-  "ml_annotated_nexus": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml\\annotated_tree.nexus",
-  "corridors": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\corridors.tsv",
-  "events_year": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\events_year.tsv"
+  "ml_gtr": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml\\GTR.txt",
+  "ml_confidence_csv": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml\\confidence.csv",
+  "ml_annotated_nexus": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml\\annotated_tree.nexus",
+  "corridors": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\corridors.tsv",
+  "events_year": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\events_year.tsv"
  },
  "sampling_bias_correction": "auto",
- "tree_in": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\timetree.nwk",
- "states_in": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\states.csv",
+ "tree_in": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\timetree.nwk",
+ "states_in": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\states.csv",
  "ml": {
   "ok": true,
   "error": null,
@@ -37,10 +37,10 @@
     "B",
     "C"
    ],
-   "mu": 0.043904,
+   "mu": 0.043903,
    "pi": {
     "A": 0.2404,
-    "B": 0.3973,
+    "B": 0.3974,
     "C": 0.3623
    },
    "W": {},
@@ -62,15 +62,15 @@
    "confidence_labels_unmapped": [],
    "n_nodes": 29,
    "n_internal": 14,
-   "median_max_p_internal": 0.9995153476155009,
-   "min_max_p": 0.4296896863913765,
+   "median_max_p_internal": 0.9995152581707699,
+   "min_max_p": 0.42969143555784006,
    "n_below_0_7": 2,
    "n_below_0_5": 1,
    "frac_below_0_7": 0.1429
   },
-  "sampling_bias_correction": 0.992887,
-  "sampling_bias_correction_suggested": 0.992887,
-  "stdout_tail": "Using column 'name' as taxon name. This needs to match the taxa in the tree!\n\n0.00\tWARNING: TreeTime has detected branches that are longer than 4. TreeTime\n    \trequires trees where branch length is in units of average number of\n    \tnucleotide or protein substitutions per site. Use on trees with longer\n    \tbranches is not recommended for ancestral sequence reconstruction.\nAssigned discrete traits to 15 out of 15 taxa.\n\n\nCompleted mugration model inference of attribute 'region' for D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\timetree.nwk\n\nSaved inferred mugration model as: D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml/GTR.txt\nSaved table with ancestral state confidences as: D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml/confidence.csv\nSaved annotated tree as: D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml/annotated_tree.nexus\n---Done!\n"
+  "sampling_bias_correction": 0.992767,
+  "sampling_bias_correction_suggested": 0.992767,
+  "stdout_tail": "Using column 'name' as taxon name. This needs to match the taxa in the tree!\n\n0.00\tWARNING: TreeTime has detected branches that are longer than 4. TreeTime\n    \trequires trees where branch length is in units of average number of\n    \tnucleotide or protein substitutions per site. Use on trees with longer\n    \tbranches is not recommended for ancestral sequence reconstruction.\nAssigned discrete traits to 15 out of 15 taxa.\n\n\nCompleted mugration model inference of attribute 'region' for D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\timetree.nwk\n\nSaved inferred mugration model as: D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml/GTR.txt\nSaved table with ancestral state confidences as: D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml/confidence.csv\nSaved annotated tree as: D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml/annotated_tree.nexus\n---Done!\n"
  },
  "root_year": 1978.4307255555555,
  "ml_n_changes": 4,
@@ -103,7 +103,7 @@
    "child": "NODE_0000009",
    "parent": "NODE_0000004",
    "year": 2005.508,
-   "branch_len": 17.09961
+   "branch_len": 17.09581
   },
   {
    "from": "Asia",
@@ -116,7 +116,7 @@
  ],
  "cross_check": {
   "tree": "divergence_tree.nwk",
-  "mu": 36.033338,
+  "mu": 36.028983,
   "n_changes": 4,
   "counts": {
    "Asia->Americas": 1,
@@ -142,7 +142,7 @@
    "to": "Asia",
    "parent": "NODE_0000013",
    "child": "NODE_0000004",
-   "year": 1988.408
+   "year": 1988.412
   },
   {
    "from": "Americas",
@@ -183,7 +183,7 @@
   "max_share": 0.4,
   "min_share": 0.2667,
   "corrected": true,
-  "factor": 0.992887
+  "factor": 0.992767
  },
  "coords": {
   "Americas": [

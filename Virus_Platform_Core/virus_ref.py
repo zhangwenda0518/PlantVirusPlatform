@@ -2,6 +2,11 @@
 """
 非冗余病毒参考库（databases/virus_ref/）——元数据中心。
 
+数据根按候选顺序解析（见 _CANDIDATE_ROOTS）：期望根 databases/virus_ref/
+之外，回退 databases/virusref_db/plant_ref（线上修复版，reference.* 命名）
+与 databases/_dl_staging（原始下载暂存）；全不可用时接口返回空，
+由调用方给出显式告警（如 host_analysis 的"已知宿主交叉验证不可用"）。
+
 数据件套（源自 plant_virus_db_pipeline，更新时整体替换）:
   Plant_Virus_Ref.fasta / Plant_Virus_Ref.Info.tsv      8,465 条非冗余代表集（98% ANI 聚类）
   Plant_Virus.complete_ref.fasta / _info.tsv            5,773 条完整基因组子集（BLAST 确认用）
@@ -24,12 +29,75 @@ from .utils import safe_open
 
 _REF_DIR = os.path.join(DIRS['databases'], 'virus_ref')
 
+#: 数据根候选（按优先级）。期望根 databases/virus_ref/ 之外，实际部署里
+#: 数据常落在别处：virusref_db/plant_ref（线上修复版，reference.* 命名，
+#: 见该目录 manifest.json）或 databases/_dl_staging（原始下载暂存，与首选项
+#: 同名）。每项 = (相对 databases 的路径段, {逻辑名: 该根实际文件名})；
+#: 逻辑名取不到（如 plant_ref 无 complete/full 子集）留空串 → 对应接口
+#: 返回 None，调用方回退。
+_CANDIDATE_ROOTS = (
+    (('virus_ref',), {
+        'ref_fasta': 'Plant_Virus_Ref.fasta',
+        'ref_info': 'Plant_Virus_Ref.Info.tsv',
+        'complete_fasta': 'Plant_Virus.complete_ref.fasta',
+        'complete_info': 'Plant_Virus.complete_ref_info.tsv',
+        'full_fasta': 'Plant_Virus_Full.fasta',
+        'version': 'DATA_VERSION'}),
+    (('virusref_db', 'plant_ref'), {
+        'ref_fasta': 'reference.fasta',
+        'ref_info': 'reference.ref_info.tsv',
+        'complete_fasta': '',
+        'complete_info': '',
+        'full_fasta': '',
+        'version': ''}),
+    (('_dl_staging',), {
+        'ref_fasta': 'Plant_Virus_Ref.fasta',
+        'ref_info': 'Plant_Virus_Ref.Info.tsv',
+        'complete_fasta': '',
+        'complete_info': '',
+        'full_fasta': '',
+        'version': ''}),
+)
+#: 逻辑文件名（本模块 API 里的名字）→ 候选根文件名表中的键。
+_LOGICAL_KEYS = {
+    'Plant_Virus_Ref.fasta': 'ref_fasta',
+    'Plant_Virus_Ref.Info.tsv': 'ref_info',
+    'Plant_Virus.complete_ref.fasta': 'complete_fasta',
+    'Plant_Virus.complete_ref_info.tsv': 'complete_info',
+    'Plant_Virus_Full.fasta': 'full_fasta',
+    'DATA_VERSION': 'version',
+}
+_resolved_root = None      # (dir, names) 缓存；refresh_paths() 时失效
+
+
+def _resolve_root():
+    """按候选顺序返回首个含「Ref FASTA + Info TSV」两件套的数据根。
+
+    全无时返回默认根 databases/virus_ref 及其文件名表（调用方按空数据
+    处理）——显式的空态告警由调用方（host_analysis 加载处）给出。
+    """
+    global _resolved_root
+    if _resolved_root is not None:
+        return _resolved_root
+    dbs = DIRS['databases']
+    for segs, names in _CANDIDATE_ROOTS:
+        d = os.path.join(dbs, *segs)
+        if os.path.isfile(os.path.join(d, names['ref_fasta'])) and \
+                os.path.isfile(os.path.join(d, names['ref_info'])):
+            _resolved_root = (d, names)
+            return _resolved_root
+    _resolved_root = (os.path.join(dbs, *_CANDIDATE_ROOTS[0][0]),
+                      _CANDIDATE_ROOTS[0][1])
+    return _resolved_root
+
 
 def refresh_paths():
     """重算模块级路径常量（切换「设置 → 数据库目录」后由 config 回调）。"""
-    global _REF_DIR
+    global _REF_DIR, _resolved_root
     _REF_DIR = os.path.join(DIRS['databases'], 'virus_ref')
+    _resolved_root = None
     return _REF_DIR
+
 
 # ref_meta.tsv 输出列（缓存文件，可用 build_meta(force=True) 重建）
 META_FIELDS = [
@@ -44,17 +112,29 @@ META_FIELDS = [
 
 
 def ref_dir():
-    """virus_ref 目录（不存在返回 None，调用方回退旧数据源）。"""
-    if os.path.isdir(_REF_DIR):
-        return _REF_DIR
+    """virus_ref 数据目录（候选解析后的实际根；无可用数据返回 None，
+    调用方回退旧数据源）。"""
+    d, names = _resolve_root()
+    if os.path.isdir(d) and os.path.isfile(os.path.join(d, names['ref_fasta'])):
+        return d
     return None
 
 
 def _ref_file(name):
-    d = ref_dir()
-    if not d:
+    """按逻辑名取文件：先在候选根里换算实际文件名（如 plant_ref 根的
+    Plant_Virus_Ref.Info.tsv → reference.ref_info.tsv），不存在的逻辑名
+    （该根无此子集）返回 None。'ref_meta.tsv' 等本模块自建缓存名原样使用。"""
+    d, names = _resolve_root()
+    if not os.path.isdir(d):
         return None
-    p = os.path.join(d, name)
+    key = _LOGICAL_KEYS.get(name)
+    if key:
+        actual = names.get(key, '')
+        if not actual:
+            return None
+    else:
+        actual = name
+    p = os.path.join(d, actual)
     return p if os.path.isfile(p) else None
 
 

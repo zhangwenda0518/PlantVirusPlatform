@@ -19,6 +19,45 @@ from Virus_Platform_Core.web.tasks import tm
 bp = Blueprint('build', __name__)
 
 
+def _selfcheck_invalidate():
+    """库状态刚变化（建库/加载/切库/登记），丢掉自检的进程内缓存。
+
+    不失效的话，总览页环境状态条会把变化前的"数据库 未就绪"继续展示到
+    缓存过期（默认 5 分钟），看起来像"库加载了但总览没同步"。"""
+    from Virus_Platform_Core.selfcheck import invalidate
+    invalidate()
+
+
+def _busy_build_task(target=None, name=None):
+    """同目标（输出目录 / 任务名）的建库任务是否已在跑或排队。
+
+    建库类接口原先无并发去重：对同一目录连点两次会起两个任务同时写
+    同一个库目录（一个删旧索引另一个正在建 → 产物混合、互相覆盖）。
+    heavy 闸门只管并发数量，不管目标是否重复。提交前用它拦一道 409。
+    """
+    def _norm(p):
+        return os.path.normcase(os.path.normpath(os.path.abspath(str(p))))
+    tgt = _norm(target) if target else None
+    with tm.lock:
+        recs = list(tm.tasks.values())
+    for r in recs:
+        if r.get('status') not in ('running', 'queued'):
+            continue
+        if tgt and r.get('out_dir') and _norm(r['out_dir']) == tgt:
+            return r
+        if name and r.get('name') == name:
+            return r
+    return None
+
+
+def _reject_busy_build(target=None, name=None):
+    """同目标建库任务在跑 → 409（busy 记录一并告知，便于用户去任务中心取消）。"""
+    busy = _busy_build_task(target, name)
+    if busy:
+        abort(409, f'同一目标的建库任务已在运行（{busy.get("id")} '
+                   f'{busy.get("name")}）；请等它完成或在任务中心取消后再提交')
+
+
 @bp.route('/api/tools')
 def api_tools():
     return jsonify({'threads': cfg.threads, 'tools': cfg.tool_status()})
@@ -135,6 +174,7 @@ def api_load_taxonomy():
         _shutil.copyfile(src, dst)
         copied.append(fn)
     from Virus_Platform_Core.taxonomy import taxonomy_ready
+    _selfcheck_invalidate()
     return jsonify({'ok': taxonomy_ready(), 'copied': copied,
                     'dir': DIRS['taxonomy']})
 
@@ -164,6 +204,7 @@ def api_load_host_db():
             abort(400, f'无法登记外部库根: {e}')
     from Virus_Platform_Core.config import host_db_info
     cfg.set_active_host_db(d)
+    _selfcheck_invalidate()
     return jsonify({'ok': True, 'path': cfg.databases['host'],
                     'info': host_db_info(cfg.databases['host'])})
 
@@ -203,6 +244,7 @@ def api_set_host_db():
         path = cfg.set_active_host_db(name)
     except ValueError as e:
         abort(400, str(e))
+    _selfcheck_invalidate()
     return jsonify({'ok': True, 'path': path, 'info': host_db_info(path)})
 
 
@@ -218,6 +260,7 @@ def api_register_virus_lib():
         cfg.extra_virus_libs = [p for p in cfg.extra_virus_libs
                                 if os.path.normpath(os.path.abspath(p)) != d]
         cfg.save()
+        _selfcheck_invalidate()
         return jsonify({'ok': True, 'libs': cfg.extra_virus_libs})
     if not _db_dir_ready(d):
         abort(400, '不是有效的 kunpeng 库目录（缺 hash_*.k2d / opts.k2d / '
@@ -225,6 +268,7 @@ def api_register_virus_lib():
     if d not in cfg.extra_virus_libs:
         cfg.extra_virus_libs.append(d)
         cfg.save()
+    _selfcheck_invalidate()
     return jsonify({'ok': True, 'libs': cfg.extra_virus_libs})
 
 
@@ -292,6 +336,7 @@ def _job_build_taxonomy(log, prog, cancel):
     prog('taxonomy', 0.1, '准备 NCBI taxonomy')
     prepare_taxonomy(logger=logger)
     prog('taxonomy', 1.0, 'taxonomy 就绪')
+    _selfcheck_invalidate()
     logger.close()
     return 'ok'
 
@@ -316,6 +361,7 @@ def _job_build_host_db(body):
             logger.log(f"当前宿主库已切换: {out}")
         except ValueError as e:                      # 目录没建成才可能到这
             logger.log(f"宿主库已建但切换当前库失败: {e}", "WARN")
+        _selfcheck_invalidate()
         prog('build_host', 1.0, f'宿主库就绪: {os.path.basename(out)}')
         logger.close()
         return 'ok'
@@ -333,6 +379,7 @@ def _job_build_virus_db(body):
                        threads=int(body.get('threads', cfg.threads)),
                        logger=logger, rebuild=bool(body.get('rebuild')),
                        clean_mid=bool(body.get('clean_mid')))
+        _selfcheck_invalidate()
         prog('build_virus', 1.0, '病毒库就绪')
         logger.close()
         return 'ok'
@@ -375,6 +422,243 @@ def api_build_host_db():
     return jsonify({'task': tid, 'out_dir': d})
 
 
+@bp.route('/api/host_genome_download', methods=['POST'])
+def api_host_genome_download():
+    """宿主参考基因组下载（上游）→ 产物直接衔接「宿主库构建」（下游）。
+
+    body: {species: 物种拉丁名（"Oryza sativa" 或 oryza_sativa）,
+           accession: 可选组装 accession（GCF_/GCA_，给出后走 NCBI datasets
+                      按号精确下载，species 可省）,
+           chromosomes: 可选染色体过滤（仅 accession 模式，如 "X,Y"）,
+           source: 'gget'（默认，Ensembl/Ensembl Plants，补 NCBI 覆盖不到
+                   的植物宿主）| 'ncbi'（datasets taxon / E-utilities 回退）,
+           release: 可选 Ensembl release（仅 gget；留空 = 最新）,
+           taxid:   可选 NCBI TaxID（留空则在线查询）}
+
+    产物：host-db/<taxid>_<物种>/genome.fa（平台建库锚点名，连同
+    all.genome.uniq.fasta / genome_report.txt / gget_ref.json）。任务
+    result 带回 genome_fa 与 taxid，前端（数据资源组「基因组查询下载」
+    独立卡）据此显示结果并跳转建库页，实现 下载 → 建库 一条龙。
+    """
+    body = request.get_json(force=True) or {}
+    species = (body.get('species') or '').strip()
+    accession = (body.get('accession') or '').strip()
+    chromosomes = (body.get('chromosomes') or '').strip()
+    if not species and not accession:
+        abort(400, '缺少物种拉丁名或 Assembly Accession')
+    if accession and not re.fullmatch(r'[GC]C[AF]_\d+\.\d+', accession):
+        abort(400, f'accession 格式应为 GCF_/GCA_数字.版本: {accession}')
+    source = (body.get('source') or 'gget').strip()
+    if source not in ('gget', 'ncbi'):
+        abort(400, f'未知下载来源: {source}（可选 gget / ncbi）')
+    if source == 'gget' and accession:
+        abort(400, 'gget/Ensembl 源不支持 accession（那是 NCBI 组装号）；'
+                   '请留空来源或改用 NCBI')
+    if source == 'gget':
+        import importlib.util
+        if importlib.util.find_spec('gget') is None:
+            abort(400, 'gget 未安装：请先在平台 Python 环境执行 '
+                       'pip install "gget==0.30.5"，或改选 NCBI 源')
+    elif accession:
+        from Virus_Platform_Core.public_meta.datasets_cli import \
+            datasets_available
+        if not datasets_available():
+            abort(400, 'accession 模式需要 NCBI datasets CLI：'
+                       '执行 python main.py datasets-setup 自动安装')
+    release = body.get('release') or None
+    if release is not None:
+        try:
+            release = int(release)
+        except (TypeError, ValueError):
+            abort(400, 'Ensembl release 必须是数字')
+    taxid = body.get('taxid') or None
+    if taxid is not None:
+        try:
+            taxid = int(taxid)
+        except (TypeError, ValueError):
+            abort(400, 'TaxID 必须是数字')
+
+    def job(log, prog, cancel):
+        from Virus_Platform_Core.public_meta import host_genome as hg
+        from Virus_Platform_Core.config import DIRS
+        logger = TaskLogger(callback=log)
+        slug = re.sub(r'[^\w\-]+', '_', accession or species).strip('_') \
+            or 'host'
+        if accession:
+            prog('download', 0.1, f'datasets accession {accession}')
+            from Virus_Platform_Core.public_meta import datasets_cli as dsc
+            res = hg.download_genome_accession(
+                accession, os.path.join(DIRS['host_src'], f'genome_{slug}'),
+                chromosomes=chromosomes, taxid=taxid, log=logger.log)
+            _selfcheck_invalidate()
+            prog('done', 1.0, f"基因组就绪: {res['genome_fa']}")
+            logger.close()
+            return res
+        prog('lookup', 0.05, '解析 TaxID 与输出目录')
+        t = taxid or hg._lookup_taxid(species)
+        out_dir = os.path.join(
+            DIRS['host_src'], f'{t}_{slug}' if t else f'genome_{slug}')
+        if source == 'gget':
+            prog('download', 0.15, f'gget/Ensembl 下载 {species}')
+            res = hg.download_genome_gget(species, out_dir, release=release,
+                                          taxid=t, log=logger.log)
+        else:
+            prog('download', 0.15, f'NCBI 下载 {species}')
+            os.makedirs(out_dir, exist_ok=True)
+            try:
+                hg.download_genome_https(species, out_dir, log=logger.log)
+            except Exception as e:                 # noqa: BLE001
+                logger.log(f'NCBI 下载失败: {e}', 'ERROR')
+            fasta_files = hg.collect_fasta_files(
+                os.path.join(out_dir, 'extracted'))
+            if not fasta_files:
+                raise RuntimeError('NCBI 源未下载到任何基因组 FASTA'
+                                   '（可改选 gget/Ensembl 源）')
+            merged = os.path.join(out_dir, 'all.genome.uniq.fasta')
+            hg.merge_and_deduplicate(fasta_files, merged, log=logger.log)
+            res = {'out_dir': out_dir,
+                   'genome_fa': hg.finalize_host_dir(out_dir, merged,
+                                                     log=logger.log),
+                   'taxid': t, 'species': hg.normalize_species(species),
+                   'source': 'ncbi'}
+        _selfcheck_invalidate()
+        prog('done', 1.0, f"基因组就绪: {res.get('genome_fa', out_dir)}")
+        logger.close()
+        return res
+
+    label = accession or species
+    _task_name = cfg.tr(f'宿主基因组下载 {label}',
+                       f'Host genome download {label}')
+    # out_dir 在本接口内要到 job 里查完 taxid 才知道，故按任务名去重
+    # （同名 = 同 accession/物种，落同一宿主目录）。
+    _reject_busy_build(name=_task_name)
+    tid = tm.start(_task_name, job)
+    return jsonify({'task': tid})
+
+
+@bp.route('/api/datasets_virus', methods=['POST'])
+def api_datasets_virus():
+    """NCBI datasets 下载病毒数据集（taxon + 可选宿主过滤）→
+    直接落平台鉴定库数据集布局（reference.fasta + reference.ref_info.tsv，
+    databases/virusref_db/<名>/），建库页「原始数据集」卡即时识别，可一键建库。
+
+    body: {taxon: 病毒 taxon（如 "tomato brown rugose fruit virus"）,
+           host: 可选宿主过滤（如 "Solanum lycopersicum"）,
+           name: 可选数据集名（默认按 taxon 命名）}"""
+    body = request.get_json(force=True) or {}
+    taxon = (body.get('taxon') or '').strip()
+    host = (body.get('host') or '').strip()
+    name = (body.get('name') or '').strip()
+    if not taxon:
+        abort(400, '缺少病毒 taxon')
+    from Virus_Platform_Core.public_meta.datasets_cli import \
+        datasets_available
+    if not datasets_available():
+        abort(400, 'NCBI datasets CLI 未安装：执行 python main.py '
+                   'datasets-setup 自动安装（官方 exe，NCBI 域名白名单内）')
+    if name and not re.fullmatch(r'[A-Za-z0-9_\-]+', name):
+        abort(400, f'数据集名仅限字母数字-_: {name}')
+    from Virus_Platform_Core.config import DIRS
+    if name:
+        tgt = os.path.join(DIRS['virus_src'], name)
+        if os.path.isfile(os.path.join(tgt, 'reference.fasta')):
+            abort(409, f'同名数据集已存在: {tgt}；请换一个名字')
+
+    def job(log, prog, cancel):
+        from Virus_Platform_Core.public_meta import datasets_cli as dsc
+        logger = TaskLogger(callback=log)
+        prog('download', 0.1,
+             f'datasets virus taxon={taxon}' + (f' host={host}' if host
+                                                else ''))
+        res = dsc.download_virus(taxon=taxon, host=host or None,
+                                 name=name or None, include=('genome',),
+                                 log=logger.log)
+        prog('done', 1.0,
+             f"数据集就绪: {res['reference']}（{res['n_seqs']} 条序列）")
+        logger.close()
+        return {'out_dir': res['out_dir'], 'reference': res['reference'],
+                'ref_info': res['ref_info'], 'n_seqs': res['n_seqs'],
+                'name': res['name']}
+
+    _task_name = cfg.tr(f'病毒数据集下载 {taxon}',
+                       f'Virus dataset download {taxon}')
+    # 给了 name（目标目录已知）按目录去重，否则按任务名（同 taxon+host）。
+    _reject_busy_build(tgt if name else None, _task_name)
+    tid = tm.start(_task_name, job)
+    return jsonify({'task': tid})
+
+
+@bp.route('/api/datasets_download', methods=['POST'])
+def api_datasets_download():
+    """NCBI datasets 通用下载（gene / taxonomy / genome 通用模式）→
+    datasets_dl/<模式>_<查询名>/，不做平台数据集布局（virus 走上面的
+    /api/datasets_virus，宿主基因组走 /api/host_genome_download）。
+
+    body: {mode: 'genome' | 'gene' | 'taxonomy',
+           taxon / accession / chromosomes / include / exclude   (genome)
+           gene-id / symbol / taxon / protein-accession          (gene)
+           taxons                                                (taxonomy)}
+    """
+    body = request.get_json(force=True) or {}
+    mode = (body.get('mode') or '').strip()
+    if mode not in ('genome', 'gene', 'taxonomy'):
+        abort(400, f'未知模式: {mode}（可选 genome / gene / taxonomy）')
+    from Virus_Platform_Core.public_meta.datasets_cli import \
+        datasets_available
+    if not datasets_available():
+        abort(400, 'NCBI datasets CLI 未安装：执行 python main.py '
+                   'datasets-setup 自动安装（官方 exe，NCBI 域名白名单内）')
+
+    kwargs = {}
+    if mode == 'genome':
+        taxon = (body.get('taxon') or '').strip()
+        accession = (body.get('accession') or '').strip()
+        if not taxon and not accession:
+            abort(400, 'genome 模式需要 taxon 或 accession')
+        if accession and not re.fullmatch(r'[GC]C[AF]_\d+\.\d+', accession):
+            abort(400, f'accession 格式应为 GCF_/GCA_数字.版本: {accession}')
+        kwargs = {'taxon': taxon or None, 'accession': accession or None,
+                  'chromosomes': (body.get('chromosomes') or '').strip() or None,
+                  'include': (body.get('include') or '').strip() or None}
+        slug = re.sub(r'[^\w\-]+', '_', accession or taxon).strip('_') or 'ds'
+    elif mode == 'gene':
+        gene_id = str(body.get('gene-id') or '').strip()
+        symbol = (body.get('symbol') or '').strip()
+        gt = (body.get('taxon') or '').strip()
+        acc = (body.get('protein-accession') or '').strip()
+        if not gene_id and not acc and not (symbol and gt):
+            abort(400, 'gene 模式需要 gene-id，或 symbol+taxon，'
+                       '或 protein-accession')
+        kwargs = {'gene_id': gene_id or None, 'symbol': symbol or None,
+                  'taxon': gt or None, 'accession': acc or None}
+        slug = re.sub(r'[^\w\-]+', '_', gene_id or acc or symbol).strip('_')
+    else:
+        taxons = (body.get('taxons') or '').strip()
+        if not taxons:
+            abort(400, 'taxonomy 模式需要 taxons（逗号分隔）')
+        kwargs = {'taxons': taxons}
+        slug = re.sub(r'[^\w\-]+', '_', taxons.split(',')[0]).strip('_')
+
+    out_dir = os.path.join(PLATFORM_ROOT, 'datasets_dl',
+                           f'{mode}_{slug or "ds"}')
+
+    def job(log, prog, cancel):
+        from Virus_Platform_Core.public_meta import datasets_cli as dsc
+        logger = TaskLogger(callback=log)
+        prog('download', 0.1, f'datasets {mode}（见日志）')
+        res = dsc.download(mode, out_dir=out_dir, log=logger.log, **kwargs)
+        prog('done', 1.0, f"下载完成: {res['out_dir']}")
+        logger.close()
+        return {'out_dir': res['out_dir'],
+                'fasta': res.get('fasta') or [],
+                'n_seqs': res.get('n_seqs'),
+                'n_reports': len(res.get('reports') or [])}
+
+    tid = tm.start(cfg.tr(f'datasets {mode} 下载 {slug}',
+                         f'datasets {mode} download {slug}'), job)
+    return jsonify({'task': tid, 'out_dir': out_dir})
+
+
 def _universal_db_job(source):
     """通用病毒库建库 job 构造器。"""
     def job(log, prog, cancel):
@@ -385,6 +669,7 @@ def _universal_db_job(source):
         res = build_universal_db(
             source, hash_capacity='2G', logger=logger, rebuild=True)
         prog('build', 0.9, '建库完成，校验库文件')
+        _selfcheck_invalidate()
         prog('done', 1.0, '完成')
         logger.close()
         return res
@@ -411,7 +696,9 @@ def api_convert_kraken2():
     db_dir = os.path.join(DIRS['databases'], name)
     # 防覆盖（与鉴定库建库同一口径）：目标已是结构完整的 kunpeng 库时，
     # 不显式勾 overwrite 就拒绝——转换写到一半的残目录不算可用库，放行。
-    if body.get('overwrite') is None and _db_dir_ready(db_dir):
+    # 判定用 falsy（与下方 build_virus_db 的 `not body.get('overwrite')` 一致）：
+    # 原先写 `is None`，前端传 overwrite=false / "" 时会被当成"要覆盖"放行。
+    if not body.get('overwrite') and _db_dir_ready(db_dir):
         abort(409, f'目标库已存在且可用: {db_dir}；请换一个库名，'
                    '或请求里带 overwrite=true 覆盖重建')
 
@@ -422,12 +709,14 @@ def api_convert_kraken2():
         res = convert_kraken2(tar, db_dir,
                               hash_capacity=body.get('hash_capacity') or '1G',
                               logger=logger)
+        _selfcheck_invalidate()
         prog('done', 1.0, '完成')
         logger.close()
         return {'db_dir': res}
 
-    tid = tm.start(cfg.tr(f'Kraken2 库转换 {name}', f'Kraken2 convert {name}'),
-                   job)
+    _task_name = cfg.tr(f'Kraken2 库转换 {name}', f'Kraken2 convert {name}')
+    _reject_busy_build(db_dir, _task_name)       # 同目标已有任务在跑 → 409
+    tid = tm.start(_task_name, job, out_dir=db_dir)
     return jsonify({'task': tid})
 
 
@@ -538,7 +827,7 @@ def api_datasets():
         # kv_index ↔ 主库 kunpeng_db/plant，其余同名对应 kunpeng_db/<name>；
         # 其他位置的库不预设分类库落点。
         if lib.get('scope') == 'platform':
-            if nm == 'kv_index':
+            if nm in ('kv_index', 'plant_ref'):   # 平台默认库（2026-09-29 更名）
                 kdir, kname = db_path('virus', 'plant'), 'plant'
             else:
                 kdir = os.path.join(DIRS['databases'], 'kunpeng_db', nm)
@@ -634,19 +923,9 @@ def api_build_kv_index():
     overwrite = bool(body.get('overwrite'))
     _stale = [os.path.join(out_dir, p) for p in
               ('reference.fasta', 'salmon_k31', 'salmon', 'minibwa')]
-    if any(os.path.exists(p) for p in _stale):
-        if not overwrite:
-            abort(409, f'同名鉴定库已存在: {out_dir}；请换一个库名，'
-                       '或勾选「允许覆盖同名库」重建')
-        import shutil as _sh_pre
-        for p in _stale:
-            try:
-                if os.path.isdir(p):
-                    _sh_pre.rmtree(p)
-                elif os.path.isfile(p):
-                    os.remove(p)
-            except OSError as exc:
-                abort(409, f'清理旧库失败（{p}）：{exc}')
+    if any(os.path.exists(p) for p in _stale) and not overwrite:
+        abort(409, f'同名鉴定库已存在: {out_dir}；请换一个库名，'
+                   '或勾选「允许覆盖同名库」重建')
 
     ref_info = (body.get('ref_info') or '').strip()
     if ref_info:
@@ -665,6 +944,20 @@ def api_build_kv_index():
         from ..known_virus_suite.kv_engines import make_engine
         import shutil as _shutil
         os.makedirs(out_dir, exist_ok=True)
+        # 旧库清理放进 job 体内（提交时只做 409 判定）：原实现在排队前就
+        # 删旧参考/索引——任务还在排队时用户已失去可用旧库，任务失败更
+        # 是「旧的没了、新的没建成」。任务开始后才删，且只在勾了 overwrite
+        # 时删；若已丢失（被别的任务/用户删掉）也不报错。
+        if overwrite:
+            for p in _stale:
+                try:
+                    if os.path.isdir(p):
+                        _shutil.rmtree(p)
+                    elif os.path.isfile(p):
+                        os.remove(p)
+                except OSError as exc:               # noqa: BLE001
+                    raise RuntimeError(f'清理旧库失败（{p}）：{exc}')
+            log('已清理旧库产物（overwrite=true）')
         # kv_engines 的 logger 需是标准 logging.Logger（.info/.warning/.error）。
         # tag 带时间戳避免多次建库复用同一 logger 时 handler 累积。
         logger, _logs = setup_logger(
@@ -749,7 +1042,9 @@ def api_build_kv_index():
         return {'out': out_dir, 'engines': [m['engine'] for m in made],
                 'failed': failed}
 
-    tid = tm.start(cfg.tr(f'病毒鉴定库构建 {name}', f'Virus index build {name}'), job)
+    _task_name = cfg.tr(f'病毒鉴定库构建 {name}', f'Virus index build {name}')
+    _reject_busy_build(out_dir, _task_name)      # 同目标已有任务在跑 → 409
+    tid = tm.start(_task_name, job, out_dir=out_dir)
     return jsonify({'task': tid, 'out': out_dir})
 
 
@@ -906,10 +1201,12 @@ def api_build_virus_db():
                        threads=int(body.get('threads', cfg.threads)),
                        logger=logger, rebuild=bool(body.get('rebuild')),
                        clean_mid=bool(body.get('clean_mid')))
+        _selfcheck_invalidate()
         prog('build_virus', 1.0, '病毒库就绪')
         logger.close()
         return 'ok'
 
-    tid = tm.start(cfg.tr(f'病毒库构建 {name}', f'Virus DB build {name}'),
-                   _job_build_virus_db(body))
+    _task_name = cfg.tr(f'病毒库构建 {name}', f'Virus DB build {name}')
+    _reject_busy_build(db_dir, _task_name)       # 同目标已有任务在跑 → 409
+    tid = tm.start(_task_name, _job_build_virus_db(body), out_dir=db_dir)
     return jsonify({'task': tid, 'db_dir': db_dir})

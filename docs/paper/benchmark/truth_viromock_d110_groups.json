@@ -183,7 +183,9 @@
    "al": [
     "pistachio virus b",
     "pistacia emaravirus"
-   ]
+   ],
+   "ambiguous": true,
+   "ambiguous_reason": "TP 依赖\"库存疑参考命中\"别名（pistacia emaravirus；疑似误标参考 100% 覆盖，见 BENCHMARK_zh.md）——主指标不计，敏感性分析单独报告"
   }
  ],
  "10": [

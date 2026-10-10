@@ -68,7 +68,28 @@ def _table_cache_path(name):
                       must_exist=False, in_platform=True)
 
 
-def build_cds_table(name, use_cache=True):
+def _iter_gb_records(path, logger=None, warn=None):
+    """逐 record 读 GenBank 文件（**逐文件容错**，参照 ictv_db._rebuild_gb_fasta）。
+
+    SeqIO.parse 是生成器：单条坏记录会让整个集合的解析中断、该集合所有
+    产物为空。这里包一层 try + WARN——坏文件跳过，其余文件继续
+    （2026-10-03 审计 P3）。warn 给定时失败原因一并收集（无 logger 的
+    调用方如 Web 接口也能把告警带回响应）。
+    """
+    from Bio import SeqIO
+    try:
+        for rec in SeqIO.parse(path, 'genbank'):
+            yield rec
+    except Exception as e:
+        msg = (f'{os.path.basename(path)} 解析失败，跳过: '
+               f'{type(e).__name__}: {e}')
+        if logger:
+            logger.log(msg, 'WARN')
+        if warn is not None:
+            warn.append(msg)
+
+
+def build_cds_table(name, use_cache=True, logger=None):
     """集合 .gb → 供人工挑选的 CDS 明细表。
 
     返回 {'rows': [...], 'viruses': [...], 'families': [...], 'genera': [...]}；
@@ -105,8 +126,9 @@ def build_cds_table(name, use_cache=True):
            if fn_.lower().endswith(_GB_EXTS)]
     rows = []
     viruses = {}          # virus -> {'family':..., 'genus':..., 'n': int}
+    warns = []            # 逐文件解析失败（返回给调用方，见 _iter_gb_records）
     for fn_ in gbs:
-        for rec in SeqIO.parse(os.path.join(cdir, fn_), 'genbank'):
+        for rec in _iter_gb_records(os.path.join(cdir, fn_), logger, warns):
             family, genus = _taxonomy_ranks(rec)
             virus = str(rec.annotations.get('organism') or '').strip() or rec.id
             acc = rec.id
@@ -161,6 +183,7 @@ def build_cds_table(name, use_cache=True):
         'genera': sorted({v['genus'] for v in vlist if v['genus']}),
         'n_cds': len(rows),
         'n_virus': len(vlist),
+        'warnings': warns,
         'cached': False,
     }
     if use_cache and cpath and sig:
@@ -271,7 +294,7 @@ def export_selected(name, items, logger=None, prog=None, subdir='selected'):
     rows, hit = [], set()
     n_cds = n_pep = 0
     for i, fn_ in enumerate(gbs, 1):
-        for rec in SeqIO.parse(os.path.join(cdir, fn_), 'genbank'):
+        for rec in _iter_gb_records(os.path.join(cdir, fn_), logger):
             family, genus = _taxonomy_ranks(rec)
             virus = str(rec.annotations.get('organism') or '').strip() or rec.id
             for fi, feat in enumerate(rec.features):
@@ -293,8 +316,18 @@ def export_selected(name, items, logger=None, prog=None, subdir='selected'):
                 else:
                     table = next((str(v) for v in q.get('transl_table',
                                                        ['11'])), '11')
-                    aa = str(BioSeq(nt).translate(table=table,
-                                                  cds=False)).rstrip('*')
+                    # codon_start（GenBank CDS qualifier，取值 1/2/3）：CDS
+                    # 起点不在首个完整密码子时，须从 codon_start-1 处切片再
+                    # 翻译，否则整条蛋白移码（2026-10-03 审计 P3）；
+                    # feat.extract() 返回的是含偏移的全长核酸。
+                    try:
+                        cs = int(next((str(v) for v in
+                                       q.get('codon_start', ['1'])), '1'))
+                    except ValueError:
+                        cs = 1
+                    cs = max(1, cs)
+                    aa = str(BioSeq(nt[cs - 1:]).translate(table=table,
+                                                           cds=False)).rstrip('*')
                 cds_by_gene.setdefault(gene, []).append((sid, nt))
                 n_cds += 1
                 if len(aa) >= 1:

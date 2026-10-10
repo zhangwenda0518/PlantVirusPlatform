@@ -1,7 +1,7 @@
 {
  "tool": "phylodyn_local",
- "created": "2026-09-21 03:56:52",
- "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6",
+ "created": "2026-10-06 16:27:02",
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e",
  "stages": {
   "prep": {
    "ok": true,
@@ -21,7 +21,7 @@
   {
    "stage": "clock",
    "tag": "clock_stats",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\clock_stats.tsv",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\clock_stats.tsv",
    "rel": "clock/clock_stats.tsv",
    "size": 253,
    "sha256_16": "8bd7217671b8c268"
@@ -29,15 +29,15 @@
   {
    "stage": "clock",
    "tag": "divergence_nwk",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\divergence_tree.nwk",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\divergence_tree.nwk",
    "rel": "clock/divergence_tree.nwk",
    "size": 3577,
-   "sha256_16": "f1b1f5255b1d6534"
+   "sha256_16": "a22ed856b58da5b7"
   },
   {
    "stage": "clock",
    "tag": "drt_json",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\clock_qc\\drt.json",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\clock_qc\\drt.json",
    "rel": "clock/clock_qc/drt.json",
    "size": 8725,
    "sha256_16": "e5b8b05a866763cb"
@@ -45,23 +45,23 @@
   {
    "stage": "clock",
    "tag": "rtt_scatter",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\clock_qc\\rtt_scatter.tsv",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\clock_qc\\rtt_scatter.tsv",
    "rel": "clock/clock_qc/rtt_scatter.tsv",
    "size": 2509,
-   "sha256_16": "baf9667f94b969ba"
+   "sha256_16": "39b312fd3d180ca0"
   },
   {
    "stage": "clock",
    "tag": "timetree_nwk",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\timetree.nwk",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\timetree.nwk",
    "rel": "clock/timetree.nwk",
    "size": 3521,
-   "sha256_16": "c59a4c6fdfe39187"
+   "sha256_16": "329576de507913e5"
   },
   {
    "stage": "clock",
    "tag": "tt_ancestral_fasta",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\ancestral_sequences.fasta",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\ancestral_sequences.fasta",
    "rel": "clock/treetime/ancestral_sequences.fasta",
    "size": 36573,
    "sha256_16": "111aca98e8a5168b"
@@ -69,23 +69,23 @@
   {
    "stage": "clock",
    "tag": "tt_auspice",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\auspice_tree.json",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\auspice_tree.json",
    "rel": "clock/treetime/auspice_tree.json",
    "size": 11846,
-   "sha256_16": "17024368322a992f"
+   "sha256_16": "7dbed31f71e07d23"
   },
   {
    "stage": "clock",
    "tag": "tt_divergence_nexus",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\divergence_tree.nexus",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\divergence_tree.nexus",
    "rel": "clock/treetime/divergence_tree.nexus",
    "size": 4045,
-   "sha256_16": "70aaa6ffc22f0ebd"
+   "sha256_16": "119f83ea5fd82e25"
   },
   {
    "stage": "clock",
    "tag": "tt_molecular_clock",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\molecular_clock.txt",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\molecular_clock.txt",
    "rel": "clock/treetime/molecular_clock.txt",
    "size": 60,
    "sha256_16": "8d6eaa26f112dc48"
@@ -93,39 +93,39 @@
   {
    "stage": "clock",
    "tag": "tt_rtt_pdf",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\root_to_tip_regression.pdf",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\root_to_tip_regression.pdf",
    "rel": "clock/treetime/root_to_tip_regression.pdf",
    "size": 16028,
-   "sha256_16": "c72bcc5c91e6d171"
+   "sha256_16": "9be830d084e508ee"
   },
   {
    "stage": "clock",
    "tag": "tt_timetree_nexus",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\timetree.nexus",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\timetree.nexus",
    "rel": "clock/treetime/timetree.nexus",
    "size": 3990,
-   "sha256_16": "f4d7de8da795e010"
+   "sha256_16": "d6ff91a17ca20f5c"
   },
   {
    "stage": "clock",
    "tag": "tt_timetree_nwk",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\timetree.nwk",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\timetree.nwk",
    "rel": "clock/treetime/timetree.nwk",
    "size": 3521,
-   "sha256_16": "c59a4c6fdfe39187"
+   "sha256_16": "329576de507913e5"
   },
   {
    "stage": "clock",
    "tag": "tt_tree_pdf",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\clock\\treetime\\timetree.pdf",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\clock\\treetime\\timetree.pdf",
    "rel": "clock/treetime/timetree.pdf",
-   "size": 13019,
-   "sha256_16": "c3724d5f1e029188"
+   "size": 13025,
+   "sha256_16": "459e14f012e636e3"
   },
   {
    "stage": "phylogeo",
    "tag": "corridors",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\corridors.tsv",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\corridors.tsv",
    "rel": "phylogeo/corridors.tsv",
    "size": 109,
    "sha256_16": "4f794af77a9a2817"
@@ -133,39 +133,39 @@
   {
    "stage": "phylogeo",
    "tag": "events_year",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\events_year.tsv",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\events_year.tsv",
    "rel": "phylogeo/events_year.tsv",
    "size": 488,
-   "sha256_16": "83629c9e8db2790d"
+   "sha256_16": "92ba4ed3ab73d17d"
   },
   {
    "stage": "phylogeo",
    "tag": "ml_annotated_nexus",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml\\annotated_tree.nexus",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml\\annotated_tree.nexus",
    "rel": "phylogeo/ml/annotated_tree.nexus",
    "size": 1789,
-   "sha256_16": "98dc19c618a91f2e"
+   "sha256_16": "feb8c6f44dc86245"
   },
   {
    "stage": "phylogeo",
    "tag": "ml_confidence_csv",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml\\confidence.csv",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml\\confidence.csv",
    "rel": "phylogeo/ml/confidence.csv",
-   "size": 1788,
-   "sha256_16": "49c22d6ecf69f750"
+   "size": 1797,
+   "sha256_16": "8e05652db863e79a"
   },
   {
    "stage": "phylogeo",
    "tag": "ml_gtr",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\phylogeo\\ml\\GTR.txt",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\phylogeo\\ml\\GTR.txt",
    "rel": "phylogeo/ml/GTR.txt",
-   "size": 408,
-   "sha256_16": "dd880465ec8ddd13"
+   "size": 409,
+   "sha256_16": "a8c908dee5ea80dd"
   },
   {
    "stage": "prep",
    "tag": "dates",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\dates.csv",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\dates.csv",
    "rel": "prep/dates.csv",
    "size": 668,
    "sha256_16": "22e1e19adb24b97d"
@@ -173,7 +173,7 @@
   {
    "stage": "prep",
    "tag": "prep_fasta",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\prep.fasta",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\prep.fasta",
    "rel": "prep/prep.fasta",
    "size": 18658,
    "sha256_16": "7518725a9cbfed3e"
@@ -181,7 +181,7 @@
   {
    "stage": "prep",
    "tag": "prep_nwk",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\prep.nwk",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\prep.nwk",
    "rel": "prep/prep.nwk",
    "size": 677,
    "sha256_16": "140139383068ae96"
@@ -189,7 +189,7 @@
   {
    "stage": "prep",
    "tag": "states",
-   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\states.csv",
+   "path": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\states.csv",
    "rel": "prep/states.csv",
    "size": 488,
    "sha256_16": "3ffe1f96ed9c3156"

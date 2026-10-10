@@ -104,7 +104,12 @@ OPTIONAL = {'selenium', 'gbdraw', 'dna_features_viewer', 'pyhmmer',
             'distinctipy', 'taxburst', 'tkinterdnd2', 'adjustText',
             # treetime：phylodyn_trees.treetime_available() 探测，缺时走
             # 自研回归兜底（RTT 真引擎降级为本地实现），功能不中断
-            'treetime'}
+            'treetime',
+            # seaborn：known_virus_suite/kv_fig.py 的 try/except ImportError
+            # 导入（HAS_SEABORN），缺时回退 matplotlib 原生的箱线/色板实现
+            # ——2026-10-03 该文件并入后未登记，导致自检 ⑥ 恒报
+            # "requirements.txt 未声明 1 个: seaborn"（假警报）。
+            'seaborn'}
 
 
 def iter_py_files():

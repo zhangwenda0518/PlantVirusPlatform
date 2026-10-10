@@ -5,7 +5,7 @@ Based on: Wu et al. (2012) psRobot: a web-based tool for plant small RNA analysi
 Key features:
   - Simple complementarity scoring (0-5, lower = better, default cutoff=2.5)
   - Designed for plant miRNAs where near-perfect complementarity is expected
-  - Target penalty score based on mismatches, gaps, and G:U wobbles
+  - Target penalty score based on mismatches and G:U wobbles
   - No complex free energy calculation needed
   - Fast: suitable for genome-wide screening
 
@@ -13,8 +13,11 @@ Scoring scheme (from psRobot documentation):
   - Perfect WC match:     0.0
   - G:U wobble:            0.5 penalty
   - Mismatch:              1.0 penalty
-  - Gap:                   2.0 penalty
   - Cutoff:                ≤2.5 (default)
+
+  ⚠️ 2026-10-03 docstring 修正：原文档声称「Gap: 2.0 penalty」，但本实现是
+  等长滑窗逐列比对（zip(miRNA, 片段)），**不产生缺口也从不计 gap 罚分**——
+  gap=2.0 从未生效，已删除该声明（对齐真实能力；num_gaps 恒为 0）。
 """
 
 from __future__ import annotations
@@ -194,6 +197,6 @@ PSROBOT_SCORING = {
     "WC_match": 0.0,
     "GU_wobble": 0.5,
     "mismatch": 1.0,
-    "gap": 2.0,
+    "gap": 2.0,          # ⚠️ 未实现：等长滑窗不产生缺口（2026-10-03 如实标注）
     "default_cutoff": 2.5,
 }

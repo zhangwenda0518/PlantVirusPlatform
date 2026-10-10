@@ -15,7 +15,9 @@ from flask import (abort, jsonify, render_template, request, send_file,
 
 from Virus_Platform_Core.config import DIRS, PLATFORM_ROOT, db_path
 from Virus_Platform_Core.utils import (check_path, fmt_size, safe_open)
-from Virus_Platform_Core.web.state import cfg, tool_runs_root as _tool_runs_root
+from Virus_Platform_Core.web.state import (cfg, run_real_dir as _run_real_dir,
+                                           tool_runs_root as _tool_runs_root,
+                                           RUN_OUT_LINK)
 from flask import Blueprint
 
 from Virus_Platform_Core.web.tool_jobs import (
@@ -40,10 +42,12 @@ from Virus_Platform_Core.web.tool_jobs import (
     _tool_job_rdp,
     _tool_job_phylogeo,
     _tool_job_dsrna,
+    _tool_job_crispr,
     _tool_job_rtt,
     _tool_job_pdprep,
     _tool_job_phylodyn,
     _tool_job_mirna,
+    _tool_job_beastexport,
 )
 from Virus_Platform_Core.web.chains import (
     _tool_job_virchain,
@@ -110,6 +114,9 @@ TOOL_REGISTRY = {
                  'need_db': False, 'job': _tool_job_phylogeo},
     'dsrna':    {'title': 'dsRNA 设计', 'title_en': 'dsRNA design',
                  'need_db': False, 'job': _tool_job_dsrna},
+    'crispr':   {'title': 'CRISPR 检测试剂设计',
+                 'title_en': 'CRISPR assay design',
+                 'need_db': False, 'job': _tool_job_crispr},
     'rtt':      {'title': '时间信号检验', 'title_en': 'Root-to-tip',
                  'need_db': False, 'job': _tool_job_rtt},
     # ---- 进化动力学（保留 5 张数据准备类卡）----
@@ -128,13 +135,19 @@ TOOL_REGISTRY = {
     # tool_jobs.py，底层 phylodyn_kit 未删。
     'mirna':    {'title': 'miRNA 靶标预测', 'title_en': 'miRNA target',
                  'need_db': False, 'job': _tool_job_mirna},
+    # BEAST 作业包导出（轨道 B 上半程，2026-10-08 接线）：本地只打包、不跑 MCMC
+    # （引擎 beast_handoff.py，此前无任何调用方）。产物喂服务器，回传的 .log/.trees
+    # 由 phylogeo 卡的「BEAST 产物导入」读入。
+    'beastexport': {'title': 'BEAST 作业包导出',
+                    'title_en': 'BEAST job export',
+                    'need_db': False, 'job': _tool_job_beastexport},
 }
 
 
 # ⚠️ 这里的键必须**都是 TOOL_REGISTRY 里真实存在的工具**：
 #    `pdspacetime` 已于 2026-09-18 并入数据准备卡 → 已删；
 #    `pdrename` / `pdgroup` 已于 2026-09-21 归档 → 已删
-LIGHT_TOOLS = {'convert', 'genoplot', 'primer', 'mirna'}
+LIGHT_TOOLS = {'convert', 'genoplot', 'primer', 'mirna', 'beastexport'}
 
 
 # 工具②/④的病毒库内置键名。RVDB（databases/virus/rvdb）已于本会话移除，
@@ -154,8 +167,15 @@ def page_tool_run_file(run, filename):
     """工具运行目录内文件的下载/预览（严格限制在该运行目录内）。"""
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run) or '..' in filename:
         abort(400, '无效的运行名')
-    p = check_path(os.path.join(_tool_runs_root(), run, filename),
+    # 外移运行：产物在自定义输出目录（out_link.json 登记），从这里寻址。
+    # base 归一 + 前缀包含校验：filename 传绝对路径时 os.path.join 会整段
+    # 替换 base，check_path(in_platform=True) 拦不住读平台内其它文件
+    # （如 run/ai_local.json 里的 API Key）。
+    base = os.path.abspath(_run_real_dir(run))
+    p = check_path(os.path.join(base, filename),
                    must_exist=True, in_platform=True)
+    if not p.startswith(base + os.sep):
+        abort(400, '非法路径')
     resp = send_file(p)
     # .svg 必须在浏览器内联渲染：send_file 在此环境把 .svg 推断成了
     # 非标准的 image/svg（浏览器会拒绝渲染 → broken image），改回标准 MIME。
@@ -216,8 +236,7 @@ def api_tool_runs():
         return jsonify(hit[2])
     out = []
     for name in names[:30]:
-        d = check_path(os.path.join(root, name), must_exist=False,
-                       in_platform=True)
+        d = _run_real_dir(name)
         if not os.path.isdir(d):
             continue
         files = []
@@ -245,10 +264,39 @@ def api_tool_run_delete(run):
     """删除一个工具运行目录（模块历史区的 🗑；运行名校验 + 平台内限定）。"""
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run):
         abort(400, '无效的运行名')
-    p = check_path(os.path.join(_tool_runs_root(), run),
-                   must_exist=True, in_platform=True)
-    import shutil as _sh
-    _sh.rmtree(p, ignore_errors=True)
+    real = _run_real_dir(run)
+    p = check_path(real, must_exist=True, in_platform=True)
+    # 有任务正在这个目录里跑（任务卡 out_dir == 本运行目录）时拒绝删除：
+    # 否则删掉的是运行中的结果目录，任务随后写盘失败、产物残缺且
+    # 任务卡还挂在「运行中」。忙时 409（与建库接口同一口径）。
+    _p_key = os.path.normcase(os.path.abspath(p))
+    with tm.lock:
+        _busy = [r for r in tm.tasks.values()
+                 if r.get('status') in ('running', 'queued')
+                 and r.get('out_dir')
+                 and os.path.normcase(os.path.abspath(str(r['out_dir'])))
+                 == _p_key]
+    if _busy:
+        abort(409, f'该运行目录上有任务正在跑（{_busy[0].get("id")} '
+                   f'{_busy[0].get("name")}）；请先停止任务再删除')
+
+    def _rmtree_retry(d):
+        """Windows 边界：刚被 send_file 下载过的产物句柄可能尚未完全
+        释放，首趟 rmtree(ignore_errors) 会静默留下它；回收后重试一趟。"""
+        import shutil as _sh
+        _sh.rmtree(d, ignore_errors=True)
+        if os.path.isdir(d):
+            import gc as _gc
+            _gc.collect()
+            time.sleep(0.3)
+            _sh.rmtree(d, ignore_errors=True)
+
+    _rmtree_retry(p)
+    # 指针目录与真实目录不同（外移运行）时都清：历史区不留死登记
+    base = check_path(os.path.join(_tool_runs_root(), run),
+                      must_exist=False, in_platform=True)
+    if os.path.abspath(base) != os.path.abspath(p):
+        _rmtree_retry(base)
     _RUNS_CACHE.clear()                 # 删了运行，最近运行列表立刻失效
     return jsonify({'ok': True, 'run': run})
 
@@ -260,8 +308,7 @@ def api_tool_open():
     name = body.get('name') or ''
     if not name or '/' in name or '\\' in name or '..' in name:
         abort(400, '无效的运行名')
-    d = check_path(os.path.join(_tool_runs_root(), name), must_exist=True,
-                   in_platform=True)
+    d = check_path(_run_real_dir(name), must_exist=True, in_platform=True)
     from Virus_Platform_Core.utils import open_in_explorer
     open_in_explorer(d)
     return jsonify({'ok': True})
@@ -367,10 +414,49 @@ def api_tool_run():
     ts = time.strftime('%Y%m%d_%H%M%S')
     # 秒级时间戳会撞车：同一秒两次同工具运行（双击/多标签页）会复用同一
     # 目录并互相覆盖产物。追加 6 位随机后缀。
-    run_dir = check_path(os.path.join(_tool_runs_root(),
-                                      f'{tool}_{ts}_{uuid.uuid4().hex[:6]}'),
-                         must_exist=False, in_platform=True)
+    run_name = f'{tool}_{ts}_{uuid.uuid4().hex[:6]}'
+    # 自定义输出位置（可选）：指定目录即产物父目录，产物写 <out_dir>/<run_name>/
+    # （结构与默认 tool_runs/<run_name> 一致，只换父目录，多次运行不互混）。
+    # 校验同下载页：平台内或设置页已挂载输出根内，越界 400。
+    # tool_runs/<run_name>/ 仍创建并写 out_link.json 指针——历史列表、产物
+    # 下载、打开目录都从 tool_runs 寻址，没有登记就全部失联。
+    base_dir = check_path(os.path.join(_tool_runs_root(), run_name),
+                          must_exist=False, in_platform=True)
+    out_root = (body.get('out_dir') or '').strip()
+    if out_root:
+        out_root = check_path(out_root, must_exist=False, in_platform=True)
+        # 结构性目录黑名单：这些目录各有扫描器按「样品 / 库 / 任务 / 静态
+        # 资源」解释其子目录。允许把工具运行写进去会造出"幽灵样品"
+        # （results/<run> 出现在样品列表里、点开全 404、还删不掉），
+        # databases/ 下的运行目录会被当成病毒库。前缀命中即拒绝。
+        _out_key = os.path.normcase(os.path.normpath(os.path.abspath(out_root)))
+        _bad_roots = (
+            ('样品结果目录', DIRS['results']),
+            ('数据库目录', DIRS['databases']),
+            ('任务状态目录', DIRS['tasks']),
+            ('前端资源目录', os.path.join(PLATFORM_ROOT, 'webapp')),
+            ('第三方依赖目录', os.path.join(PLATFORM_ROOT, '3rd')),
+        )
+        for _label, _bad in _bad_roots:
+            _bad_key = os.path.normcase(
+                os.path.normpath(os.path.abspath(str(_bad))))
+            if _out_key == _bad_key or _out_key.startswith(_bad_key + os.sep):
+                abort(400, f'输出目录不能位于{_label}内（{_bad}）；请换一个'
+                           '目录（如平台 run/ 下的自定义输出根）')
+        run_dir = check_path(os.path.join(out_root, run_name),
+                             must_exist=False, in_platform=True)
+    else:
+        run_dir = base_dir
     os.makedirs(run_dir, exist_ok=True)
+    if run_dir != base_dir:
+        os.makedirs(base_dir, exist_ok=True)
+        try:
+            with safe_open(os.path.join(base_dir, RUN_OUT_LINK),
+                           'wt') as f:
+                json.dump({'out_dir': run_dir, 'tool': tool}, f,
+                          ensure_ascii=False, indent=2)
+        except OSError:
+            pass    # 指针写失败只影响历史区寻址，不阻塞运行
     # 数字参数钳制：负数/异常大值不直接传给外部工具
     if threads is not None:
         threads = max(1, min(int(threads), (os.cpu_count() or 4) * 4))
@@ -383,10 +469,11 @@ def api_tool_run():
         # 工厂期 abort（缺必填参数）不该留下空运行目录
         import shutil as _sh
         _sh.rmtree(run_dir, ignore_errors=True)
+        if run_dir != base_dir:
+            _sh.rmtree(base_dir, ignore_errors=True)
         raise
 
     name = cfg.tr(f"工具·{spec['title']} {ts}", f"Tool·{spec['title_en']} {ts}")
-    run_name = os.path.basename(run_dir)
 
     def _job_with_run(log, prog, cancel):
         """包一层：结果 dict 注入 run 名与输出目录，供结果面板列出产物、
@@ -395,6 +482,13 @@ def api_tool_run():
         if isinstance(res, dict):
             res.setdefault('run', run_name)
             res['out_dir'] = str(run_dir)
+        # 外移运行结束时 touch 指针目录：历史列表签名基于 tool_runs/<run>
+        # 的 mtime，产物写在外部目录时没有这一下，列表里的文件清单
+        # 会停在创建时刻（只剩 out_link.json）。
+        try:
+            os.utime(base_dir)
+        except OSError:
+            pass
         return res
 
     tid = tm.start(name, _job_with_run,
@@ -501,7 +595,7 @@ def api_rdp_masked():
     run = (request.args.get('run') or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run or ''):
         abort(400, '无效的运行名')
-    base = os.path.join(_tool_runs_root(), run, 'rdp')
+    base = os.path.join(_run_real_dir(run), 'rdp')
     ev_file = os.path.join(base, 'events.json')
     if not os.path.isfile(ev_file):
         abort(404, '该运行无重组事件结果')
@@ -533,11 +627,20 @@ def api_rdp_masked_post():
 
 @bp.route('/api/tool/dsrna_panel')
 def api_dsrna_panel():
-    """dsRNA 脱靶面板清单（物种名 + 大小 + 是否配致死基因表）。"""
+    """dsRNA 脱靶面板清单（物种名 + 大小 + 是否配致死基因表）。
+
+    只读 databases/dsrna/ 下的约定目录；目录缺失时返回空清单（前端提示
+    自行放置面板 FASTA），不当作错误——面板是可选数据。
+    """
     from Virus_Platform_Core import dsrna_offtarget as dso
     from Virus_Platform_Core.dsrna_pipeline import _norm_species
-    panel_dir = os.path.join(PLATFORM_ROOT, 'databases', 'dsrna', 'panel')
-    lethal_dir = os.path.join(PLATFORM_ROOT, 'databases', 'dsrna', 'lethal_lists')
+    # ⚠️ 必须走 DIRS['databases']：分发版由 config._detect_database_root() 把
+    # 数据库根重定向到同级 VirusPlatform-Database，与 PLATFORM_ROOT 不等价。
+    # 用 PLATFORM_ROOT 时面板清单会恒为空（本函数把"目录缺失"当正常），
+    # 用户以为平台没有面板数据 —— 静默失效。2026-10-07 审查 P1-2。
+    panel_dir = os.path.join(DIRS['databases'], 'dsrna', 'panel')
+    lethal_dir = os.path.join(DIRS['databases'], 'dsrna',
+                              'lethal_lists')
     files = []
     for f in dso.panel_files(panel_dir):
         sp = _norm_species(os.path.splitext(os.path.basename(f))[0])
@@ -565,7 +668,7 @@ def _phylogeo_run_dir(run):
     """校验 run 名并定位 <run>/phylogeo 结果目录。"""
     if not re.fullmatch(r'[A-Za-z0-9_\-]+', run or ''):
         abort(400, '无效的运行名')
-    d = os.path.join(_tool_runs_root(), run, 'phylogeo')
+    d = os.path.join(_run_real_dir(run), 'phylogeo')
     if not os.path.isdir(d):
         abort(404, '该运行没有系统地理分析结果（phylogeo 目录不存在）')
     return check_path(d, must_exist=True, in_platform=True)
@@ -683,7 +786,9 @@ _MIRNA_LIB_CACHE = {'rows': None, 'mtime': None, 'facets': None}
 
 
 def _mirna_lib_path():
-    return os.path.join(PLATFORM_ROOT, 'databases', 'mirna_lib',
+    # DIRS['databases'] 而非 PLATFORM_ROOT/databases（分发版数据库外置会重定向）
+    # —— 2026-10-07 审查 P1-2
+    return os.path.join(DIRS['databases'], 'mirna_lib',
                         'plant_mirna_library.tsv')
 
 

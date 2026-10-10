@@ -2,7 +2,7 @@
  "stage": "prep",
  "ok": true,
  "error": null,
- "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep",
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep",
  "aln": "D:\\桌面\\植物病毒分析平台\\examples\\example_phylogeo.fasta",
  "meta": "D:\\桌面\\植物病毒分析平台\\examples\\example_phylogeo.meta.csv",
  "tree_in": null,
@@ -10,10 +10,10 @@
  "trait": "region",
  "warnings": [],
  "outputs": {
-  "dates": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\dates.csv",
-  "states": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\states.csv",
-  "prep_fasta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\prep.fasta",
-  "prep_nwk": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20260921_035638_83ccc6\\prep\\prep.nwk"
+  "dates": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\dates.csv",
+  "states": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\states.csv",
+  "prep_fasta": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\prep.fasta",
+  "prep_nwk": "D:\\桌面\\植物病毒分析平台\\run\\tool_runs\\phylodyn_20261006_162647_b60b2e\\prep\\prep.nwk"
  },
  "notes": [],
  "n_seqs": 15,

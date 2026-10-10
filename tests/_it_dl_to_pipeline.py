@@ -77,8 +77,14 @@ class FakeQueue:
         self.added = []
 
     def add(self, samples, stages, params, project=None):
+        # 返回契约与真实 SampleQueue.add 一致：条目 dict 列表（含 id/
+        # sample）。此前返回字符串列表，download.to_pipeline 的
+        # bind_queue_entry(it) 拿字符串调 .get('id') 直接 500（2026-10-06
+        # 批量回归定位）
+        import uuid as _uuid
         self.added.append({'samples': list(samples), 'project': project})
-        return list(samples)
+        return [{'id': _uuid.uuid4().hex[:10], 'sample': s, 'status': 'queued',
+                 'project': project or ''} for s in samples]
 
 
 fakeq = FakeQueue()

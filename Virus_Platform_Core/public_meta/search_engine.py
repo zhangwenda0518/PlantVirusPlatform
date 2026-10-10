@@ -73,6 +73,7 @@ class SRAEngine:
         self.detailed = detailed
         self.ncbi_api = ncbi_api
         self.session = get_retry_session()
+        self.last_error = None                 # 源级状态（P1-5）：None=未失败
 
     def fetch_runinfo(self):
         print("\n" + "="*65)
@@ -146,6 +147,7 @@ class SRAEngine:
 
         except Exception as e:
             print(f"❌ SRA 获取失败: {e}")
+            self.last_error = str(e)[:300]     # 源级状态（审查 P1-5）
             return pd.DataFrame()
 
 # ==========================================
@@ -156,6 +158,7 @@ class GSAEngine:
         self.query = str(query).strip()
         self.source_filter = str(source).strip() if source else None
         self.center_filter = "NGDC"
+        self.last_error = None                 # 源级状态（P1-5）
         self.detailed = detailed
         self.base_dir = os.path.join(out_dir, "GSA_Results")
         self.d_web = os.path.join(self.base_dir, "0_web_cache")
@@ -166,6 +169,7 @@ class GSAEngine:
         self.session = get_retry_session()
         self.max_workers = max_workers
         self.progress_cb = progress_cb  # callback(n_done, n_total, msg)
+        self.last_counts = {}           # get_accession_list 的记录（写快照用）
 
     def get_accession_list(self):
         url = "https://ngdc.cncb.ac.cn/gsa/search/getAccessionList"
@@ -176,15 +180,26 @@ class GSAEngine:
         clean_term = term.replace('&quot;', '"')
         print(f"🧩 构建 GSA 检索逻辑: {clean_term}")
 
-        payload = f"searchField=&searchTerm={quote(term)}&totalDatas=99999"
+        total_datas_cap = 99999          # 服务端硬编码上限
+        payload = f"searchField=&searchTerm={quote(term)}&totalDatas={total_datas_cap}"
         headers = self.session.headers.copy()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
 
         try:
             res = self.session.post(url, data=payload, headers=headers, timeout=45)
-            return sorted(list(set(re.findall(r'(CR[RPAX]\d{6,})', res.text))))
-        except Exception:
+        except Exception as e:
+            self.last_error = str(e)[:300]     # 源级状态（审查 P1-5）
             return []
+        raw_hits = re.findall(r'(CR[RPAX]\d{6,})', res.text)
+        accs = sorted(list(set(raw_hits)))
+        # 快照口径：原始命中数与去重后 accession 数都记下来（写 query.json 用）
+        self.last_counts = {'raw_hits': len(raw_hits), 'accessions': len(accs)}
+        if len(accs) > 99000:
+            # 接近 totalDatas=99999 上限：结果可能被服务端截断，必须提醒
+            print(f"⚠️ GSA 返回 {len(accs)} 个 accession（原始命中 {len(raw_hits)}），"
+                  f"已接近服务端上限 {total_datas_cap}；结果可能被截断，"
+                  f"建议按年份/来源拆分检索式后分批重跑")
+        return accs
 
     def parse_all_from_html(self, html, acc):
         feat = {
@@ -437,7 +452,27 @@ class GSAEngine:
 # ==========================================
 # 🤖 AI 智能清洗与规范化引擎 (全新提纯规则)
 # ==========================================
+def _same_scalar(a, b):
+    """标量等值比较（NA/NaN 视为相等），用于改写判定。"""
+    def _na(v):
+        try:
+            return v is None or bool(pd.isna(v))
+        except (TypeError, ValueError):
+            return False
+    if _na(a) and _na(b):
+        return True
+    if _na(a) or _na(b):
+        return False
+    return str(a) == str(b)
+
+
 def run_ai_sanitizer(df, api_key, api_base, model):
+    """AI 清洗 Tissue/Age_GrowthStage/Location。
+
+    provenance：每次改写前把原值写入 `<col>_original` 列、来源标注
+    `<col>_source`（'AI'=AI 清洗改写、'original'=未改写；Location 的来源列即
+    Location_source / GeoLoc 口径）。列仅在确有改写时才新增，主列口径不变。
+    """
     if df.empty or not api_key: return df
     print("\n🤖 启动 AI 洗髓引擎 (深度规范 Tissue, Age_GrowthStage, Location)...")
 
@@ -445,6 +480,9 @@ def run_ai_sanitizer(df, api_key, api_base, model):
     cols = ['Location', 'Tissue', 'Age_GrowthStage']
     for c in cols:
         if c not in df.columns: df[c] = pd.NA
+    # provenance 快照：改写前整列原值（<col>_original 惰性物化时用快照，
+    # 否则逐行改写会让"原值"混入本行之前已被 AI 改过的值）
+    _orig_snap = {c: df[c].copy() for c in cols}
 
     prompt = """你是一个极其严苛的生命科学数据清理程序。请严格按以下规则处理输入的JSON，返回清洗后的JSON：
 1. **全局去杂**：遇到 'not applicable', 'not collected', 'missing', 'N/A', 'nan', 或只包含无意义编号(如 'tissue9')，一律清空替换为 'Not_Provided'。
@@ -469,10 +507,18 @@ def run_ai_sanitizer(df, api_key, api_base, model):
             for k in cols:
                 if k in clean_data:
                     val = str(clean_data[k]).strip()
-                    if val.lower() in ["", "none", "nan", "not_provided", "unknown"]:
-                        df.at[idx, k] = pd.NA
-                    else:
-                        df.at[idx, k] = val
+                    new_val = pd.NA if val.lower() in ["", "none", "nan", "not_provided", "unknown"] else val
+                    old_val = df.at[idx, k]
+                    # provenance：仅在确有改写时新增 <col>_original / <col>_source
+                    if not _same_scalar(old_val, new_val):
+                        oc, sc = f'{k}_original', f'{k}_source'
+                        if oc not in df.columns:
+                            df[oc] = _orig_snap.get(k, df[k]).copy()   # 改写前的整列原值
+                        if sc not in df.columns:
+                            df[sc] = 'original'
+                        df.at[idx, oc] = old_val
+                        df.at[idx, sc] = 'AI'
+                    df.at[idx, k] = new_val
         except Exception: pass
     return df
 
@@ -615,6 +661,44 @@ Output ONLY the paragraph, no markdown."""
 
 
 # ==========================================
+# 🧾 检索快照（query.json）
+# ==========================================
+def write_query_snapshot(out_dir, query, source=None, detailed=False,
+                         n_sra=0, n_gsa=0, counts=None, log=None):
+    """检索参数与计数快照 → <out_dir>/query.json（与 gb_collection 惯例一致）。
+
+    记录 term / 各库命中数 / 抓取时间(UTC) / 是否 detailed，便于复现与溯源：
+    仅凭结果 CSV 无法知道当时用的检索式与规模。
+    """
+    import datetime as _dt
+    snap = {
+        'term': str(query or ''),
+        'source_filter': source or '',
+        'detailed': bool(detailed),
+        'db': 'both',
+        'counts': {
+            'sra_runs': int(n_sra or 0),
+            'gsa_runs': int(n_gsa or 0),
+            'total_runs': int(n_sra or 0) + int(n_gsa or 0),
+        },
+        # 时间统一 UTC（跨时区协作/与 NCBI 记录对齐）
+        'fetched_utc': _dt.datetime.now(_dt.timezone.utc).strftime(
+            '%Y-%m-%dT%H:%M:%SZ'),
+    }
+    if counts:
+        snap['gsa_accessions'] = counts
+    try:
+        p = os.path.join(out_dir, 'query.json')
+        with safe_open(p, 'wt') as f:
+            json.dump(snap, f, ensure_ascii=False, indent=2)
+        (log or print)(f"🧾 检索快照已保存: {p}")
+        return p
+    except (OSError, ValueError) as e:
+        (log or print)(f"⚠️ 检索快照写入失败: {e}")
+        return None
+
+
+# ==========================================
 # 🌍 数据大一统合并
 # ==========================================
 def merge_results(df_sra, df_gsa, out_dir, detailed, api_key, api_base, model, do_summary=False):
@@ -680,6 +764,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args.detailed = not args.no_detailed  # default True, --no-detailed to disable
+    # API Key 优先从环境变量读（宿主 subprocess env 注入，密钥不落命令行/进程表）
+    if not args.ncbi_api:
+        args.ncbi_api = os.environ.get('NCBI_API_KEY') or None
+    if not args.deepseek_api:
+        args.deepseek_api = os.environ.get('DEEPSEEK_API_KEY') or None
     # Normalize "All" / "" source to None (no filter)
     if args.source and args.source.strip().lower() in ("all", ""):
         args.source = None
@@ -689,15 +778,57 @@ if __name__ == "__main__":
 
     df_sra = pd.DataFrame()
     df_gsa = pd.DataFrame()
+    # 源级状态（审查 P1-5）：每个来源 ok / no_hits / failed + 明细，
+    # 落 source_status.json；全部请求来源 failed → 非零退出，任务层
+    # （web/meta.py 按退出码判定）不再把取数失败显示成"检索完成"。
+    source_status = {}
 
     if args.db in ("sra", "both"):
         sra_engine = SRAEngine(args.query, args.source, args.outdir, detailed=args.detailed, ncbi_api=args.ncbi_api)
         df_sra = sra_engine.fetch_runinfo()
+        source_status['sra'] = {
+            'status': ('failed' if getattr(sra_engine, 'last_error', None)
+                       else ('ok' if not df_sra.empty else 'no_hits')),
+            'n': int(len(df_sra)),
+            **({'detail': sra_engine.last_error}
+               if getattr(sra_engine, 'last_error', None) else {}),
+        }
 
     if args.db in ("gsa", "both"):
         gsa_engine = GSAEngine(args.query, args.source, args.outdir, detailed=args.detailed,
                                max_workers=max(1, min(20, args.workers)))
         df_gsa = gsa_engine.fetch_gsa()
+        source_status['gsa'] = {
+            'status': ('failed' if getattr(gsa_engine, 'last_error', None)
+                       else ('ok' if not df_gsa.empty else 'no_hits')),
+            'n': int(len(df_gsa)),
+            **({'detail': gsa_engine.last_error}
+               if getattr(gsa_engine, 'last_error', None) else {}),
+        }
+
+    with open(os.path.join(args.outdir, "source_status.json"), "w",
+              encoding="utf-8") as _f:
+        json.dump({'query': args.query, 'db': args.db,
+                   'sources': source_status,
+                   'ts': time.strftime('%Y-%m-%dT%H:%M:%SZ',
+                                       time.gmtime())},
+                  _f, ensure_ascii=False, indent=1)
+    _req = [k for k in ('sra', 'gsa') if k in source_status]
+    if _req and all(source_status[k]['status'] == 'failed' for k in _req):
+        print("❌ 所有请求的检索来源均失败（网络/服务端错误）——"
+              "详见 source_status.json；本次不产出结果文件，退出码 2",
+              flush=True)
+        sys.exit(2)
+    _part = [k for k in _req if source_status[k]['status'] != 'ok']
+    if _part:
+        print(f"⚠ 部分来源未成功（{_part}）：结果为部分检索，"
+              f"状态见 source_status.json", flush=True)
+
+    # 检索快照：term / 命中数 / 抓取时间(UTC) / 是否 detailed（与 gb_collection 惯例一致）
+    write_query_snapshot(args.outdir, args.query, args.source, args.detailed,
+                         n_sra=len(df_sra), n_gsa=len(df_gsa),
+                         counts=getattr(gsa_engine, 'last_counts', None)
+                         if args.db in ("gsa", "both") else None)
 
     merge_results(df_sra, df_gsa, args.outdir, args.detailed, args.deepseek_api, "https://api.deepseek.com", args.deepseek_model)
 

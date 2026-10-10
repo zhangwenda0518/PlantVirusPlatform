@@ -103,6 +103,12 @@ def _release_lock():
 # slow=True 的测试含真实重型计算或在线请求，`--quick` 时跳过。
 TESTS = [
     ('tests/_it_platform.py',       300,  False),
+    # dsRNA 全链路集成（2026-10-03 入编；此前从不在批量里，迁出/恢复期间
+    # 无人报警）：真跑 dsRNAmax 选窗 + dsRIP 效价 + 面板脱靶扫描 + T7 引物
+    # + 成品 QC，含确定性/内存守卫/max_mm=0 语义/isolsates 分支；约 3 秒。
+    # 前置数据 databases/dsrna/lookup.db（小文件）；面板缺失时自合成小面板
+    # 自足运行，不依赖仓库外 GB 级面板。
+    ('tests/_it_dsrna.py',          300,  False),
     # 日志编码统一（2026-09-27）：decode_output 三分支 + to_utf8_file 四场景
     # （纯 GBK 转写 / 纯 UTF-8 幂等 / 混编码逐行无损 / 缺失文件静默）。
     ('tests/_check_enc_utils.py',    60,  False),
@@ -175,6 +181,25 @@ TESTS = [
     # spec 里 webapp 的 datas 展开：既不漏前端文件、也不带 .mimosa 等工具残留
     # （AST 抽出 spec 里的 _tree 单独执行；秒级，只读）
     ('tests/_check_spec_datas.py',   60,  False),
+    # i18n 缺键：扫 webapp/templates/*.html 全部 data-i18n/-ph/-title 锚点，
+    # 逐个喂真实 applyI18n，断言不会被写成 key 字面量 + 中英成对。
+    # 2026-10-01 入编 —— 此前 _verify_i18n.js 从不在批量里（只跑 .py），
+    # 于是它 fixture 过期变永久红灯也没人发现。无 node 时自动 SKIP。
+    ('tests/_check_i18n.py',         60,  False),
+    # 前端 JS 语法静态校验（内联 script 块 + static/*.js，node --check 只做
+    # 语法不执行）+ 4 个跨卡复用函数存在性 + tools.html 无重复 id。无 node 时
+    # 自动 SKIP 返回 0。2026-10-03 入编（此前不在批量里，一次批量替换把函数头
+    # 连删 5 行都无人报警）。
+    ('tests/_check_js_syntax.py',   120,  False),
+    # 路由清单基线守卫：rule+methods 与 tests/_route_baseline.json 严格比对。
+    # 新增/丢失/方法变化都会报红（改路由后需 python tests/_route_inventory.py
+    # --save 更新基线）；只读、不启动分析任务，秒级。
+    ('tests/_route_inventory.py',    60,  False),
+    # 全路由健壮性巡检：对每条路由发一次空参数请求，只找「未捕获异常 500」；
+    # 破坏性路由（空 POST 就改状态/删数据）在脚本内 DESTRUCTIVE_POST 里显式
+    # 跳过，且请求前后比对 run/tasks 增删。只写 tests/_audit_routes_report.txt
+    #（已 gitignore）。2026-10-03 入编。约 20s。
+    ('tests/_audit_routes.py',      300,  False),
     # 阶段表一致性守卫（后端 9 张表 + 前端 static/*.js + ③c 卡片可见性实测）。
     # 2026-09-16 修掉它"只读 app.js"的过时假设（前端已拆分到 app-jobs/app-batch）
     # 后重新入编——此前不在批量里，被前端重构甩下后静默腐烂了一轮。
@@ -261,6 +286,13 @@ TESTS = [
     # （原 _check_decimal_year_conventions.py 依赖 explorer 的 virphykit_export，
     #  已随 2026-09-27 归档移除；其 P0 断言由 _check_phylodyn_meta_alias.py 延续。）
     # 示例**输入** fixture 自洽（叶名能被元数据匹配 / 等长 / 不是 GenBank 转储）。
+    # 示例输入 fixture 自洽由上行守卫覆盖；以下为 2026-10 修复轮新增守卫：
+    # AA 同一性分簇锚定（M1）/ 圈图真圈图（M2）/ SVG 良构（M3）/
+    # 引物全链热力学评分分级（Primer 专项）
+    ('tests/_check_identity_aa.py', 600, False),
+    ('tests/_check_genome_circos.py', 120, False),
+    ('tests/_check_svg_wellformed.py', 60, False),
+    ('tests/_check_primer.py', 600, False),
     ('tests/_check_examples_inputs.py', 120, False),
     # 在线获取（替代 SeqHarvester 的便利层）+ **输出 schema 一致性**：
     # taxid/物种名一键采集、geo_loc_name 优先、host 通道、host 可选列。
@@ -275,9 +307,90 @@ TESTS = [
     # SVG（属色带 / 基因框 / 同源连线）与换纯树时的清零负控 + 新增 i18n 键。
     # 无 playwright（开发依赖未装）时真浏览器段自动 SKIP 并返回 0。
     ('tests/_check_tree_overlay.py', 900, False),
-    # 真跑 HMM + CDD 全链路 + 在线 NCBI，实测 400s~900s（网络波动大）
+    # 真跑 HMM 全链路 + 在线 NCBI，实测 400s~900s（网络波动大）
     ('tests/_it_annotate.py',      1500,  True),
+
+    # ---- 2026-10-07 审查新增守卫（每条都带「从备份抽取旧实现」的对照臂）----
+    # SDT gap 口径：_sdt_formula 必须与 phylo.pairwise_identity_matrix 同口径
+    # （'-. ' 都算 gap）；旧实现只认 '-'，含 '.' 的 MSA 会算出两个答案。
+    ('tests/_check_sdt_gap_parity.py', 120, False),
+    # SDT 分布图：全同输入（所有两两 identity == 100）曾因 counts 为空而
+    # max(空) 崩溃，且崩在 CSV/热图落盘之后。
+    ('tests/_check_sdt_distribution.py', 120, False),
+    # CRISPR 路线 B（枚举兜底）的引物交付序列必须纯 ACGT —— 旧实现只挡 'N'，
+    # W/S/M/K/R/Y 会一路流到订购表。
+    ('tests/_check_crispr_primer_purity.py', 120, False),
+    # TaskManager.on_finish：排队途中取消时 fn 根本不被调用，清理若只写在
+    # fn 的 finally 里会永久泄漏（样品占位表 _RUNNING_SAMPLES）。
+    ('tests/_check_task_on_finish.py', 120, False),
+    # P1-4 SVG 良构：出口覆盖（dfv/gbdraw/genome_diag/viz 必须调 verify_svg）
+    # + 覆盖范围扩到 run/ 产物 + 判据灵敏度自测（已在 _check_svg_wellformed）。
+    # 本条是**消费侧链路**：残缺 SVG 不得进入 report.html（修得动的就地修复后
+    # 内嵌、修不动的跳过），对照臂证明"未校验"时确实会漏进报告。
+    ('tests/_it_svg_embed_chain.py', 300, False),
+
+    # ---- AI 助手（对话驱动智能代理）----
+    # 2026-10-08 入编：这 6 个用例此前**存在但从不在批量里**（批量入口是硬编码
+    # 元组、不是 glob），等于「写了测试但没人跑」——本仓已两次踩过同一坑
+    # （_verify_i18n.js 与 6 个 pytest 文件）。3 个 Playwright UI 巡检缺
+    # playwright 时 SKIP 返回 0（已补守卫；此前会直接抛 ImportError 变红）；
+    # 3 个集成测试用线程内模拟 OpenAI 兼容端点，不打真实网络。
+    ('tests/_it_ai_assist.py',       300, False),
+    ('tests/_it_ai_events.py',       300, False),
+    ('tests/_it_ai_actions.py',      300, False),
+    ('tests/_check_ai_dock_ui.py',   300, False),
+    ('tests/_check_ai_events_ui.py', 300, False),
+    ('tests/_check_ai_global_ui.py', 300, False),
+    # digest ↔ 源文件数字对拍（2026-10-08）：digest 是 AI 的**唯一数字来源**，
+    # 读错文件/键 → AI 给出"看起来完全合理"的错误解读，且没有任何报错。
+    # 本守卫独立重读源文件逐键比对（含"凭空造数字"反向检查），自带灵敏度
+    # 自证（改错一个数字/造一个假键都必须被报出），秒级。
+    ('tests/_check_ai_digest_parity.py', 120, False),
+    # AI 审计落盘（2026-10-08）：执行单状态变迁与事件流原本只在进程内存里
+    # （重启即失、事后无从追溯）。本守卫含**真子进程 + 信号**的"退出不丢"
+    # 测试、反复 drain 的"不重复写"测试，以及"接线自证"（publish/executors
+    # 真的会落盘 —— 只测 audit 模块自身等于没测接线）。约 10s（含子进程）。
+    ('tests/_check_ai_audit.py',     180, False),
+
+    # ---- pytest 风格用例（走 `python -m pytest`，见 PYTEST_FILES 说明）----
+    # 2026-10-07 审查 P1-3：这 6 个文件此前**既不在本清单、也无 CI**，
+    # 等于「写了测试但从不在回归面上跑」（平台最大的新模块 crispr_design
+    # 就属于这种）。现统一接入。
+    ('tests/test_crispr_design.py',   300, False),
+    ('tests/test_host_genome_gget.py', 120, False),
+    ('tests/test_mirna_alignment.py', 120, False),
+    ('tests/test_utils_pure.py',      120, False),
+    ('tests/test_datasets_cli.py',    120, False),
+    ('tests/test_web_guard.py',       120, False),
 ]
+
+# pytest 风格用例：用 pytest 的 fixture / importorskip，且**没有 __main__
+# 入口** —— 不能像其它 _check_*/_it_* 那样直接当脚本跑，必须走 `python -m
+# pytest`。本清单按此集合选择调用方式。
+# 未安装 pytest 时整组 SKIP（不 FAIL）：开发依赖未装的机器不该因此报红。
+PYTEST_FILES = {
+    'tests/test_crispr_design.py',
+    'tests/test_host_genome_gget.py',
+    'tests/test_mirna_alignment.py',
+    'tests/test_utils_pure.py',
+    'tests/test_datasets_cli.py',
+    'tests/test_web_guard.py',
+}
+_PYTEST_OK = None
+
+
+def _pytest_available():
+    """pytest 是否可用（探测一次并缓存）。"""
+    global _PYTEST_OK
+    if _PYTEST_OK is None:
+        try:
+            r = subprocess.run([sys.executable, '-c', 'import pytest'],
+                               capture_output=True, timeout=60,
+                               env=_child_env())
+            _PYTEST_OK = (r.returncode == 0)
+        except Exception:
+            _PYTEST_OK = False
+    return _PYTEST_OK
 DEFAULT_TIMEOUT = 300
 _ONLINE_HINT = {
     'tests/_it_annotate.py': '含在线 NCBI 请求，可设 VP_SKIP_ONLINE=1 跳过该段',
@@ -303,6 +416,8 @@ def _child_env():
     """
     env = {k: v for k, v in os.environ.items()
            if 'SAFE_DELETE' not in k and not k.startswith('CODEBUDDY_')}
+    # 批量满载下浏览器类测试的元素等待放宽（单文件直跑不受影响）
+    env.setdefault('VP_TEST_WAIT', '90')
     # 剥离后 PATH 里可能残留宿主 safe-bin 目录，一并去掉
     if env.get('PATH'):
         parts = [p for p in env['PATH'].split(os.pathsep)
@@ -364,6 +479,7 @@ def _run(plan, quick):
     out_path = os.path.join(ROOT, 'tests', '_run_all_report.txt')
     lines = []
     n_ok = 0
+    n_skip = 0
     t0 = time.time()
     for path, to, slow in plan:
         p = os.path.join(ROOT, path)
@@ -371,11 +487,19 @@ def _run(plan, quick):
             lines.append(f'[SKIP] {path} 不存在')
             print(lines[-1])
             continue
+        is_pytest = path in PYTEST_FILES
+        if is_pytest and not _pytest_available():
+            lines.append(f'[SKIP] {path} 未安装 pytest（开发依赖缺失，不计失败）')
+            print(lines[-1])
+            n_skip += 1
+            continue
         ts = time.time()
         timed_out = False
         try:
-            r = subprocess.run([sys.executable, p], cwd=ROOT,
-                               env=_child_env(),
+            # pytest 风格用例没有 __main__，必须走 `python -m pytest`
+            cmd = ([sys.executable, '-m', 'pytest', p, '-q'] if is_pytest
+                   else [sys.executable, p])
+            r = subprocess.run(cmd, cwd=ROOT, env=_child_env(),
                                capture_output=True, timeout=to)
             rc = r.returncode
             raw = (r.stdout or b'') + (r.stderr or b'')
@@ -404,9 +528,11 @@ def _run(plan, quick):
         print(f'[{status}] {path}  ({dur:.1f}s){note}')
         sys.stdout.flush()
 
-    total = len([p for p, _t, _s in plan if os.path.isfile(os.path.join(ROOT, p))])
+    total = (len([p for p, _t, _s in plan
+                  if os.path.isfile(os.path.join(ROOT, p))]) - n_skip)
     elapsed = time.time() - t0
     head = (f'批量测试汇总: {n_ok}/{total} 通过，总耗时 {elapsed:.1f}s'
+            + (f'（{n_skip} 个 SKIP）' if n_skip else '')
             + ('（--quick 模式）' if quick else '') + '\n')
     with io.open(out_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(head + '\n' + '\n'.join(lines))

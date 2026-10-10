@@ -36,13 +36,36 @@ def parse_dnd(data):
     return out
 
 
-def find_platform(port):
+def _port_from_file():
+    """优先读平台落盘的 run/.port（app.py 绑定成功后写入）。
+
+    平台端口候选含 8900/9600/8888/5050/5000 与随机 10000-19999，全在
+    旧的 8760-8789 扫描区间外——8765 被占时代理必报「未发现平台」
+    （2026-10-04 审查 E4）。"""
+    try:
+        pf = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'run', '.port')
+        with open(pf, encoding='ascii') as f:
+            p = int(f.read().strip())
+        return p if 0 < p < 65536 else None
+    except (OSError, ValueError):
+        return None
+
+
+def find_platform(port, host='127.0.0.1'):
     """在候选端口上探测平台（/api/dropped_paths/last 存在即命中）。"""
-    candidates = [port] + [p for p in range(8760, 8790) if p != port]
+    candidates = [port]
+    pf = _port_from_file()
+    if pf and pf not in candidates:
+        candidates.insert(0, pf)          # 端口文件最优先
+    # app.py 的全部固定候选也纳入扫描兜底（与 _pick_port 同步）
+    candidates += [p for p in (8765, 8900, 8989, 9600, 8888, 5050, 5000)
+                   if p not in candidates]
+    candidates += [p for p in range(8760, 8790) if p not in candidates]
     for p in candidates:
         try:
             with urllib.request.urlopen(
-                    f'http://127.0.0.1:{p}/api/dropped_paths/last?since=0',
+                    f'http://{host}:{p}/api/dropped_paths/last?since=0',
                     timeout=2) as r:
                 j = json.loads(r.read().decode())
                 if 'fresh' in j:
@@ -53,9 +76,9 @@ def find_platform(port):
     return None
 
 
-def send(port, paths):
+def send(host, port, paths):
     req = urllib.request.Request(
-        f'http://127.0.0.1:{port}/api/dropped_paths', method='POST',
+        f'http://{host}:{port}/api/dropped_paths', method='POST',
         data=json.dumps({'paths': paths}).encode())
     req.add_header('Content-Type', 'application/json')
     with urllib.request.urlopen(req, timeout=10) as r:
@@ -65,6 +88,7 @@ def send(port, paths):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--port', type=int, default=8765, help='平台端口')
+    ap.add_argument('--host', default='127.0.0.1', help='平台主机（文档既有参数，此前未注册——按文档调用会 exit 2）')
     args = ap.parse_args()
 
     root = TkinterDnD.Tk()
@@ -86,7 +110,7 @@ def main() -> int:
         plist.insert(END, msg)
         plist.see(END)
 
-    platform_port = find_platform(args.port)
+    platform_port = find_platform(args.port, args.host)
     if not platform_port:
         log('✘ 未发现平台服务——请先启动平台（网页或桌面窗口）')
         port_var.set('未连接')
@@ -103,7 +127,7 @@ def main() -> int:
         if not paths:
             return
         try:
-            send(platform_port, paths)
+            send(args.host, platform_port, paths)
             for p in paths:
                 log('→ ' + p)
         except Exception as e:

@@ -1,7 +1,7 @@
-,PZ530881.1_Odontoglossum_ringspot_virus,PZ512725.1_Tomato_brown_rugose_fruit_vir,PZ397462.1_Tomato_mottle_mosaic_virus,PZ512725.1_Tomato_brown_rugose_fruit_vir_1,PZ397462.1_Tomato_mottle_mosaic_virus_va,PZ530881.1_Odontoglossum_ringspot_virus_
-PZ530881.1_Odontoglossum_ringspot_virus,,63.2,62.5,62.5,59.7,88.5
-PZ512725.1_Tomato_brown_rugose_fruit_vir,63.2,,80.5,98.5,76.5,57.6
-PZ397462.1_Tomato_mottle_mosaic_virus,62.5,80.5,,79.5,94.3,56.9
-PZ512725.1_Tomato_brown_rugose_fruit_vir_1,62.5,98.5,79.5,,75.7,57.0
-PZ397462.1_Tomato_mottle_mosaic_virus_va,59.7,76.5,94.3,75.7,,54.3
-PZ530881.1_Odontoglossum_ringspot_virus_,88.5,57.6,56.9,57.0,54.3,
+,PZ530881.1_Odontoglossum_ringspot_virus,PZ512725.1_Tomato_brown_rugose_fruit_virus,PZ397462.1_Tomato_mottle_mosaic_virus,PZ512725.1_Tomato_brown_rugose_fruit_virus_variant1,PZ397462.1_Tomato_mottle_mosaic_virus_variant2,PZ530881.1_Odontoglossum_ringspot_virus_variant3
+PZ530881.1_Odontoglossum_ringspot_virus,,63.8,62.9,63.0,60.3,88.5
+PZ512725.1_Tomato_brown_rugose_fruit_virus,63.8,,80.8,98.5,76.8,58.4
+PZ397462.1_Tomato_mottle_mosaic_virus,62.9,80.8,,79.8,94.3,58.2
+PZ512725.1_Tomato_brown_rugose_fruit_virus_variant1,63.0,98.5,79.8,,75.8,57.8
+PZ397462.1_Tomato_mottle_mosaic_virus_variant2,60.3,76.8,94.3,75.8,,55.8
+PZ530881.1_Odontoglossum_ringspot_virus_variant3,88.5,58.4,58.2,57.8,55.8,

@@ -3,6 +3,7 @@
 
 SRA+GSA 双引擎按物种检索 Run → 统一元数据 → 出版级图组；
 含在线表格编辑、AI 元数据清洗（DeepSeek 可选）与项目归档。"""
+import contextlib
 import json
 import os
 import re
@@ -44,6 +45,45 @@ _meta_overview_cache = {}
 
 
 _meta_cache_lock = threading.Lock()
+
+# 元数据表「读-改-写」的 per-name 编辑锁（RLock：同线程内可重入，如
+# ai_fill job 里再调 _meta_store_df）。
+# 为什么需要：编辑接口是整表读改写（_meta_load_df → 改 → _meta_store_df），
+# 同一项目的两个编辑请求各自读到旧表，后写者把前者的修改整表抹掉；
+# AI 清洗任务更是持着开始时的旧 DataFrame 在收尾时整表覆盖。
+# 锁按项目名分片（不同项目互不阻塞），由 _meta_edit_lock 惰性创建。
+_meta_edit_locks = {}
+_meta_edit_locks_guard = threading.Lock()
+
+
+def _meta_edit_lock(name):
+    """取（必要时创建）项目 name 的编辑锁。"""
+    with _meta_edit_locks_guard:
+        lk = _meta_edit_locks.get(name)
+        if lk is None:
+            lk = _meta_edit_locks[name] = threading.RLock()
+        return lk
+
+
+@contextlib.contextmanager
+def _meta_edit_ctx():
+    """编辑事务：校验请求 → 持项目锁 → 读表，with 块内做改+存。
+
+    锁覆盖「读表 → 改 → 写回」全程，两个并发编辑因此串行；块内改动
+    与落盘是一次不可分割的临界区。
+    """
+    body = request.get_json(force=True) or {}
+    name = str(body.get('name') or '')
+    which = str(body.get('which') or '')
+    if not re.fullmatch(r'[A-Za-z0-9_\-]+', name):
+        abort(400, '无效的检索项目名')
+    if which not in _META_EDITABLE:
+        abort(400, '该表为只读明细，仅 search / core14 可编辑')
+    with _meta_edit_lock(name):
+        df = _meta_load_df(name, which)
+        if df is None:
+            abort(404, '表不存在（先检索/提取元数据）')
+        yield body, name, which, df
 
 
 AI_SANITIZE_PROMPT = """你是一个极其严谨的生物信息元数据清理程序。你的任务是【去污染、归位、格式化】，绝对不是【凭空捏造】。
@@ -138,13 +178,18 @@ def _meta_load_df(name, which):
     return df
 
 
-def _meta_store_df(name, which, df):
-    """保存项目表（csv+tsv 双格式，与引擎 save_dual_format 一致）。"""
+def _meta_store_df(name, which, df, stem_suffix=''):
+    """保存项目表（csv+tsv 双格式，与引擎 save_dual_format 一致）。
+
+    stem_suffix 非空时另存一份带后缀的副本（如 '.ai_result'），且**不**更新
+    内存缓存——缓存必须继续指向真正的项目表，副本只是给用户人工合并用。
+    返回写出的 csv 路径（AI 冲突分支要把它报给用户）。
+    """
     sub, fname = _META_TABLE_FILES[which]
     base = check_path(os.path.join(_meta_proj(name), sub),
                       must_exist=False, in_platform=True)
     os.makedirs(base, exist_ok=True)
-    stem = os.path.splitext(fname)[0]
+    stem = os.path.splitext(fname)[0] + stem_suffix
     df = df.loc[:, ~df.columns.duplicated()]
     csv_p = os.path.join(base, stem + '.csv')
     with safe_open(csv_p, 'wt') as f:
@@ -153,8 +198,10 @@ def _meta_store_df(name, which, df):
     with safe_open(os.path.join(base, stem + '.tsv'), 'wt') as f:
         f.write('\ufeff')
         df.to_csv(f, index=False, sep='\t', lineterminator='\n')
-    with _meta_cache_lock:
-        _meta_df_cache[(name, which)] = [os.path.getmtime(csv_p), df]
+    if not stem_suffix:
+        with _meta_cache_lock:
+            _meta_df_cache[(name, which)] = [os.path.getmtime(csv_p), df]
+    return csv_p
 
 
 def _meta_missing_count(df):
@@ -199,12 +246,19 @@ def _meta_ai_chat(client, model, system, user, timeout=180):
     return resp.choices[0].message.content or ''
 
 
-def _meta_stream_task(task_name, cmd, done_msg, log_file=None, link=None):
-    """子进程跑 meta 脚本，stdout 实时进任务日志；完成返回 summary。"""
+def _meta_stream_task(task_name, cmd, done_msg, log_file=None, link=None,
+                      env_extra=None):
+    """子进程跑 meta 脚本，stdout 实时进任务日志；完成返回 summary。
+
+    env_extra：额外注入子进程的环境变量（API Key 走这里，避免出现在命令行）。
+    """
     def fn(log, progress, cancel):
         from Virus_Platform_Core.utils import task_register_proc
         env = dict(os.environ)
         env.setdefault('PYTHONUNBUFFERED', '1')   # 引擎脚本日志实时流出
+        for _k, _v in (env_extra or {}).items():
+            if _v:
+                env[str(_k)] = str(_v)
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True,
                                 encoding='utf-8', errors='replace', env=env)
@@ -255,6 +309,13 @@ def api_meta_collections():
             search_f = os.path.join(d, 'search', 'SRA_GSA_Merged_Final.csv')
             core_f = os.path.join(d, 'info', 'Global_Unified_Metadata_Core14.csv')
             full_f = os.path.join(d, 'info', 'Global_Unified_Metadata_Full.csv')
+            # 只列真正的「检索集合」。run/meta_search/<name>/ 是共享项目目录，
+            # 「病毒样本预筛」会在同名项目下只写 prescreen/ 子目录（见
+            # web/prescreen.py）。若把它也当集合列出，meta 页在无 ?p= 时会
+            # 回退选中最新项目 → 三个表格接口全 404（见 meta.html setProject）。
+            if not (os.path.isfile(search_f) or os.path.isfile(core_f)
+                    or os.path.isfile(full_f)):
+                continue
             n_runs = _csv_data_rows(search_f) if os.path.isfile(search_f) else None
             n_core = _csv_data_rows(core_f) if os.path.isfile(core_f) else None
             n_full = _csv_data_rows(full_f) if os.path.isfile(full_f) else None
@@ -310,8 +371,7 @@ def api_meta_search():
                      '--workers', str(workers), '-o', out_dir)
     if not detailed:
         cmd.append('--no-detailed')
-    if os.environ.get('NCBI_API_KEY'):
-        cmd += ['--ncbi-api', os.environ['NCBI_API_KEY']]
+    # NCBI key 走环境变量（_meta_stream_task 会带 env 转发给子进程），不落命令行
     tid = _meta_stream_task(
         f'公共检索 {species}', cmd, f'检索完成: {out_dir}',
         log_file=os.path.join(out_dir, 'run.log'), link='/meta')
@@ -361,13 +421,14 @@ def api_meta_info():
     from Virus_Platform_Core.public_meta import info_engine
     cmd = engine_cmd(info_engine.__file__,
                      '-i', input_arg, '-o', info_dir, '-t', '4', '-m', mode)
-    if ds_key:
-        cmd += ['--deepseek-api', ds_key]
+    # key 经 subprocess env 注入（DEEPSEEK_API_KEY）而非命令行参数：
+    # 命令行会被 ps/tasklist 与任务日志看到
     if body.get('fill_date'):
         cmd.append('--fill-date')
     return jsonify({'task': _meta_stream_task(
         f'元数据提取 {name}', cmd, f'元数据完成: {info_dir}',
-        log_file=os.path.join(info_dir, 'run.log'), link='/meta')})
+        log_file=os.path.join(info_dir, 'run.log'), link='/meta',
+        env_extra={'DEEPSEEK_API_KEY': ds_key} if ds_key else None)})
 
 
 @bp.route('/api/meta/plot', methods=['POST'])
@@ -547,6 +608,12 @@ def api_meta_unique(name):
 
 
 def _meta_editable_target():
+    """兼容保留：校验请求并读表（不带锁）。
+
+    ⚠️ 编辑类接口请改用 `with _meta_edit_ctx()`（持项目锁），否则
+    「读-改-写」会被并发请求整表覆盖。非落盘用途（如 ai_fill 提交时
+    取快照）仍可用本函数。
+    """
     body = request.get_json(force=True) or {}
     name = str(body.get('name') or '')
     which = str(body.get('which') or '')
@@ -563,18 +630,18 @@ def _meta_editable_target():
 @bp.route('/api/meta/cell', methods=['POST'])
 def api_meta_cell():
     """编辑单个单元格（双击编辑）。body: {name, which, row, col, value}"""
-    body, name, which, df = _meta_editable_target()
-    cols = list(df.columns)
-    col = str(body.get('col') or '')
-    try:
-        row = int(body.get('row'))
-    except (TypeError, ValueError):
-        abort(400, 'row 需为整数')
-    if col not in cols or not (0 <= row < len(df)):
-        abort(400, '无效的单元格位置')
-    value = '' if body.get('value') is None else str(body.get('value'))
-    df.iat[row, cols.index(col)] = value
-    _meta_store_df(name, which, df)
+    with _meta_edit_ctx() as (body, name, which, df):
+        cols = list(df.columns)
+        col = str(body.get('col') or '')
+        try:
+            row = int(body.get('row'))
+        except (TypeError, ValueError):
+            abort(400, 'row 需为整数')
+        if col not in cols or not (0 <= row < len(df)):
+            abort(400, '无效的单元格位置')
+        value = '' if body.get('value') is None else str(body.get('value'))
+        df.iat[row, cols.index(col)] = value
+        _meta_store_df(name, which, df)
     return jsonify({'ok': True, 'value': value,
                     'n_missing': _meta_missing_count(df)})
 
@@ -582,21 +649,21 @@ def api_meta_cell():
 @bp.route('/api/meta/row', methods=['POST'])
 def api_meta_row():
     """整行多字段保存（编辑面板）。body: {name, which, row, data:{col:value}}"""
-    body, name, which, df = _meta_editable_target()
-    data = body.get('data') or {}
-    try:
-        row = int(body.get('row'))
-    except (TypeError, ValueError):
-        abort(400, 'row 需为整数')
-    if not (0 <= row < len(df)):
-        abort(400, '无效的行号')
-    applied = 0
-    for col, val in data.items():
-        if col in df.columns:
-            df.iat[row, df.columns.get_loc(col)] = \
-                '' if val is None else str(val)
-            applied += 1
-    _meta_store_df(name, which, df)
+    with _meta_edit_ctx() as (body, name, which, df):
+        data = body.get('data') or {}
+        try:
+            row = int(body.get('row'))
+        except (TypeError, ValueError):
+            abort(400, 'row 需为整数')
+        if not (0 <= row < len(df)):
+            abort(400, '无效的行号')
+        applied = 0
+        for col, val in data.items():
+            if col in df.columns:
+                df.iat[row, df.columns.get_loc(col)] = \
+                    '' if val is None else str(val)
+                applied += 1
+        _meta_store_df(name, which, df)
     return jsonify({'ok': True, 'applied': applied,
                     'n_missing': _meta_missing_count(df)})
 
@@ -604,18 +671,18 @@ def api_meta_row():
 @bp.route('/api/meta/rows/delete', methods=['POST'])
 def api_meta_rows_delete():
     """删除选中行。body: {name, which, rows:[绝对行号...]}"""
-    body, name, which, df = _meta_editable_target()
-    rows = body.get('rows') or []
-    try:
-        rows = sorted({int(r) for r in rows})
-    except (TypeError, ValueError):
-        abort(400, 'rows 需为行号数组')
-    if not rows:
-        abort(400, '未选择行')
-    if rows[-1] >= len(df) or rows[0] < 0:
-        abort(400, '行号越界')
-    df = df.drop(index=rows).reset_index(drop=True)
-    _meta_store_df(name, which, df)
+    with _meta_edit_ctx() as (body, name, which, df):
+        rows = body.get('rows') or []
+        try:
+            rows = sorted({int(r) for r in rows})
+        except (TypeError, ValueError):
+            abort(400, 'rows 需为行号数组')
+        if not rows:
+            abort(400, '未选择行')
+        if rows[-1] >= len(df) or rows[0] < 0:
+            abort(400, '行号越界')
+        df = df.drop(index=rows).reset_index(drop=True)
+        _meta_store_df(name, which, df)
     return jsonify({'ok': True, 'total': len(df),
                     'n_missing': _meta_missing_count(df)})
 
@@ -658,40 +725,40 @@ def api_meta_record():
 @bp.route('/api/meta/fill_cache', methods=['POST'])
 def api_meta_fill_cache():
     """从本地网页缓存 JSON 回填缺失字段（对应 GUI「Fill from Cache」）。"""
-    body, name, which, df = _meta_editable_target()
-    mapping = {'SubmissionDate': 'ReleaseDate', 'Organization': 'CenterName',
-               'PRJ': 'BioProject', 'TaxID': 'TaxID',
-               'ScientificName': 'ScientificName'}
-    if 'Run' not in df.columns:
-        abort(400, '表缺少 Run 列')
-    cache_dirs = _meta_web_cache_dirs(name)
-    filled = 0
-    for idx in range(len(df)):
-        run = str(df.iat[idx, df.columns.get_loc('Run')]).strip()
-        if not run:
-            continue
-        data = None
-        for d in cache_dirs:
-            jp = os.path.join(d, f'{run}.json')
-            if os.path.isfile(jp):
-                try:
-                    with safe_open(jp) as f:
-                        data = json.load(f)
-                except Exception:
-                    data = None
-                break
-        if not data:
-            continue
-        for jk, col in mapping.items():
-            if col not in df.columns:
+    with _meta_edit_ctx() as (body, name, which, df):
+        mapping = {'SubmissionDate': 'ReleaseDate', 'Organization': 'CenterName',
+                   'PRJ': 'BioProject', 'TaxID': 'TaxID',
+                   'ScientificName': 'ScientificName'}
+        if 'Run' not in df.columns:
+            abort(400, '表缺少 Run 列')
+        cache_dirs = _meta_web_cache_dirs(name)
+        filled = 0
+        for idx in range(len(df)):
+            run = str(df.iat[idx, df.columns.get_loc('Run')]).strip()
+            if not run:
                 continue
-            cur = str(df.iat[idx, df.columns.get_loc(col)]).strip()
-            val = str(data.get(jk, '') or '').strip()
-            if val and cur.lower() in _META_NA:
-                df.iat[idx, df.columns.get_loc(col)] = val
-                filled += 1
-    if filled:
-        _meta_store_df(name, which, df)
+            data = None
+            for d in cache_dirs:
+                jp = os.path.join(d, f'{run}.json')
+                if os.path.isfile(jp):
+                    try:
+                        with safe_open(jp) as f:
+                            data = json.load(f)
+                    except Exception:
+                        data = None
+                    break
+            if not data:
+                continue
+            for jk, col in mapping.items():
+                if col not in df.columns:
+                    continue
+                cur = str(df.iat[idx, df.columns.get_loc(col)]).strip()
+                val = str(data.get(jk, '') or '').strip()
+                if val and cur.lower() in _META_NA:
+                    df.iat[idx, df.columns.get_loc(col)] = val
+                    filled += 1
+        if filled:
+            _meta_store_df(name, which, df)
     return jsonify({'ok': True, 'filled': filled})
 
 
@@ -711,8 +778,20 @@ def api_meta_ai_fill():
         row = {c: str(df.iat[i, df.columns.get_loc(c)]).strip() for c in cols}
         if any(v and v.lower() not in _AI_EMPTY for v in row.values()):
             records.append((i, row))
+    # 收尾冲突检测基线：提交时记录表的磁盘 mtime。任务跑完若 mtime 已变，
+    # 说明用户在 AI 清洗期间编辑过表 → 绝不整表覆盖（原先用开始时读到的
+    # 旧 DataFrame 直接写回，把用户的编辑静默抹掉）。
+    csv_path = _meta_table_path(name, which)
+    try:
+        start_mtime = os.path.getmtime(csv_path)
+    except OSError:
+        start_mtime = None
+    # AI 在独立快照上工作：与内存缓存里的 df 解耦，收尾是否落盘由 mtime
+    # 冲突检测决定（不冲突才写，见下）。records 的行号基于本快照。
+    work_df = df.copy()
 
     def job(log, prog, cancel):
+        df = work_df                            # job 内沿用原变量名
         client = _meta_ai_client(key)
         total, changed, done = len(records), 0, 0
         cells = []
@@ -750,7 +829,29 @@ def api_meta_ai_fill():
             if done % 10 == 0:
                 log(f'进度 {done}/{total}，已修改 {changed} 个字段')
         if changed:
-            _meta_store_df(name, which, df)
+            # 落盘与冲突判定必须在项目锁内一次完成：锁外的 mtime 比较会
+            # 让"判定后、写回前"的编辑漏网。
+            with _meta_edit_lock(name):
+                try:
+                    cur_mtime = os.path.getmtime(csv_path)
+                except OSError:
+                    cur_mtime = None
+                if (start_mtime is not None and cur_mtime is not None
+                        and cur_mtime != start_mtime):
+                    # 表在 AI 清洗期间被外部编辑过：不覆盖，另存副本。
+                    ai_path = _meta_store_df(name, which, df,
+                                             stem_suffix='.ai_result')
+                    msg = (f'表在 AI 清洗期间被编辑过（磁盘 mtime 已变），'
+                           f'为避免覆盖你的修改，AI 结果已另存为 '
+                           f'{ai_path}；请手动对比合并。'
+                           f'本次修改 {changed} 个字段。')
+                    log('[WARN] ' + msg)
+                    prog('done', 1.0, 'AI 清洗完成（结果另存，未覆盖）')
+                    return {'kind': 'meta', 'conflict': True,
+                            'ai_result': ai_path, 'message': msg,
+                            'stats': {'记录': total, '修改字段': changed,
+                                      'cells': cells[:5000]}}
+                _meta_store_df(name, which, df)
         return {'kind': 'meta', 'stats': {'记录': total, '修改字段': changed,
                                           'cells': cells[:5000]}}
 
@@ -916,7 +1017,10 @@ def api_meta_import():
         except OSError:
             pass
     df = df.loc[:, ~df.columns.duplicated()].fillna('')
-    _meta_store_df(name, which, df.astype(object))
+    # 整表替换同样持项目锁：与并发编辑/删行串行，避免"导入刚落地、
+    # 编辑基于旧表写回"把整表又改回去。
+    with _meta_edit_lock(name):
+        _meta_store_df(name, which, df.astype(object))
     return jsonify({'ok': True, 'rows': len(df),
                     'columns': list(df.columns)})
 

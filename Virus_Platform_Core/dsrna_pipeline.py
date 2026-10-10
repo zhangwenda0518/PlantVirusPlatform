@@ -20,12 +20,13 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 
 from .config import PLATFORM_ROOT
 from . import dsrna_scoring as dscore
-from .utils import decode_output
+from .utils import decode_output, safe_open, task_register_proc
 
 DSRNA_DIR = Path(PLATFORM_ROOT) / 'databases' / 'dsrna'
 PANEL_DIR = DSRNA_DIR / 'panel'
@@ -38,7 +39,8 @@ EXE_CANDIDATES = ('3rd/tools/dsrnamax/dsRNAmax_det.exe',
 
 RSS_PER_KMER_PER_ITER = 160      # B；iterations=100 实测 13-16KB/kmer 反推
 DEFAULT_RSS_CAP_GB = 32.0
-EXEC_TIMEOUT_S = 3600
+# 单次 exe 调用的挂死上限（秒）：可用 VP_DSRNA_TIMEOUT_SEC 覆盖
+EXEC_TIMEOUT_S = float(os.environ.get('VP_DSRNA_TIMEOUT_SEC') or 0) or 3600.0
 
 _EXE_PROBE = None
 
@@ -53,6 +55,82 @@ class MemoryBudgetExceeded(ValueError):
 
 # ---------------------------------------------------------------- exe 探测
 
+def _run_exe(cmd, timeout=EXEC_TIMEOUT_S, cancel=None, what='dsRNAmax'):
+    """跑 exe 并回收输出：进程登记 + 超时/取消看门狗 + 平台解码口径。
+
+    - CREATE_NO_WINDOW：GUI（pywebview）模式下不弹控制台黑框；
+    - task_register_proc：任务停止（TaskManager.cancel）时可硬杀本进程，
+      否则一次选窗最长挂到 timeout，用户点了「停止」也只能干等；
+    - 输出按字节收集后 decode_output（utf-8→GBK）：dsRNAmax 报错会回显
+      含中文的输入/输出路径，固定 utf-8+replace 会打成 U+FFFD 不可读。
+    返回 (returncode, 输出文本, 耗时秒)。取消抛 RuntimeError，超时抛 DsrnaExeError。
+    """
+    cmd = [str(c) for c in cmd]
+    creationflags = 0
+    if os.name == 'nt':
+        creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                creationflags=creationflags)
+    except OSError as e:
+        raise DsrnaExeError(f'{what} 无法执行: {e}') from e
+    try:
+        task_register_proc(proc)         # 任务取消 → 硬杀（非任务线程内为空操作）
+    except Exception:                    # noqa: BLE001 —— 登记失败不阻塞运行
+        pass
+
+    chunks = []
+
+    def _reader():
+        try:
+            while True:
+                blk = proc.stdout.read(65536)
+                if not blk:
+                    break
+                chunks.append(blk)
+        except Exception:                # noqa: BLE001 —— 读流异常交给 returncode 判定
+            pass
+
+    th = threading.Thread(target=_reader, daemon=True)
+    th.start()
+
+    def _kill():
+        try:
+            proc.kill()
+        except Exception:                # noqa: BLE001 —— 进程可能已退出
+            pass
+        try:
+            proc.wait(timeout=10)
+        except Exception:                # noqa: BLE001
+            pass
+
+    t0 = time.time()
+    timed_out = cancelled = False
+    while proc.poll() is None:
+        if cancel is not None and cancel.is_set():
+            cancelled = True
+            _kill()
+            break
+        if timeout and time.time() - t0 > timeout:
+            timed_out = True
+            _kill()
+            break
+        time.sleep(0.15)
+    th.join(timeout=5)
+    out = decode_output(b''.join(chunks))
+    try:
+        proc.stdout.close()
+    except Exception:                    # noqa: BLE001 —— 管道已随进程回收
+        pass
+    dt = time.time() - t0
+    if cancelled:
+        raise RuntimeError('用户取消')
+    if timed_out:
+        raise DsrnaExeError(f'{what} 超时（>{timeout:g}s 未返回）')
+    return proc.returncode, out, dt
+
+
 def probe_exe(force=False):
     """定位 dsRNAmax 并探测版本号与 -seed 支持（结果缓存）。"""
     global _EXE_PROBE
@@ -64,7 +142,7 @@ def probe_exe(force=False):
         p = get_config().tool('dsRNAmax')
         if p:
             cands.append(p)
-    except Exception:
+    except Exception:                    # noqa: BLE001 —— 配置未就绪时退回候选路径
         pass
     cands += [os.path.join(PLATFORM_ROOT, *c.split('/')) for c in EXE_CANDIDATES]
     exe = next((c for c in cands if c and os.path.isfile(c)), None)
@@ -72,12 +150,8 @@ def probe_exe(force=False):
         raise DsrnaExeError(
             '未找到 dsRNAmax 可执行文件（3rd/tools/dsrnamax/），'
             '请确认发行包完整或在设置页登记路径')
-    try:
-        r = subprocess.run([exe, '-h'], capture_output=True, text=True,
-                           timeout=30, encoding='utf-8', errors='replace')
-    except OSError as e:
-        raise DsrnaExeError(f'dsRNAmax 无法执行: {e}')
-    text = (r.stdout or '') + (r.stderr or '')
+    # -h 走同一条子进程通道（不弹黑框、可用平台解码口径读回中文路径回显）
+    _rc, text, _dt = _run_exe([exe, '-h'], timeout=30, what='dsRNAmax -h')
     m = re.search(r'Version:\s*([\d.]+)', text)
     _EXE_PROBE = {
         'path': exe,
@@ -124,20 +198,50 @@ def guard_memory(seqs, kmer_len, iterations, cap_gb=None):
 
 
 def _mem_available_gb():
+    """系统可用物理内存（GB）；取不到返回 None。
+
+    Linux 读 /proc/meminfo；Windows 走 GlobalMemoryStatusEx（ctypes，无新依赖）。
+    修复 2026-10-03：原实现只读 /proc/meminfo，Windows 恒 None —— 内存守卫
+    「按可用内存 70% 收紧预算」的分支在主平台（Windows）上是死代码，
+    只剩固定 32GB 上限（大目标集时该收紧反而是主要的 OOM 前置保护）。
+    """
     try:
         with open('/proc/meminfo') as fh:
             for line in fh:
                 if line.startswith('MemAvailable:'):
                     return int(line.split()[1]) / 1024 / 1024
+        return None                       # 能读文件但没有该字段（非 Linux）
     except OSError:
-        return None
+        pass
+    if os.name == 'nt':
+        try:
+            import ctypes
+
+            class _MEMSTATUSEX(ctypes.Structure):
+                _fields_ = [('dwLength', ctypes.c_ulong),
+                            ('dwMemoryLoad', ctypes.c_ulong),
+                            ('ullTotalPhys', ctypes.c_ulonglong),
+                            ('ullAvailPhys', ctypes.c_ulonglong),
+                            ('ullTotalPageFile', ctypes.c_ulonglong),
+                            ('ullAvailPageFile', ctypes.c_ulonglong),
+                            ('ullTotalVirtual', ctypes.c_ulonglong),
+                            ('ullAvailVirtual', ctypes.c_ulonglong),
+                            ('ullAvailExtendedVirtual', ctypes.c_ulonglong)]
+
+            st = _MEMSTATUSEX()
+            st.dwLength = ctypes.sizeof(_MEMSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+                return st.ullAvailPhys / 1e9
+        except Exception:                # noqa: BLE001 —— 取不到就当未知
+            return None
     return None
 
 
 # ---------------------------------------------------------------- FASTA 工具
 
 def write_fasta(path, seqs):
-    with open(path, 'w', encoding='utf-8') as f:
+    """写 FASTA（平台 safe_open：UTF-8 + LF 行尾 + 平台内写入校验）。"""
+    with safe_open(path, 'wt') as f:
         for n, s in seqs:
             f.write(f'>{n}\n')
             for i in range(0, len(s), 70):
@@ -176,11 +280,16 @@ def candidate_key(rows):
 
 
 def run_dsrnamax_once(exe_info, fa, construct_len, kmer_len, iterations, seed,
-                      off_targets='', csv_out=None, timeout=EXEC_TIMEOUT_S):
+                      off_targets='', csv_out=None, timeout=EXEC_TIMEOUT_S,
+                      cancel=None):
     """跑一次 exe，返回 (sense_arm, stdout, 耗时)。失败抛 DsrnaExeError。
 
     注意：exe 的 -csv 写失败时退出码仍为 0 且 stdout 不再输出序列
     （上游 output.go early-return），此处靠「解析不到臂序列」兜底报错。
+
+    exe 与中间文件路径都可能是中文（平台根含中文，2026-10-03 实测
+    dsRNAmax_det.exe 对中文 targets/-csv 路径读写正常，无需 ASCII 中转）。
+    子进程通道（无黑框 / 可取消 / 输出解码）统一走 _run_exe。
     """
     exe = exe_info['path']
     cmd = [exe, '-targets', str(fa),
@@ -194,21 +303,13 @@ def run_dsrnamax_once(exe_info, fa, construct_len, kmer_len, iterations, seed,
         cmd += ['-offTargets', str(off_targets)]
     if csv_out:
         cmd += ['-csv', str(csv_out)]
-    t0 = time.time()
-    try:
-        # 按字节捕获再 decode_output（utf-8→GBK 兜底）：dsRNAmax 报错会回显
-        # 输入/输出路径（平台路径含中文），utf-8+replace 会把那几行打成
-        # U+FFFD，异常消息不可读
-        p = subprocess.run(cmd, capture_output=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        raise DsrnaExeError(f'dsRNAmax 超时（>{timeout}s）')
-    out = decode_output((p.stdout or b'') + (p.stderr or b''))
-    if p.returncode != 0:
-        raise DsrnaExeError(f'dsRNAmax 退出码 {p.returncode}: {out[-800:]}')
+    p_rc, out, dt = _run_exe(cmd, timeout=timeout, cancel=cancel)
+    if p_rc != 0:
+        raise DsrnaExeError(f'dsRNAmax 退出码 {p_rc}: {out[-800:]}')
     m = re.search(r'dsRNA sense-arm sequence.*?\n([ACGTNacgtn]+)', out, re.S)
     if not m:
         raise DsrnaExeError('未能从 dsRNAmax 输出解析出臂序列:\n' + out[-800:])
-    return m.group(1).strip().upper(), out, time.time() - t0
+    return m.group(1).strip().upper(), out, dt
 
 
 def _unmasked_runs(seqs):
@@ -295,7 +396,7 @@ def select_windows(seqs, exe_info, work_dir, params, log, prog, cancel):
             seed_c = base_seed + 1000 * c        # 候选间种子域不重叠
             a, o, dt = run_dsrnamax_once(
                 exe_info, fa, clen, kmer_len, iterations, seed_c, off,
-                csv_out=Path(work_dir) / f'cand_w{w}_c{c}.csv')
+                csv_out=Path(work_dir) / f'cand_w{w}_c{c}.csv', cancel=cancel)
             rows = parse_dsrnamax_table(o)
             # orig 记录候选原始编号：result.csv 兼容产物必须拷中选者自己的
             # CSV（cand_w{w}_c{orig}.csv），maximin 重排后 winner 未必是 c0
@@ -331,8 +432,8 @@ def select_windows(seqs, exe_info, work_dir, params, log, prog, cancel):
             weak = [n for n, h in hits if 0 < h < 0.25 * best_hit]
             if weak:
                 logs.append('⚠ 警告：' + '、'.join(weak)
-                            + f' 覆盖不足最优目标的 25%（median 看不出来），'
-                              f'建议为这些目标单独补臂')
+                            + ' 覆盖不足最优目标的 25%（median 看不出来），'
+                              '建议为这些目标单独补臂')
         arms.append({
             'name': f'arm_{w + 1}',
             'seq': arm,
@@ -393,10 +494,12 @@ def scan_panel(arm_seqs, panel_names=None, max_mm=1, log=None, prog=None,
         if prog:
             prog('offtarget', 0.45 + 0.15 * i / max(1, len(files)),
                  f'索引面板 {sp}（{i + 1}/{len(files)}）')
-        info = dso.build_species_index(f, cache_dir=str(CACHE_DIR), log=log)
+        # 索引面板是整条链里最重的一步（真实面板 GB 级），索引内也响应取消
+        info = dso.build_species_index(f, cache_dir=str(CACHE_DIR), log=log,
+                                       cancel=cancel)
         # 致死表按裸种名命名（Apis_mellifera_all_lethals.tsv）
         lethal = dso.load_lethal_ids(str(LETHAL_DIR), sp)
-        larr = (dso.build_lethal_index(f, lethal)
+        larr = (dso.build_lethal_index(f, lethal, cancel=cancel)
                 if lethal and info['arr'].size else None)
         indexes[stem] = {'arr': info['arr'], 'lethal_arr': larr,
                          'bp': info['bp'], 'n_records': info['n_records']}
@@ -420,22 +523,26 @@ def safety_counts(scanres, coeff=20):
     out = {}
     if not scanres:
         return out
+    # mm 阈值必须显式取：max_mm=0（界面「0 错配」档）时 `or 1` 会静默放宽成
+    # ≤1 错配，把 1mm 命中也算进脱靶加权（2026-10-03 修复）。
+    mm_cap = scanres.get('max_mm')
+    mm_cap = 1 if mm_cap is None else int(mm_cap)
     for arm, d in scanres['arms'].items():
         per = {}
         tiers_all = d.get('sirna_tiers') or {}
         n = d['n_sirna']
         all_hit = [0] * n
         lethal_hit = [0] * n
-        for sp, td in tiers_all.items():
+        for _sp, td in tiers_all.items():
             tiers = td.get('tiers') if isinstance(td, dict) else None
             if tiers:
                 for i, t in enumerate(tiers):
-                    if i < n and t is not None and t <= (scanres.get('max_mm') or 1):
+                    if i < n and t is not None and t <= mm_cap:
                         all_hit[i] += 1
             lt = td.get('lethal_tiers') if isinstance(td, dict) else None
             if lt:
                 for i, t in enumerate(lt):
-                    if i < n and t is not None and t <= (scanres.get('max_mm') or 1):
+                    if i < n and t is not None and t <= mm_cap:
                         lethal_hit[i] += 1
         for i in range(n):
             per[i + 1] = (all_hit[i] - lethal_hit[i]) + lethal_hit[i] * coeff
@@ -474,6 +581,13 @@ def design_primers(arms, params, log=None):
 
     复用平台统一引物引擎 primer_design.design_for_sequence（含热力学评分），
     不再维护第三套 primer3 参数。
+
+    切片坐标系（2026-10-03 修复）：best_window 的 nt_start/nt_end 是
+    **guide（反义链）帧**（dsRIP 口径），臂上与之等价的区间是
+    sense_nt_start..sense_nt_end（= L-nt_end+1 .. L-nt_start+1）。此前直接
+    arm_seq[nt_start-1:nt_end] 切的是**镜像区间**——引物落在偏离最优窗的位置，
+    且 QC 的「窗内占比」用同一组镜像坐标自比恒 ≈ 1，掩盖了错位。旧报告
+    （无 sense_nt_*）按上式就地换算，行为一致。
     """
     from . import primer_design as pd
     product_min = int(params.get('primer_product_min') or 200)
@@ -484,11 +598,17 @@ def design_primers(arms, params, log=None):
     for a in arms:
         arm_seq = a['seq'].upper()
         bw = a.get('best_window') or {}
-        nt_s, nt_e = bw.get('nt_start'), bw.get('nt_end')
+        nt_s = bw.get('sense_nt_start')
+        nt_e = bw.get('sense_nt_end')
+        if (nt_s is None or nt_e is None) and bw.get('nt_start') \
+                and bw.get('nt_end'):
+            # guide 帧 → 臂帧（臂长 L：sense = L-nt_end+1 .. L-nt_start+1）
+            _L = len(arm_seq)
+            nt_s, nt_e = _L - bw['nt_end'] + 1, _L - bw['nt_start'] + 1
         if scope == 'best_window' and nt_s and nt_e and nt_e > nt_s:
             sub = arm_seq[nt_s - 1:nt_e]
             off0 = nt_s - 1
-            scope_used = f'best_window(nt {nt_s}-{nt_e})'
+            scope_used = f'best_window(臂 nt {nt_s}-{nt_e})'
         else:
             sub = arm_seq
             off0 = 0
@@ -614,6 +734,11 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
 
     iterations = int(params.get('iterations') or 100)
     kmer_len = int(params.get('kmer_len') or 21)
+    # max_mm 显式解析（0 = 界面「0 错配」档是合法值）：`or 1` 会把 0 吞成 1，
+    # 静默把 1mm 命中也计入脱靶/红线判定（2026-10-03 修复）
+    _mm_raw = params.get('max_mm')
+    max_mm = 1 if _mm_raw is None or str(_mm_raw).strip() == '' \
+        else max(0, min(int(_mm_raw), 2))
     n_kmer, need_gb, cap = guard_memory(seqs, kmer_len, iterations)
     log(f'内存守卫：去重 {kmer_len}-mer {n_kmer:,} · 预计峰值 ≈{need_gb:.1f} GB'
         f' / 预算 {cap:.1f} GB')
@@ -644,12 +769,18 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
     else:
         scanres, why = scan_panel(
             [(a['name'], a['seq']) for a in arms],
-            panel_names=panel_sel, max_mm=int(params.get('max_mm') or 1),
+            panel_names=panel_sel, max_mm=max_mm,
             log=log, prog=prog, cancel=cancel)
     off_counts = safety_counts(scanres, coeff=coeff) if scanres else {}
     if scanres:
         log(f'脱靶扫描完成：{scanres["k"]}-mer，≤{scanres["max_mm"]} 错配，'
             f'{len(scanres["species"])} 物种')
+    elif panel_sel:
+        # 用户勾了面板却没扫成（名称对不上/目录空/索引坏）：必须显式告警，
+        # 否则 report 里 offtarget_panel=None 会被误读成"本来就没启用"
+        logs.append('⚠ 所选脱靶面板未能匹配任何面板文件，脱靶扫描与安全评分已跳过：'
+                    + why)
+        log(f'未启用面板脱靶扫描：{why}')
     else:
         log(f'未启用面板脱靶扫描：{why}')
 
@@ -698,7 +829,7 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
     amp_scan = None
     if scanres and amp_pairs:
         amp_scan, _ = scan_panel(amp_pairs, panel_names=panel_sel,
-                                 max_mm=int(params.get('max_mm') or 1),
+                                 max_mm=max_mm,
                                  log=None, prog=None, cancel=cancel)
 
     isolates = (params.get('isolates') or '').strip()
@@ -733,8 +864,15 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
             amp_off = {'mm0_total': tot, 'red_line': bool(ad.get('red_line')),
                        'lethal_rows': lrow[:10]}
         bw = next((a['best_window'] for a in arms if a['name'] == pe['arm']), {})
+        # 窗内占比按**臂帧**比较：引物按 sense_nt_* 切片（见 design_primers），
+        # 这里也必须用同一帧，否则又变回"拿镜像坐标自比"。旧报告无
+        # sense_nt_* 时用臂长换算（同 design_primers 的口径）。
+        w_lo, w_hi = bw.get('sense_nt_start'), bw.get('sense_nt_end')
+        if (w_lo is None or w_hi is None) and bw.get('nt_start') and bw.get('nt_end'):
+            _L = len(next(a['seq'] for a in arms if a['name'] == pe['arm']))
+            w_lo, w_hi = _L - bw['nt_end'] + 1, _L - bw['nt_start'] + 1
         ov = window_overlap(p0['amp_start_in_arm'], p0['amp_end_in_arm'],
-                            bw.get('nt_start'), bw.get('nt_end'))
+                            w_lo, w_hi)
         qc.append({
             'arm': pe['arm'], 'ok': True,
             'pair': {kk: p0[kk] for kk in ('f_T7', 'r_T7', 'product_bp',
@@ -758,7 +896,9 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
                    ('construct_len', 'kmer_len', 'iterations', 'seed',
                     'candidates', 'n_windows', 'off_targets', 'panel',
                     'max_mm', 'efficiency_priority', 'safety_priority',
-                    'primer_scope', 'primer_product_min', 'primer_product_max')},
+                    'safety_essential_coeff', 'primer_scope',
+                    'primer_product_min', 'primer_product_max',
+                    'primer_num_return', 'isolates')},
         'memory': {'distinct_kmers': n_kmer, 'predicted_gb': round(need_gb, 2),
                    'cap_gb': cap},
         'logs': logs,
@@ -777,8 +917,9 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
         'isolate_coverage': iso_cov,
         'elapsed_s': round(time.time() - t0, 1),
     }
-    (out_dir / 'report.json').write_text(
-        json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
+    # 落盘统一走平台 safe_open（编码 utf-8 + 平台根内校验），与其余工具产物一致
+    with safe_open(out_dir / 'report.json', 'wt') as f:
+        json.dump(report, f, ensure_ascii=False, indent=1)
 
     # TSV 产物（兼容管线 TSV 契约：arm/sirna_idx/species/category/gene）
     if scanres:
@@ -787,8 +928,8 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
             for r in (d.get('lethal_rows') or []):
                 lines.append(f'{arm_name}\t{r["sirna_idx"]}\t{r["species"]}\t'
                              f'{r["mm"]}mm_lethal\tlethal')
-        (out_dir / 'offtarget_lethal.tsv').write_text(
-            '\n'.join(lines) + '\n', encoding='utf-8')
+        with safe_open(out_dir / 'offtarget_lethal.tsv', 'wt') as f:
+            f.write('\n'.join(lines) + '\n')
 
     plines = ['arm\tidx\tforward_T7\treverse_T7\tproduct_bp\tf_tm\tr_tm\t'
               'amp_start\tamp_end\tamplicon']
@@ -798,8 +939,8 @@ def run_chain(targets_path, params, run_dir, log, prog, cancel):
                 pe['arm'], p['idx'], p['f_T7'], p['r_T7'], p['product_bp'],
                 p['f_tm'], p['r_tm'], p['amp_start_in_arm'],
                 p['amp_end_in_arm'], p['amplicon'])))
-    (out_dir / 'primers.tsv').write_text('\n'.join(plines) + '\n',
-                                         encoding='utf-8')
+    with safe_open(out_dir / 'primers.tsv', 'wt') as f:
+        f.write('\n'.join(plines) + '\n')
     write_fasta(out_dir / 'amplicons.fa',
                 [(f"{pe['arm']}_p{p['idx']}", p['amplicon'])
                  for pe in primer_entries for p in pe['pairs'] if p['amplicon']])

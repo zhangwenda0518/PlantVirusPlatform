@@ -16,7 +16,8 @@ from flask import (Blueprint, abort, jsonify, request,
 
 from Virus_Platform_Core.config import DIRS, PLATFORM_ROOT
 from Virus_Platform_Core.utils import (TaskLogger, check_path, fmt_size,
-                                      resolve_sample_name, safe_open)
+                                      resolve_sample_name, safe_open,
+                                      total_ram)
 from Virus_Platform_Core.web.common import _safe_sample
 from Virus_Platform_Core.web.state import cfg
 from Virus_Platform_Core.web.tasks import tm
@@ -216,10 +217,13 @@ class SampleQueue:
                                must_exist=False, in_platform=True)
         os.makedirs(q_log_dir, exist_ok=True)
         try:
+            # on_finish：终态必调一次（含「排队途中被取消」——那种情况下 job
+            # 根本不会执行，其 finally 也就不存在）。2026-10-07 审查 P1-1。
             tid = tm.start(cfg.tr(f'队列·{s}', f'Queue·{s}'), job,
                            log_file=os.path.join(
                                q_log_dir,
-                               f'queue_{time.strftime("%Y%m%d_%H%M%S")}.log'))
+                               f'queue_{time.strftime("%Y%m%d_%H%M%S")}.log'),
+                           on_finish=lambda: _sample_busy_release(s))
         except BaseException:
             _sample_busy_release(s)      # 任务没起来也要放掉占位
             raise
@@ -229,9 +233,24 @@ class SampleQueue:
             time.sleep(2.0)
             snap = tm.snapshot(tid, log_lines=0, include_result=False)
             if snap is None or snap['status'] != 'running':
-                it['status'] = ('done' if snap and snap['status'] == 'done'
-                                else 'failed' if snap else 'failed')
-                it['error'] = (snap or {}).get('error') or ''
+                # 三态显式映射：原先把 cancelled 并进 failed 且 error 常为空，
+                # 队列卡片只显示"失败"、没有任何原因（用户以为出错了，其实
+                # 是自己停的任务）。done/failed/cancelled 分别落位，
+                # cancelled 写明"用户取消"。
+                st = (snap or {}).get('status')
+                if st == 'done':
+                    it['status'] = 'done'
+                    it['error'] = ''
+                elif st == 'cancelled':
+                    it['status'] = 'cancelled'
+                    it['error'] = ((snap or {}).get('error')
+                                   or f'用户取消（{s} 的任务已停止）')
+                else:
+                    it['status'] = 'failed'
+                    it['error'] = ((snap or {}).get('error')
+                                   or ('任务记录已消失（可能被中断或清理）'
+                                       if snap is None else
+                                       f'{s} 的任务执行失败（详见任务日志）'))
                 return
 
     def snapshot(self):
@@ -457,19 +476,41 @@ def _analysis_kwargs(body):
             return bool(d.get(key, fallback))
         return bool(v)
 
+    def _opt_float(key):
+        """可选数值门槛：空/0/非法 → None（含义"不过滤"）。
+
+        ⑥b 层1 的 min_pident/min_qcov 用（0 门槛等于不过滤，无区分意义）。
+        """
+        v = body.get(key)
+        if v is None or v == '':
+            v = d.get(key)
+        if v in (None, '', 0, '0'):
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if f > 0 else None
+
     def _norm_db(v):
         if not v:
             return None
         return v if os.path.isabs(str(v)) else os.path.join(PLATFORM_ROOT, v)
     def _norm_methods(v):
-        """验证证据方法：接受列表/逗号串，只保留 blastx/cdd，空则默认双路。"""
+        """验证证据方法：接受列表/逗号串，只保留 blastx/bfvd，空则默认双路。"""
         if v is None or v == '':
-            v = d.get('verify_methods') or ['blastx', 'cdd']
+            v = d.get('verify_methods') or ['blastx', 'bfvd']
         if isinstance(v, str):
             v = [x for x in v.replace(';', ',').split(',') if x.strip()]
         keep = tuple(x for x in (str(i).strip() for i in v)
-                     if x in ('blastx', 'cdd'))
-        return keep or ('blastx', 'cdd')
+                     if x in ('blastx', 'bfvd'))
+        return keep or ('blastx', 'bfvd')
+
+    # 资源钳制（2026-10-04 审查 E3）：线程 ≤ 物理核、内存 ≤ 物理内存
+    # 60%——此前 POST 任意大值直通 SPAdes（-m 64 在 16GB 机器换页抖动）
+    _phys_cores = os.cpu_count() or 4
+    _ram_cap_gb = max(2, int((total_ram() or 16 * 1024 ** 3)
+                             * 0.6 / 1024 ** 3))
 
     return dict(
         db_host=_norm_db(body.get('db_host')) or cfg.databases['host'],
@@ -485,14 +526,18 @@ def _analysis_kwargs(body):
         gbdraw_fasta=body.get('gbdraw_fasta') or None,
         gbdraw_ann=body.get('gbdraw_ann') or None,
         plot_engine=_val('plot_engine', 'auto'),
-        threads=int(body.get('threads') or cfg.threads),
+        threads=max(1, min(int(body.get('threads') or cfg.threads),
+                           _phys_cores)),
         confidence=float(_val('confidence', 0) or 0),
         assembly_mode=_val('assembly_mode', 'rnaviral'),
         assembly_input=_val('assembly_input', 'virus'),
-        memory_gb=int(_val('memory', 64) or 64),
+        memory_gb=min(int(_val('memory', 64) or 64), _ram_cap_gb),
         subsample=int(_val('subsample', 0) or 0),
         min_contig_len=int(_val('min_contig_len', 200) or 200),
         min_orf_aa=int(_val('min_orf_aa', 100) or 100),
+        # ⑥b 层1 命中过滤门槛（百分数口径；空/0 = 不过滤，保持历史结果）
+        min_pident=_opt_float('min_pident'),
+        min_qcov=_opt_float('min_qcov'),
         top_n_refs=int(_val('top_n_refs', 10) or 10),
         tree_tool=_val('tree_tool', 'fasttree'),
         tree_sampling=_val('tree_sampling', 'blast'),
@@ -545,11 +590,13 @@ def api_analyze():
                          must_exist=False, in_platform=True)
     os.makedirs(log_dir, exist_ok=True)
     try:
+        # on_finish：终态必调一次（含排队途中被取消，见 tasks.TaskManager.start）
         tid = tm.start(cfg.tr(f'样品分析 {sample}', f'Sample analysis {sample}'),
                        job,
                        log_file=os.path.join(
                            log_dir,
-                           f'analyze_{time.strftime("%Y%m%d_%H%M%S")}.log'))
+                           f'analyze_{time.strftime("%Y%m%d_%H%M%S")}.log'),
+                       on_finish=lambda: _sample_busy_release(sample))
     except BaseException:
         _sample_busy_release(sample)     # 任务没起来也要放掉占位
         raise
@@ -887,10 +934,12 @@ def api_pipeline_run(sample):
                          in_platform=True)
     os.makedirs(log_dir, exist_ok=True)
     try:
+        # on_finish：终态必调一次（含排队途中被取消，见 tasks.TaskManager.start）
         tid = tm.start(f'{s} · {label}', job,
                        log_file=os.path.join(
                            log_dir,
-                           f'run_{time.strftime("%Y%m%d_%H%M%S")}.log'))
+                           f'run_{time.strftime("%Y%m%d_%H%M%S")}.log'),
+                       on_finish=lambda: _sample_busy_release(s))
     except BaseException:
         _sample_busy_release(s)          # 任务没起来也要放掉占位
         raise
@@ -910,10 +959,15 @@ def api_open_report_dir(sample):
 def api_sample_file(sample, rel):
     """结果文件下载（严格限制在样品目录内）。"""
     safe = _safe_sample(sample)
-    p = check_path(os.path.join(DIRS['results'], safe, rel),
-                   must_exist=True, in_platform=True)
-    return send_file(check_path(p, must_exist=True, in_platform=True),
-                     as_attachment=request.args.get('dl') == '1')
+    # rel 传绝对路径（如 C:/.../run/ai_local.json）时 os.path.join 会整段
+    # 替换 base；check_path(in_platform=True) 只保证「平台内」，拦不住读
+    # 平台内其它文件。归一后强制落在样品目录内（样板见 meta_files_download）。
+    base = os.path.abspath(check_path(os.path.join(DIRS['results'], safe),
+                                      must_exist=True, in_platform=True))
+    p = check_path(os.path.join(base, rel), must_exist=True, in_platform=True)
+    if not p.startswith(base + os.sep):
+        abort(400, '非法路径')
+    return send_file(p, as_attachment=request.args.get('dl') == '1')
 
 
 def _sample_busy(safe):

@@ -13,7 +13,15 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-UP = r'D:\桌面\延伸基因组\MMPV-RNA\virome_phylo_pipeline'
+# 外部参照仓（延伸基因组/MMPV-RNA 工作区）：默认仍是维护者本机路径，
+# 可用环境变量 VP_EXT_ROOT 覆盖（指向 MMPV-RNA 工作区根）；
+# 目录不存在时跳过（返回 0，不判失败）——上游只是对拍参照，不是运行依赖。
+EXT_ROOT = os.environ.get('VP_EXT_ROOT', r'D:\桌面\延伸基因组\MMPV-RNA')
+UP = os.path.join(EXT_ROOT, 'virome_phylo_pipeline')
+if not os.path.isdir(UP):
+    print(f'[SKIP] 上游参照仓不存在: {UP}'
+          '（如已迁移，请设 VP_EXT_ROOT 指向 MMPV-RNA 工作区根）')
+    sys.exit(0)
 sys.path.insert(0, UP)
 
 from Virus_Platform_Core import phylodyn_govern as og      # noqa: E402

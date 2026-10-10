@@ -2,6 +2,15 @@
  "endpoints": {
   "/": "pages.page_index",
   "/annotation": "pages.page_annotation",
+  "/api/ai/actions": "ai_assist.api_ai_actions",
+  "/api/ai/actions/resolve": "ai_assist.api_ai_action_resolve",
+  "/api/ai/audit": "ai_assist.api_ai_audit",
+  "/api/ai/chat": "ai_assist.api_ai_chat",
+  "/api/ai/config": "ai_assist.api_ai_config_set",
+  "/api/ai/context": "ai_assist.api_ai_context",
+  "/api/ai/events": "ai_assist.api_ai_events",
+  "/api/ai/gate": "ai_assist.api_ai_gate",
+  "/api/ai/test": "ai_assist.api_ai_test",
   "/api/align/file": "tool_results.api_align_file",
   "/api/align/save": "tool_results.api_align_save",
   "/api/analyze": "samples.api_analyze",
@@ -16,6 +25,8 @@
   "/api/cds/table": "cds_export.api_cds_table",
   "/api/convert_kraken2": "build.api_convert_kraken2",
   "/api/datasets": "build.api_datasets",
+  "/api/datasets_download": "build.api_datasets_download",
+  "/api/datasets_virus": "build.api_datasets_virus",
   "/api/dbs": "build.api_dbs",
   "/api/dl/batch/<bid>": "download.api_dl_batch",
   "/api/dl/batch/<bid>/<action>": "download.api_dl_batch_action",
@@ -37,6 +48,7 @@
   "/api/gb/phylo": "refs.api_gb_phylo",
   "/api/global/reset": "tasks_api.api_global_reset",
   "/api/host_dbs": "build.api_host_dbs",
+  "/api/host_genome_download": "build.api_host_genome_download",
   "/api/ictv/cascade": "refs.api_ictv_cascade",
   "/api/ictv/download": "refs.api_ictv_download",
   "/api/ictv/preview": "refs.api_ictv_preview",
@@ -88,6 +100,11 @@
   "/api/pipeline/<sample>": "samples.api_pipeline",
   "/api/pipeline/<sample>/run": "samples.api_pipeline_run",
   "/api/pipeline/create": "samples.api_pipeline_create",
+  "/api/prescreen/projects": "prescreen.api_prescreen_projects",
+  "/api/prescreen/result": "prescreen.api_prescreen_result",
+  "/api/prescreen/run": "prescreen.api_prescreen_run",
+  "/api/prescreen/viral": "prescreen.api_prescreen_viral",
+  "/api/prescreen/virome": "prescreen.api_prescreen_virome",
   "/api/queue": "samples.api_queue",
   "/api/queue/<entry_id>/remove": "samples.api_queue_remove",
   "/api/queue/<entry_id>/start": "samples.api_queue_start",
@@ -184,6 +201,7 @@
   "/cds-export": "pages.page_cds_export",
   "/download": "download.page_download",
   "/downloads/<bid>/<path:filename>": "download.page_dl_file",
+  "/favicon.ico": "_favicon",
   "/genome": "pages.page_genome",
   "/help": "pages.page_help",
   "/hostremoval": "pages.page_host_removal",
@@ -194,7 +212,10 @@
   "/meta_files/<name>/<path:subpath>": "meta.meta_files_download",
   "/orf": "pages.page_orf",
   "/pipeline": "pages.page_pipeline",
+  "/prescreen": "prescreen.page_prescreen",
+  "/prescreen_files/<name>/<path:subpath>": "prescreen.page_prescreen_file",
   "/primer": "pages.page_primer",
+  "/refdata": "pages.page_refdata",
   "/report/<sample>/": "pages.page_report",
   "/report/<sample>/<path:filename>": "pages.page_report_file",
   "/results": "pages.page_results",
@@ -215,6 +236,34 @@
   ],
   "/annotation": [
    "GET"
+  ],
+  "/api/ai/actions": [
+   "GET"
+  ],
+  "/api/ai/actions/resolve": [
+   "POST"
+  ],
+  "/api/ai/audit": [
+   "GET"
+  ],
+  "/api/ai/chat": [
+   "POST"
+  ],
+  "/api/ai/config": [
+   "GET",
+   "POST"
+  ],
+  "/api/ai/context": [
+   "GET"
+  ],
+  "/api/ai/events": [
+   "GET"
+  ],
+  "/api/ai/gate": [
+   "POST"
+  ],
+  "/api/ai/test": [
+   "POST"
   ],
   "/api/align/file": [
    "GET"
@@ -257,6 +306,12 @@
   ],
   "/api/datasets": [
    "GET"
+  ],
+  "/api/datasets_download": [
+   "POST"
+  ],
+  "/api/datasets_virus": [
+   "POST"
   ],
   "/api/dbs": [
    "GET"
@@ -320,6 +375,9 @@
   ],
   "/api/host_dbs": [
    "GET"
+  ],
+  "/api/host_genome_download": [
+   "POST"
   ],
   "/api/ictv/cascade": [
    "GET"
@@ -473,6 +531,21 @@
   ],
   "/api/pipeline/create": [
    "POST"
+  ],
+  "/api/prescreen/projects": [
+   "GET"
+  ],
+  "/api/prescreen/result": [
+   "GET"
+  ],
+  "/api/prescreen/run": [
+   "POST"
+  ],
+  "/api/prescreen/viral": [
+   "GET"
+  ],
+  "/api/prescreen/virome": [
+   "GET"
   ],
   "/api/queue": [
    "GET"
@@ -764,6 +837,9 @@
   "/downloads/<bid>/<path:filename>": [
    "GET"
   ],
+  "/favicon.ico": [
+   "GET"
+  ],
   "/genome": [
    "GET"
   ],
@@ -794,7 +870,16 @@
   "/pipeline": [
    "GET"
   ],
+  "/prescreen": [
+   "GET"
+  ],
+  "/prescreen_files/<name>/<path:subpath>": [
+   "GET"
+  ],
   "/primer": [
+   "GET"
+  ],
+  "/refdata": [
    "GET"
   ],
   "/report/<sample>/": [

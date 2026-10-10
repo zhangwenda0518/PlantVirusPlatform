@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>基因组查询下载 - 植物病毒分析平台</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="vp-lang" content="{{ lang }}">
+<script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
+<link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
+<style>h2[id]{scroll-margin-top:60px}</style>
+</head>
+<body>
+{% include "_nav.html" %}
+
+<div class="page">
+  <div class="tools-layout group-layout">
+    {% include "_group_nav.html" %}
+    <main class="group-main">
+  <div class="layout">
+    <div class="col">
+
+      <div class="card">
+        <h2 id="m-hostdl" data-i18n="rd.hostTitle">🧬 宿主基因组下载（→ 构建宿主库）</h2>
+        <p class="hint" data-i18n="rd.hostHint">宿主去除（工具①）和宿主预测（工具④）都要宿主库。三源可选：
+        <b>gget·Ensembl</b>（覆盖水稻、番茄、小麦等 NCBI 之外的植物宿主）、<b>NCBI taxon</b>（按物种）、
+        <b>NCBI accession</b>（按组装号精确下载，可染色体过滤）。产物落到 host-db/&lt;TaxID&gt;_&lt;物种&gt;/genome.fa，
+        下载完成后去「数据库构建」页点「构建宿主库」即可（路径 TaxID 自动解析）。
+        gget 需先安装：pip install "gget==0.30.5"；accession 模式需 datasets CLI（python main.py datasets-setup）。</p>
+        <div class="grid2">
+          <div><label data-i18n="bd.hostDlSpecies">宿主物种拉丁名</label>
+            <input id="hostDlSpecies" type="text" data-i18n-ph="bd.hostDlSpeciesPh"
+                   placeholder="如 Oryza sativa / oryza_sativa"></div>
+          <div><label data-i18n="bd.hostDlSource">下载来源</label>
+            <select id="hostDlSource" style="width:100%">
+              <option value="gget">gget · Ensembl / Ensembl Plants</option>
+              <option value="ncbi">NCBI RefSeq（taxon）</option>
+            </select></div>
+          <div><label data-i18n="bd.hostDlAcc">Assembly Accession（可选，按号精确下载）</label>
+            <input id="hostDlAcc" type="text" data-i18n-ph="bd.hostDlAccPh"
+                   placeholder="如 GCF_000001405.40（填写后忽略物种名）"></div>
+          <div><label data-i18n="bd.hostDlChr">染色体过滤（可选，仅 accession 模式）</label>
+            <input id="hostDlChr" type="text" placeholder="如 X,Y"></div>
+          <div><label data-i18n="bd.hostDlRelease">Ensembl release（留空 = 最新）</label>
+            <input id="hostDlRelease" type="number" placeholder="如 60"></div>
+          <div><label data-i18n="bd.hostDlTaxid">NCBI TaxID（留空自动查询）</label>
+            <input id="hostDlTaxid" type="number" placeholder="如 39947(水稻)"></div>
+        </div>
+        <button class="btn primary" onclick="dlHostGenome(this)" data-i18n="bd.hostDlBtn"
+                style="margin-top:6px">⬇ 下载到 host-db/</button>
+        <div id="hostDlResult" class="hint" style="margin-top:6px"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="m-virusdl" data-i18n="rd.virusTitle">🦠 NCBI datasets 病毒数据集（→ 病毒库构建）</h2>
+        <p class="hint" data-i18n="rd.virusHint">按病毒 taxon（可加<b>宿主过滤</b>）拉取 NCBI 病毒基因组，自动产出
+        reference.fasta + reference.ref_info.tsv（含 Taxid/宿主/地理列），落
+        databases/virusref_db/&lt;名&gt;/，「数据库构建」页「原始数据集」卡即时识别——一键建鉴定库索引或 kunpeng 分类库。
+        需 NCBI datasets CLI（未装时执行 python main.py datasets-setup 自动安装）。</p>
+        <div class="grid2">
+          <div><label data-i18n="bd.dsDlTaxon">病毒 taxon</label>
+            <input id="dsDlTaxon" type="text" data-i18n-ph="bd.dsDlTaxonPh"
+                   placeholder="如 tomato brown rugose fruit virus"></div>
+          <div><label data-i18n="bd.dsDlHost">宿主过滤（可选）</label>
+            <input id="dsDlHost" type="text" placeholder="如 Solanum lycopersicum，留空不过滤"></div>
+          <div><label data-i18n="bd.dsDlName">数据集名（可选，默认按 taxon）</label>
+            <input id="dsDlName" type="text" placeholder="如 tobrfv"></div>
+        </div>
+        <button class="btn primary" onclick="dlVirusDataset(this)" data-i18n="bd.dsDlBtn"
+                style="margin-top:6px">⬇ 下载病毒数据集</button>
+        <div id="dsDlResult" class="hint" style="margin-top:6px"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="m-dsgen" data-i18n="rd.genTitle">📥 NCBI datasets 通用下载（genome / gene / taxonomy）</h2>
+        <p class="hint" data-i18n="rd.genHint">datasets CLI 其余模式：任意物种基因组包（taxon / accession+染色体过滤）、
+        基因包（gene-id / symbol+taxon / 蛋白 accession）、分类报告包。产物落 datasets_dl/，
+        供注释、比对、建树等下游自取。旧版 --exclude-* 语法已自动翻译为 --include 组合。</p>
+        <div class="grid2">
+          <div><label data-i18n="rd.genMode">模式</label>
+            <select id="dsGenMode" style="width:100%" onchange="dsGenShow()">
+              <option value="genome">genome · 基因组包</option>
+              <option value="gene">gene · 基因包</option>
+              <option value="taxonomy">taxonomy · 分类报告包</option>
+            </select></div>
+        </div>
+        <div id="dsGenGenome" class="grid2">
+          <div><label data-i18n="rd.genTaxon">物种 / 病毒 taxon</label>
+            <input id="dsGenTaxon" type="text" placeholder="如 bos taurus"></div>
+          <div><label data-i18n="rd.genAcc">Assembly Accession（二选一）</label>
+            <input id="dsGenAcc" type="text" placeholder="如 GCF_000001405.40"></div>
+          <div><label data-i18n="bd.hostDlChr">染色体过滤（可选）</label>
+            <input id="dsGenChr" type="text" placeholder="如 X,Y"></div>
+          <div><label data-i18n="rd.genInclude">include（可选）</label>
+            <input id="dsGenInclude" type="text" placeholder="genome,gff3,rna,protein"></div>
+        </div>
+        <div id="dsGenGene" class="grid2" style="display:none">
+          <div><label data-i18n="rd.genGeneId">Gene ID</label>
+            <input id="dsGenGid" type="text" placeholder="如 672"></div>
+          <div><label data-i18n="rd.genSymbol">gene symbol + taxon</label>
+            <input id="dsGenSym" type="text" placeholder="如 brca1"></div>
+          <div><label data-i18n="rd.genSymTaxon">symbol 所属物种</label>
+            <input id="dsGenSymTaxon" type="text" placeholder="如 mus musculus"></div>
+          <div><label data-i18n="rd.genProtAcc">蛋白 accession</label>
+            <input id="dsGenPacc" type="text" placeholder="如 NP_000483.3"></div>
+        </div>
+        <div id="dsGenTax" class="grid2" style="display:none">
+          <div><label data-i18n="rd.genTaxons">taxon（逗号分隔多个）</label>
+            <input id="dsGenTaxons" type="text" placeholder="如 human,sars-cov-2"></div>
+        </div>
+        <button class="btn primary" onclick="dlDsGeneric(this)" data-i18n="rd.genBtn"
+                style="margin-top:6px">⬇ 下载到 datasets_dl/</button>
+        <div id="dsGenResult" class="hint" style="margin-top:6px"></div>
+      </div>
+
+    </div>
+  </div>
+  </main>
+  </div>
+</div>
+
+<script src="/static/i18n.js?v={{ asset_v }}"></script>
+<script src="/static/app.js?v={{ asset_v }}"></script>
+<script>
+/* ---------- ① 宿主基因组：dlHostGenome 在 app.js（本页 #hostDlResult 出结果） ---------- */
+
+/* ---------- ② NCBI datasets 病毒数据集（自 /build 迁入） ---------- */
+async function dlVirusDataset(btn) {
+  const taxon = $('dsDlTaxon').value.trim();
+  if (!taxon) { alert(t('bd.dsDlNeedTaxon', '请填写病毒 taxon')); return; }
+  const body = { taxon };
+  if ($('dsDlHost').value.trim()) body.host = $('dsDlHost').value.trim();
+  if ($('dsDlName').value.trim()) body.name = $('dsDlName').value.trim();
+  let r;
+  try {
+    r = await fetch('/api/datasets_virus', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)});
+  } catch (e) { alert(t('c.startFail', '启动失败') + ': ' + e); return; }
+  if (!r.ok) { alert(t('c.startFail', '启动失败') + ': ' + ((await r.json().catch(() => ({}))).error || r.status)); return; }
+  const d = await r.json();
+  taskLogOpen.add(d.task);
+  startPolling();
+  watchTaskBtn(d.task, btn, '⏳ 下载中…', (snap) => {
+    const res = snap && snap.result;
+    if (res) {
+      $('dsDlResult').innerHTML =
+        `✅ <b>${esc(res.name)}</b>（${res.n_seqs} 条序列）<br>` +
+        `${esc(res.reference || '')}` +
+        ` <a href="/build#m-datasets">${t('rd.goBuild', '去数据库构建页一键建库 →')}</a>`;
+    }
+    if (res && typeof toast === 'function') {
+      toast(t('bd.dsDlDone', '病毒数据集已就绪') + `: ${res.name}（${res.n_seqs} 条）`, '', {ttl: 6000});
+    }
+  });
+}
+
+/* ---------- ③ datasets 通用下载（genome / gene / taxonomy） ---------- */
+function dsGenShow() {
+  const m = $('dsGenMode').value;
+  $('dsGenGenome').style.display = m === 'genome' ? '' : 'none';
+  $('dsGenGene').style.display = m === 'gene' ? '' : 'none';
+  $('dsGenTax').style.display = m === 'taxonomy' ? '' : 'none';
+}
+
+async function dlDsGeneric(btn) {
+  const mode = $('dsGenMode').value;
+  const body = { mode };
+  if (mode === 'genome') {
+    body.taxon = $('dsGenTaxon').value.trim();
+    body.accession = $('dsGenAcc').value.trim();
+    if ($('dsGenChr').value.trim()) body.chromosomes = $('dsGenChr').value.trim();
+    if ($('dsGenInclude').value.trim()) body.include = $('dsGenInclude').value.trim();
+    if (!body.taxon && !body.accession) {
+      alert(t('rd.genNeedG', '请填写物种 taxon 或 Assembly Accession')); return;
+    }
+  } else if (mode === 'gene') {
+    if ($('dsGenGid').value.trim()) body['gene-id'] = $('dsGenGid').value.trim();
+    if ($('dsGenSym').value.trim()) body.symbol = $('dsGenSym').value.trim();
+    if ($('dsGenSymTaxon').value.trim()) body.taxon = $('dsGenSymTaxon').value.trim();
+    if ($('dsGenPacc').value.trim()) body['protein-accession'] = $('dsGenPacc').value.trim();
+  } else {
+    if (!$('dsGenTaxons').value.trim()) { alert(t('rd.genNeedT', '请填写 taxon')); return; }
+    body.taxons = $('dsGenTaxons').value.trim();
+  }
+  let r;
+  try {
+    r = await fetch('/api/datasets_download', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)});
+  } catch (e) { alert(t('c.startFail', '启动失败') + ': ' + e); return; }
+  if (!r.ok) { alert(t('c.startFail', '启动失败') + ': ' + ((await r.json().catch(() => ({}))).error || r.status)); return; }
+  const d = await r.json();
+  taskLogOpen.add(d.task);
+  startPolling();
+  watchTaskBtn(d.task, btn, '⏳ 下载中…', (snap) => {
+    const res = snap && snap.result;
+    if (res) {
+      const n = (res.n_seqs != null) ? `（${res.n_seqs} 条序列 / ${res.n_reports} 条记录）` : '';
+      $('dsGenResult').innerHTML = `✅ ${esc(res.out_dir)} ${n}`;
+    }
+  });
+}
+</script>
+</body>
+</html>

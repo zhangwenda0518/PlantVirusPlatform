@@ -18,9 +18,10 @@ import re
 _RX_DNA_RNA_LETTER = re.compile(r'\b(DNA|RNA)\s*[-_ ]?\s*([A-Z])\b', re.I)
 # (DNA|RNA) + 可选分隔 + 数字（多分节 RNA 病毒）
 _RX_DNA_RNA_DIGIT = re.compile(r'\b(DNA|RNA)\s*[-_ ]?\s*([1-9])\b', re.I)
-# Segment/Seg + 数字
-_RX_SEG_N = re.compile(r'\bSegment\s*[-_# ]?\s*([1-9])\b', re.I)
-_RX_SEG_AB = re.compile(r'\bSeg\s*[-_ ]?([1-9])\b', re.I)
+# Segment/Seg + 数字（允许两位数：呼肠孤病毒等有 10-12 个片段，
+# 原 `([1-9])\b` 只认单数字，Segment 10/11/12 全部漏过规范化）
+_RX_SEG_N = re.compile(r'\bSegment\s*[-_# ]?\s*(\d{1,2})\b', re.I)
+_RX_SEG_AB = re.compile(r'\bSeg\s*[-_ ]?(\d{1,2})\b', re.I)
 # 布尼亚病毒目 L/M/S 三段式
 _RX_LMS = re.compile(r'^(?:segment\s*|seg\s*|strand\s*)?([LMS])(?:\s*(?:segment|rna))?$',
                      re.I)
@@ -65,8 +66,11 @@ def norm_segment_ctx(raw, family='', molecule=''):
     fam = (family or '').upper()
     mol = (molecule or '').upper()
 
-    # 裸字母（Geminiviridae A/B）与裸 U1-U4（Nanoviridae）：科可判定归属
-    if (up in 'ABCRSMDNU' or re.fullmatch(r'U[1-4]', up)) and up:
+    # 裸字母（Geminiviridae A/B）与裸 U1-U4（Nanoviridae）：科可判定归属。
+    # 必须是**单字符**完整值：子串判断会把 "AB"/"SM"/"ND" 这类多字符值
+    # （如 "S segment" 之外的自由文本）误当成字母片段加前缀。
+    if ((len(up) == 1 and up in 'ABCRSMDNU')
+            or re.fullmatch(r'U[1-4]', up)):
         if 'NANO' in fam or 'BABU' in fam:
             return 'DNA-' + up
         if 'GEMINI' in fam and up in ('A', 'B'):
