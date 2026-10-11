@@ -709,7 +709,26 @@ def predict_hosts(sample_dir, info_tsv=None, prob_dir=None, threads=None,
                           include_plotlyjs='plotly.min.js' if os.path.isfile(
                               os.path.join(out_dir, 'plotly.min.js'))
                           else 'cdn', full_html=True)
-        sb = fig_host_sunburst(rows)
+        # Krona 风格 8 级谱系（审查用户要求）：从 ③ 的谱系表取
+        # realm→species 完整层级，缺表时 fig 内部退化 3 级
+        _lineage_by_contig = {}
+        try:
+            _cls_tsv = check_path(os.path.join(sample_dir, '03_assembly',
+                                               'virus_classification.tsv'),
+                                  must_exist=False, in_platform=True)
+            if os.path.isfile(_cls_tsv):
+                import csv as _csv
+                _RANKS = ('realm', 'kingdom', 'phylum', 'class', 'order',
+                          'family', 'genus', 'species')
+                with safe_open(_cls_tsv) as _f:
+                    for _r in _csv.DictReader(_f, delimiter='	'):
+                        _c = (_r.get('contig') or '').strip()
+                        if _c:
+                            _lineage_by_contig[_c] = {
+                                k: (_r.get(k) or '').strip() for k in _RANKS}
+        except Exception:
+            _lineage_by_contig = {}
+        sb = fig_host_sunburst(rows, _lineage_by_contig)
         if sb:
             sb.write_html(check_path(os.path.join(
                 out_dir, 'sunburst_host.html'), must_exist=False,

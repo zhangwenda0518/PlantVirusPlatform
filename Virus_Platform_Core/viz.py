@@ -388,38 +388,122 @@ def fig_host_sankey(host_rows):
     return fig
 
 
-def fig_host_sunburst(host_rows):
-    """宿主预测旭日图：病毒科 → 属 → 种（contigs 数），外圈颜色随宿主。"""
+def fig_host_sunburst(host_rows, lineage_by_contig=None):
+    """宿主预测旭日图（Krona 风格，2026-10-11 按用户要求重做）。
+
+    旧版只有 科→属→种 三环且无数值/百分比——用户要的是 Krona 式多环层级：
+    中心 Root，向外每环一个分类级（realm → kingdom → phylum → class →
+    order → family → genus → species，缺级自动跳过），扇区大小 = contig 数，
+    标签带百分比与数值。lineage_by_contig 由 host_analysis 从
+    03_assembly/virus_classification.tsv 传入（8 级谱系表）；缺省时退化用
+    rows 自带的 family/genus/species 三级。
+    """
     ids, labels, parents, values = [], [], [], []
+    RANKS = ('realm', 'kingdom', 'phylum', 'class', 'order',
+             'family', 'genus', 'species')
 
     def short(n):
         return (n[:24] + '..') if len(n) > 26 else n
 
-    fam_cnt, gen_cnt, sp_cnt = {}, {}, {}
+    lineage_by_contig = lineage_by_contig or {}
+    # 聚合：完整路径 → contig 计数（Root 为中心节点）
+    paths = {}
+    total = 0
     for r in host_rows:
-        fam = r.get('family') or '（未定科）'
-        gen = r.get('genus') or '（未定属）'
-        sp = r.get('species') or r.get('contig') or '（未定种）'
-        fam_cnt[fam] = fam_cnt.get(fam, 0) + 1
-        gen_cnt[(fam, gen)] = gen_cnt.get((fam, gen), 0) + 1
-        sp_cnt[(fam, gen, sp)] = sp_cnt.get((fam, gen, sp), 0) + 1
-    if not fam_cnt:
-        return None
-    for fam, c in fam_cnt.items():
-        ids.append(f'f|{fam}'); labels.append(short(fam))
-        parents.append(''); values.append(c)
-    for (fam, gen), c in gen_cnt.items():
-        ids.append(f'g|{fam}|{gen}'); labels.append(short(gen))
-        parents.append(f'f|{fam}'); values.append(c)
-    for (fam, gen, sp), c in sp_cnt.items():
-        ids.append(f's|{fam}|{gen}|{sp}'); labels.append(short(sp))
-        parents.append(f'g|{fam}|{gen}'); values.append(c)
-    fig = go.Figure(go.Sunburst(ids=ids, labels=labels, parents=parents,
-                                values=values, branchvalues='remainder',
-                                maxdepth=3))
-    fig.update_layout(title='病毒 ICTV 分类旭日图（内→外：科 → 属 → 种）',
-                      height=560)
+        total += 1
+        contig = r.get('contig') or ''
+        lin = lineage_by_contig.get(contig) or {}
+        parts = []
+        for rank in RANKS:
+            v = (lin.get(rank) or '').strip()
+            if not v and rank in ('family', 'genus', 'species'):
+                v = (r.get(rank) or '').strip()
+            if v:
+                parts.append(short(v))
+        paths[tuple(parts) or ('（未定）',)] =             paths.get(tuple(parts) or ('（未定）',), 0) + 1
+
+    root_id = 'Root'
+    ids.append(root_id)
+    labels.append('Root')
+    parents.append('')
+    values.append(total)
+    _node_tot = {root_id: total}
+    for path, cnt in sorted(paths.items()):
+        pid = root_id
+        for depth, part in enumerate(path, 1):
+            nid = pid + '/' + part
+            if nid not in _node_tot:
+                ids.append(nid)
+                labels.append(part)
+                parents.append(pid)
+                values.append(0)
+                _node_tot[nid] = 0
+            _node_tot[nid] += cnt
+            pid = nid
+    # 分支值 = 子树合计（branchvalues='total' 要求父值 ≥ 子值和，含自身）
+    for k, nid in enumerate(ids):
+        if nid != root_id:
+            values[k] = _node_tot.get(nid, 0)
+
+    # 配色（Krona 视觉口径）：第一分类环（realm）按 Okabe-Ito 分色，后代
+    # 继承变浅；未定支灰色。全蓝单色会让多环不可读（2026-10-11 目检）。
+    import colorsys as _cs
+    _PAL = ('#E64B35', '#4DBBD5', '#00A087', '#3C5488', '#F39B7F',
+            '#8491B4', '#91D1C2', '#DC9EC9', '#7E6148', '#B09C85')
+    # 按 family 分支配色（三个 contig 通常同 realm——按 realm 分色会全同色；
+    # family 才是视觉上能区分分支的层级）。family 之前的环用中性灰蓝。
+    fam_colors = {}
+
+    def _fam_of(nid):
+        parts = nid.split('/')[1:]
+        return parts[5] if len(parts) >= 6 else (parts[-1] if parts else 'Root')
+
+    for nid in ids:
+        if nid == root_id:
+            fam_colors[nid] = '#FFFFFF'
+            continue
+        fam = _fam_of(nid)
+        if fam not in fam_colors:
+            if fam == 'Root':
+                fam_colors[fam] = '#FFFFFF'
+            else:
+                fam_colors[fam] = _PAL[len(fam_colors) % len(_PAL)]
+    colors = []
+    for nid in ids:
+        depth = nid.count('/')
+        if nid == root_id:
+            colors.append('#FFFFFF')
+            continue
+        c = fam_colors.get(_fam_of(nid), '#8491B4')
+        colors.append(c if depth <= 6 else _lighten(c, 0.25 * (depth - 6)))
+    fig = go.Figure(go.Sunburst(
+        ids=ids, labels=labels, parents=parents, values=values,
+        branchvalues='total',
+        textinfo='label+percent root',
+        insidetextorientation='radial',
+        marker=dict(colors=colors, line=dict(width=1, color='white')),
+        hovertemplate='%{id}<br>%{label}：%{value} contigs'
+                      '（占 Root %{percentRoot}）<extra></extra>',
+        maxdepth=9))
+    fig.update_layout(
+        title='宿主预测旭日图（Krona 风格：内→外 realm → … → species；'
+              '扇区 = contig 数；小扇区悬停看明细）',
+        height=680, margin=dict(t=60, l=10, r=10, b=10),
+        uniformtext_minsize=9, uniformtext_mode='hide')
     return fig
+
+
+def _lighten(hex_color, frac):
+    """向白色按 frac 混合（后代环逐级变浅，保持分支色系可辨识）。"""
+    h = hex_color.lstrip('#')
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return hex_color
+    r = int(r + (255 - r) * frac)
+    g = int(g + (255 - g) * frac)
+    b = int(b + (255 - b) * frac)
+    return f'#{r:02x}{g:02x}{b:02x}'
 
 
 def fig_abundance_bar(virus_rows, top_n=15):
