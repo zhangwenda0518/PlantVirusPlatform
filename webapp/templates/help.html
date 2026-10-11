@@ -44,8 +44,9 @@
   <script src="/static/app-storage.js?v={{ asset_v }}"></script>
 <script src="/static/examples.js?v={{ asset_v }}"></script>
 <script>
-  // Markdown 渲染（覆盖 README.md 实际语法：标题/粗斜体/行内码/链接/
-  // 有序无序列表/表格/代码块/引用/分隔线）。先整体转义，再按块解析。
+  // Markdown 渲染（覆盖 README.md 实际语法：标题/粗斜体/行内码/链接/图片
+  // 徽章/有序无序列表/表格/代码块/引用/分隔线/<details> 折叠块/装饰性
+  // HTML 包装行与 <br>、<b> 白名单标签）。先整体转义，再按块解析。
   (function () {
     const RAW = {{ text | tojson }};
     // 与 app.js 的 esc 同一口径：连引号一起转义（属性上下文也安全）
@@ -63,11 +64,25 @@
       t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
       // 斜体（避开已生成的标签属性）
       t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+      // 图片 ![alt](url)：先于链接解析（否则 `!` 落单，README 头部徽章
+      // 会变成「!Platform」假链接）。只放行 https 外链（shields 徽章）；
+      // 加载失败（离线）整只隐藏，非外链/相对路径退化为 alt 文本。
+      t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, url) => {
+        if (!/^https:\/\//i.test(url)) return alt;
+        return '<img src="' + url + '" alt="' + esc(alt) + '" loading="lazy" ' +
+               'style="display:inline-block;height:20px;margin:2px 3px;' +
+               'vertical-align:middle" onerror="this.style.display=\'none\'">';
+      });
       // 链接 [text](url)：只放行 http(s)/mailto/站内锚点，堵 javascript: 协议
       t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, txt, url) => {
         const ok = /^(https?:\/\/|mailto:|\/|#)/i.test(url);
         return '<a href="' + (ok ? url : '#') + '" target="_blank" rel="noopener">' + txt + '</a>';
       });
+      // README 允许少量装饰性 HTML（2026-10 头部改版：<br/>、<details> 折叠
+      // 块、<b> 直接出现在正文）。整体转义后仅还原这只白名单标签，其余
+      // 标签维持转义原样显示——安全口径不变。
+      t = t.replace(/&lt;(\/?)(details|summary|b|kbd|sub|sup)([^&]*?)&gt;/g, '<$1$2$3>');
+      t = t.replace(/&lt;br\s*\/?&gt;/gi, '<br>');
       return t;
     }
 
@@ -185,6 +200,28 @@
 
       // 分隔线
       if (/^\s*([-*_])\1{2,}\s*$/.test(l)) { out.push('<hr style="border:0;border-top:1px solid #e3e8ee;margin:20px 0">'); i++; continue; }
+
+      // GitHub 装饰性包装行（<div align="center"> / </div>）：居中排版只在
+      // 仓库页面有意义，直接丢弃，不渲染也不显形
+      if (/^\s*<\/?div[^>]*>\s*$/i.test(l)) { i++; continue; }
+
+      // 独立成行的徽章图片（README 头部）：连续行合并为一个居中段落，
+      // 观感对齐 GitHub 头图
+      if (/^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(l)) {
+        const imgs = [];
+        while (i < lines.length && /^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(lines[i])) {
+          imgs.push(inline(lines[i].trim())); i++;
+        }
+        out.push('<p style="text-align:center;margin:8px 0">' + imgs.join('') + '</p>');
+        continue;
+      }
+
+      // <details>/<summary> 折叠块（README FAQ 用）：标签行原样输出
+      // （inline() 的白名单会把转义还原成真标签），内部内容照常走块解析
+      if (/^\s*<details[^>]*>\s*$/i.test(l) || /^\s*<\/details>\s*$/i.test(l) ||
+          /^\s*<summary>.*<\/summary>\s*$/i.test(l)) {
+        out.push(inline(l)); i++; continue;
+      }
 
       // 空行
       if (!l.trim()) { i++; continue; }
