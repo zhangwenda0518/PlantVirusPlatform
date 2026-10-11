@@ -168,13 +168,15 @@ mindmap
 ```bat
 git clone https://github.com/zhangwenda0518/VirusPlatform.git
 cd VirusPlatform
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt   :: 装依赖（2026-10-11 起不再随仓库分发，省 ~700MB 克隆体积）
+:: 没装 Python 的机器：跳过第 3 行，直接双击「环境自检.bat」——
+:: 它会用内置解释器（3rd/python/）检测缺包并自动安装（清华镜像）
 ```
 
-- 需要 **Windows 10+ 与 Python 3.12+**；**平台以源码形态发布（2026-10-11 定案），欢迎按需修改定制**。外部工具已预置在 `3rd/`（约 2GB：单文件工具 + 工具套件 + 内置 Python 运行时），克隆即用，**无需也不支持自行编译**（2026-10-11 起不再提供源码构建路线，历史实测记录见 `docs/归档记录_源码构建路线_20261011.md`）。
+- 需要 **Windows 10+ 与 Python 3.12+**；**平台以源码形态发布（2026-10-11 定案），欢迎按需修改定制**。外部工具已预置在 `3rd/`（约 1.2GB：单文件工具 + 工具套件 + 内置 Python 解释器），克隆即用，**无需也不支持自行编译**（2026-10-11 起不再提供源码构建路线，历史实测记录见 `docs/归档记录_源码构建路线_20261011.md`）。
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
-- 仅两个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
-  `3rd/tools/rdp5/3seqTable`（105MB）与 `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`（168MB）。
+- 仅一个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
+  `3rd/tools/rdp5/3seqTable`（105MB）。Python 依赖一律 pip 安装（2026-10-11 起，含曾经的 `_polars_runtime.pyd` 168MB，均不再需要手动下载）。
 - 数据库（约 3.4GB）不进 git：从已有部署机器整体拷贝 `databases/`（跨盘用 `python main.py db-migrate --to D:\库目录`），预置库明细与自建方式见 [Wiki · Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases)。
 
 ### 2. 启动（两种模式）
@@ -247,9 +249,9 @@ VirusPlatform/
 ├─ docs/                     开发文档与模块功能清单
 ├─ wiki/                     本仓库 Wiki 的源 Markdown（与线上 Wiki 同步）
 ├─ examples/                 内置示例数据（✨示例按钮共用，~9MB）
-├─ 3rd/                      外部依赖（bin/ tools/ python/ open-virome/，全量入库；
-│                            仅 3seqTable 与 _polars_runtime.pyd 两个 >100MB 文件
-│                            经 Release 分发）
+├─ 3rd/                      外部依赖（bin/ tools/ python/ open-virome/；python/ 仅
+│                            解释器本体入库，依赖包经 requirements.lock 安装；
+│                            仅 3seqTable 一个 >100MB 文件经 Release 分发）
 ├─ databases/                病毒分类/参考/注释/建树库（~3.4GB，不进 git）
 ├─ host-db/                  宿主基因组与宿主分类库（按物种一库）
 ├─ platform.json             工具路径/语言/默认参数配置

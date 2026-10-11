@@ -21,10 +21,11 @@
 ```bat
 git clone https://github.com/zhangwenda0518/VirusPlatform.git
 cd VirusPlatform
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt   :: 装依赖（2026-10-11 起不再随仓库分发）
+:: 没装 Python 的机器：跳过第 3 行，直接双击「环境自检.bat」自动装（内置解释器 + 清华镜像）
 ```
 
-**外部工具**已预置在平台目录 `3rd/`（bin/ 与 tools/，kunpeng、seqkit、crabz、Blast、mafft、FastTree、iQtree、trimAl、Gblocks、diamond、mmseqs、fastp、salmon、aria2c、sracha 等），随 git 仓库分发、克隆即用（**2026-10-11 定案：不再提供源码构建路线，无需也不支持自行编译**，历史实测见 `docs/归档记录_源码构建路线_20261011.md`）；仅两个超 100MB 的文件走 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools)，下载后放回对应路径即可（`3rd/tools/rdp5/3seqTable`、`3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`，各目录内有同名 README 说明）。也可自行放置后用 `platform.json` 的 `tools` 段指定路径。
+**外部工具**已预置在平台目录 `3rd/`（bin/ 与 tools/，kunpeng、seqkit、crabz、Blast、mafft、FastTree、iQtree、trimAl、Gblocks、diamond、mmseqs、fastp、salmon、aria2c、sracha 等），随 git 仓库分发、克隆即用（**2026-10-11 定案：不再提供源码构建路线，无需也不支持自行编译**，历史实测见 `docs/归档记录_源码构建路线_20261011.md`）；仅一个超 100MB 的文件走 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools)，下载后放回对应路径即可（`3rd/tools/rdp5/3seqTable`，目录内有同名 README 说明）。Python 依赖（含曾经的 `_polars_runtime.pyd`）2026-10-11 起一律 pip 安装，不再手动下载。也可自行放置工具后用 `platform.json` 的 `tools` 段指定路径。
 
 **需要单独安装的两项**：
 

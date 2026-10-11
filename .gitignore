@@ -127,3 +127,11 @@ tests/._run_all.lock
 # 工具本体已在 3rd/tools/table2asn/ 跟踪分发，副本勿再入库
 3rd/tools/table2asn/new/
 3rd/tools/table2asn/win64.table2asn.zip
+
+# ---------- 12. 内置 Python 的依赖包（2026-10-11 出库） ----------
+# 解释器本体（python.exe + python312.zip + DLL）仍随仓库分发，保"没装 Python
+# 的机器也能跑"；依赖包不再入库（713MB/1.44 万文件），克隆后由 环境自检.bat
+# 检测缺包自动 pip install -r requirements.lock（清华镜像），或手动执行同命令。
+# 本机 site-packages 保留在磁盘上（gitignore，不影响运行）。
+3rd/python/Lib/site-packages/
+3rd/python/Scripts/

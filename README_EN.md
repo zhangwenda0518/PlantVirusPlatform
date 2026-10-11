@@ -168,13 +168,16 @@ mindmap
 ```bat
 git clone https://github.com/zhangwenda0518/VirusPlatform.git
 cd VirusPlatform
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt   :: install dependencies (no longer bundled since 2026-10-11, saves ~700MB of clone size)
+:: No Python on this machine? Skip line 3 and just run 环境自检.bat —
+:: it uses the bundled interpreter (3rd/python/) to detect missing packages
+:: and installs them automatically (Tsinghua mirror)
 ```
 
-- Requires **Windows 10+ and Python 3.12+**. **The platform is released as source code (decided 2026-10-11) — modify and customize it to your needs.** External tools come pre-provisioned in `3rd/` (~2GB: single-file tools + tool suites + a bundled Python runtime), clone and go — **no self-building needed or supported** (the source-build route was retired on 2026-10-11; the historical test log lives in `docs/归档记录_源码构建路线_20261011.md`).
+- Requires **Windows 10+ and Python 3.12+**. **The platform is released as source code (decided 2026-10-11) — modify and customize it to your needs.** External tools come pre-provisioned in `3rd/` (~1.2GB: single-file tools + tool suites + a bundled Python interpreter), clone and go — **no self-building needed or supported** (the source-build route was retired on 2026-10-11; the historical test log lives in `docs/归档记录_源码构建路线_20261011.md`).
 - gbdraw is the preferred genome-plot engine: `pip install git+https://github.com/satoshikawato/gbdraw.git` (falls back automatically to the pure-Python dna_features_viewer).
-- Only two files exceed GitHub's 100MB per-file hard limit and are served from the [Release (external-tools)](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) instead — download and put them back in place:
-  `3rd/tools/rdp5/3seqTable` (105MB) and `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd` (168MB).
+- Only one file exceeds GitHub's 100MB per-file hard limit and is served from the [Release (external-tools)](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) instead — download and put it back in place:
+  `3rd/tools/rdp5/3seqTable` (105MB). Python dependencies are installed via pip only (since 2026-10-11, including the former `_polars_runtime.pyd` at 168MB — no manual downloads needed).
 - Databases (~3.4GB) are not in git: copy the whole `databases/` folder from an existing deployment (across drives use `python main.py db-migrate --to D:\dbdir`); for prebuilt-DB details and build-from-scratch instructions see [Wiki · Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases).
 
 ### 2. Launch (two modes)
