@@ -86,9 +86,9 @@ python main.py ref-status                   :: 参考库版本与统计
 
 - `python main.py db-migrate --to D:\库目录 [--mode move] [--dry-run] [--check]`：robocopy（多线程+断点续传）→ 文件数与总字节校验 → **通过后才切配置**；任一失败配置不动、源原样，可断点重跑；目标须在平台目录外且剩余 ≥ 源体积 +10GB；
 - 设置页「数据库目录」直接填路径（即时反馈宿主库/病毒库/Taxonomy 就绪状态，切换后 ictv_db/virus_ref/universal_ref/local_search/verify 路径常量同步刷新，无需重启）；
-- 数据库包与程序同级放置自动识别（零配置，探测结果不写回 platform.json 保持可移植）。
+- 从其他机器迁移：整体拷贝 `databases/`（与 `host-db/`）到目标机同位置即可，探测结果不写回 platform.json 保持可移植。
 
 ## 相关
 
 - 各库在分析里的用法 → [Kvsuite](Kvsuite) / [Host-Prediction](Host-Prediction) / [ORF](ORF) / [Phylo](Phylo)
-- 迁移与打包 → [Settings-Ops](Settings-Ops)
+- 数据库迁移与外置 → [Settings-Ops](Settings-Ops)

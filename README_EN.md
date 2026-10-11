@@ -48,6 +48,74 @@ flowchart LR
     K --> L["Tracing / clock /<br/>phylogeo / submission"]
 ```
 
+## 🗺️ Feature Map
+
+> The in-app manual hosts an **interactive feature tree** (click to expand, jump straight to each tool card); `docs/功能全景图.html` is a standalone panorama page.
+
+```mermaid
+mindmap
+  root((🌿 VirusPlatform))
+    🌐 Data Resources
+      Public Data Search
+      Virus Sample Prescreen
+      Open-Virome
+      Bulk Data Download
+      Genome Query & Download
+      Database Builder
+    🧹 Sample Processing
+      One-click Prep Chain
+      Sample Registry & Batch Import
+      Format Conversion
+      Read QC fastp
+      Host Removal & Extraction
+    📈 Quantification & Consensus
+      One-click Full Pipeline
+      Known-virus ID & Quant
+      Consensus Analysis
+      Variant Analysis
+    🦠 Identification & Classification
+      One-click ②→③→④
+      Virus ID & Extraction
+      Contig Assembly
+      Assembly Re-ID
+      Candidate Verification
+    🔬 Annotation
+      Annotation Trio
+      ORF Prediction
+      Functional Annotation
+      Homology BLASTN·BLASTX
+      Genome Plot
+    💊 Detection & Control
+      Primer Design
+      CRISPR Assay Designer
+      dsRNA Designer
+      miRNA Targets
+    ⚖️ Comparative Genomics
+      Reference Acquisition
+      CDS·PEP Export
+      MSA MAFFT+trimAl
+      Tree Building
+      SDT Identity
+    🧬 Phylodynamics
+      Data Intake & Curation
+      RDP5 Recombination
+      Temporal Signal & Dating
+      Phylogeography
+      One-click Dating→Dispersal
+    📊 Results Center
+      Sample & Special Results
+      Tree·SDT·MSA Viewers
+    🔍 Provenance & Submission
+      LOGAN Provenance
+      NCBI Submission Prep
+    ✨ Platform Capabilities
+      AI Assistant
+      Task Center
+      Full CLI 40 subcommands
+      Bilingual UI
+      Visual Reports
+```
+
 ## 📦 Module Overview
 
 > Each module's **detailed documentation (inputs/outputs · parameters · CLI · product folders · caveats) lives in the [Wiki](https://github.com/zhangwenda0518/VirusPlatform/wiki)** (pages in Chinese).
@@ -89,7 +157,7 @@ flowchart LR
 |---|---|---|
 | Databases & references | [Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases) | Taxonomy, kunpeng DBs, virus reference/ID DB, annotation DBs (RefSeq proteins / Pfam), tree DBs (plant_tree.db / ICTV VMR), host-probability tables, host-DB building |
 | Pipeline orchestration | [Pipeline-Overview](https://github.com/zhangwenda0518/VirusPlatform/wiki/Pipeline-Overview) | dependency scheduling, checkpoint resume, weighted progress with self-learning ETA, resource estimates, concurrency gates |
-| Settings · tasks · ops | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | bilingual UI, 19 default parameters, disk watermark, environment self-check, tool_runs archiving/cleanup, database migration, packaging |
+| Settings · tasks · ops | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | bilingual UI, 19 default parameters, disk watermark, environment self-check, tool_runs archiving/cleanup, database migration |
 | Full CLI reference | [CLI-Reference](https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference) | all 40 subcommands with per-parameter quick reference |
 | FAQ & known issues | [FAQ](https://github.com/zhangwenda0518/VirusPlatform/wiki/FAQ) | common questions, non-ASCII path handling, large-genome DB building, SDT semantics, ML tree building… |
 
@@ -103,11 +171,11 @@ cd VirusPlatform
 python -m pip install -r requirements.txt
 ```
 
-- Requires **Windows 10+ and Python 3.12+**. **All external tools ship with the repository** (`3rd/`, ~2GB: single-file tools + tool suites + a bundled Python runtime; all 30 tools present) — clone and go.
+- Requires **Windows 10+ and Python 3.12+**. **The platform is released as source code (decided 2026-10-11) — modify and customize it to your needs.** External tools come pre-provisioned in `3rd/` (~2GB: single-file tools + tool suites + a bundled Python runtime), clone and go — **no self-building needed or supported** (the source-build route was retired on 2026-10-11; the historical test log lives in `docs/归档记录_源码构建路线_20261011.md`).
 - gbdraw is the preferred genome-plot engine: `pip install git+https://github.com/satoshikawato/gbdraw.git` (falls back automatically to the pure-Python dna_features_viewer).
 - Only two files exceed GitHub's 100MB per-file hard limit and are served from the [Release (external-tools)](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) instead — download and put them back in place:
   `3rd/tools/rdp5/3seqTable` (105MB) and `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd` (168MB).
-- Databases (~3.4GB) are not in git: copy them from a database package / a packaging machine, or build with `dev_tools/package.py` (see [Packaging](#-packaging--distribution-software--examples--databases-in-three-separate-folders)).
+- Databases (~3.4GB) are not in git: copy the whole `databases/` folder from an existing deployment (across drives use `python main.py db-migrate --to D:\dbdir`); for prebuilt-DB details and build-from-scratch instructions see [Wiki · Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases).
 
 ### 2. Launch (two modes)
 
@@ -137,60 +205,16 @@ python main.py selfcheck                                   :: environment self-c
 python main.py init-taxonomy                               :: download taxonomy
 python main.py build-host-db --genome host-db\genome.fa --taxid 4081
 python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample NX-5
-python main.py report --sample NX-5                        :: regenerate the report
-```
+py## 🧰 External Tools
 
-## 🧰 Appendix: Source-Build Test Log (not the release route)
+The `3rd/` prebuilt tree ships with the repository — clone and go (decided 2026-10-11: **the source-build route is retired**;
+see `docs/归档记录_源码构建路线_20261011.md` for the historical test log). To swap an individual tool, drop the new build into
+its `3rd/` path and it is picked up automatically, or register a custom path under the `tools` section of `platform.json`
+(takes effect on save); `python main.py tools` reports detection status and `python main.py selfcheck` runs the full checkup.
+A missing tool only affects its own step — optional steps (fastp / fq2fa / gbdraw) grey out and skip automatically, while
+required steps report exactly which tool is missing.
 
-> **The release route is the prebuilt `3rd/` tree** (shipped fully in-repo, clone-and-go; decided 2026-09-28).
-> This section only preserves the source-build findings for self-compilation / binary auditing / disaster-recovery scenarios — **it is not the recommended install method**.
-
-**First, the common question: compiling from source does NOT reduce runtime memory.** Runtime RAM is determined by algorithms and data scale (kunpeng's hash capacity, SPAdes' assembly graph, DIAMOND's search index), not by where the binary came from — a locally built binary behaves identically to the official release of the same source.
-What source builds actually buy you is **clone size** (2GB of prebuilt binaries → tens of MB of sources) and a **need-based subset** (build only the chain you use). The price is paid at build time: linking big C++ projects (SPAdes/BLAST) can peak at several GB of RAM, with another 5–10GB of disk for intermediate artifacts.
-Also, `3rd/python/` (the 868MB bundled interpreter) is optional — a system Python 3.12 plus `python -m pip install -r requirements.txt` works just as well (the bundled interpreter only serves the packaged exe).
-
-### Toolchain setup
-
-```bat
-winget install MSYS2.MSYS2 Rustlang.Rustup GoLang.Go Kit.CMake
-:: inside the MSYS2/UCRT64 shell:
-pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
-:: on networks where proxy.golang.org is unreachable:
-set GOPROXY=https://goproxy.cn,direct
-```
-
-### Tiered build guide
-
-| Tier | Tools (put built binaries in) | Language | Notes |
-|---|---|---|---|
-| ① minutes | kunpeng / crabz / sracha → `3rd/bin/` | Rust | `cargo build --release` |
-| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2/seqkit@latest` (main package lives in the module's `seqkit/` subfolder) |
-| ① | FastTree / trimAl / minimap2 / minibwa | C | straight `gcc`/`make`; the minibwa Windows port lives in `docs/minibwa-build/` (mmap-stub patch + parity report) |
-| ② ready-made MSYS2 packages | mafft / samtools / bcftools | C | one `pacman -S` each |
-| ② CMake | diamond / iQ-TREE / RAxML-NG / lsd2 / SPAdes | C++ | CMake + VS Build Tools; for SPAdes the official installer is easier |
-| ③ not recommended locally | Blast+ / salmon / mmseqs | C++ | extremely heavy toolchains or degraded Windows support (salmon pushes WSL/Docker; mmseqs native build is experimental) — use the prebuilt `3rd/tools/` copies |
-| ④ binary-only | RDP5 (VB6, no public source) / table2asn / Gblocks / strawberry-perl / dsrnamax / pandepth / snpgenie / viral_consensus | — | no upstream sources (or platform-internal); rely on the prebuilt `3rd/` copies |
-| side | SnpEff | Java | source is public, jar can be self-built; the slim JRE in `3rd/tools/jre-snpeff/` only serves runtime |
-| side | open-virome frontend | Node | source ships in-repo: `npm ci && npm run build` (rename `.git-upstream/` back to `.git` for upstream git work) |
-
-### ✅ Build test log (2026-09-28, on this machine: Win11 · MinGW gcc 16.2 / cargo 1.98 / go 1.27 / cmake 4.4)
-
-| Tool | Result | Notes |
-|---|---|---|
-| crabz | ✅ v0.10.1 | straight from crates.io, ~2 min |
-| sracha | ✅ v0.7.0 | `rnabioco/sracha-rs`, ~3 min |
-| seqkit | ✅ v2.14.0 | `go install .../v2/seqkit@latest`; use goproxy.cn where proxy.golang.org is unreachable |
-| FastTree | ✅ v2.2.0 | author mirror `morgannprice/fasttree`, single-file gcc build |
-| trimAl | ✅ | `inab/trimal`, `make -C source` |
-| minimap2 | ✅ v2.31 | `lh3/minimap2`, `make` |
-| minibwa | ✅ 0.7-r424-dirty | apply `docs/minibwa-build/windows-mmap-stub.patch` then **`make mimalloc=0`** (the vendored mimalloc is trimmed and has no Windows backend; disabling falls back to kalloc); index+map smoke test passed |
-| kunpeng | ⚠️ blocked | crates.io only has 0.6.9–0.7.5; the bundled v0.7.12 carries **locally modified sources** — rebuilding requires that modified source tree, the vanilla crate is no substitute |
-| RAxML-NG | ❌ MinGW route blocked | cleared 4 hurdles (coraxlib's `__declspec(dllexport)` on `__thread`, `M_PI`, `asprintf`, size_t width) then hit `sysutil.cpp`'s POSIX header `sys/resource.h` — a real port, not a patch. **The realistic tier-② route = official MSVC releases/installers** (SPAdes installer, RAxML-NG official release), exactly as the table advises |
-| MSYS2 pacman route | ❌ not verified | the silent installer popped a GUI here and never finished; documented route kept |
-| RDP5.93 (tier ④ install test) | ❌ not adopted | its RDP5CL is actually **5.84**: -f/-ofp honored, all nine methods run, exit 0 — but **zero output files written**; bundled **5.69** stays. Both 3seqTable copies are byte-identical (110,174,436 B). Install kept at `3rd/tools/rdp5.93/` (gitignored) |
-
-- **Paths**: drop binaries into the matching `3rd/` location and they are auto-detected; anywhere else, register them in the `tools` section of `platform.json` (takes effect immediately).
-- **Verify**: `python main.py tools` (detection status) → `python main.py selfcheck` (full check-up). A missing tool only affects its own step — optional steps (fastp / fq2fa / gbdraw) gray out and get skipped automatically; required steps clearly name what's missing.
+) gray out and get skipped automatically; required steps clearly name what's missing.
 
 ## 🖥️ UI Tour
 
@@ -218,7 +242,7 @@ VirusPlatform/
 │  └─ mirna_target/          miRNA target prediction (5 engines)
 ├─ webapp/                   page templates & static assets (i18n bilingual)
 ├─ tests/                    self-checks, data generators, integration tests
-├─ dev_tools/                packaging & DB-build scripts (package.py etc.)
+├─ dev_tools/                DB-build & maintenance scripts (build_virus_db.py / package.py etc.)
 ├─ docs/                     development docs & module inventories
 ├─ wiki/                     source Markdown of this repo's Wiki (kept in sync)
 ├─ examples/                 built-in example data (✨Example buttons, ~9MB)
@@ -233,16 +257,12 @@ VirusPlatform/
 
 Legacy path compatibility: platform-relative paths like `tool_runs/`, `results/` are auto-redirected into `run/`; `tools/`, `bin/` → `3rd/`. No old calls need rewriting.
 
-## 📤 Packaging & Distribution (software / examples / databases in three separate folders)
+## 📤 Distribution Form (decided 2026-10-11)
 
-```bat
-python dev_tools/package.py            :: ① program + ② examples (~1.5GB)
-python dev_tools/package.py --with-db  :: plus ③ database pack (~3.4GB)
-python dev_tools/package.py --db-only  :: database pack only
-python dev_tools/package.py --verify   :: run exe --cli selfcheck after packing
-```
+**No more packaged distribution** (the `VirusPlatform.exe` installer route is retired): this repository's source code is the single distribution form — clone, read, modify, and customize directly in the source, which also fits the agent-driven way of working.
 
-The program pack (`VirusPlatform.exe`) upgrades/distributes independently; the examples and database packs are auto-detected when placed next to the program — zero configuration. Databases can also live on any drive: `python main.py db-migrate --to D:\dbdir` (robocopy + byte verification before switching config), or set the path in Settings → Database directory.
+- Database migration is unchanged: `python main.py db-migrate --to D:\dbdir` (robocopy + byte verification before switching config), or set the path in Settings → Database directory;
+- `dev_tools/package.py` stays in the repo for users with their own distribution needs; the platform no longer ships official installers.
 
 ## 📚 Documentation
 

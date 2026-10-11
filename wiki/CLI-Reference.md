@@ -2,7 +2,7 @@
 
 > 返回 [Home](Home) ｜ 上一页：[Settings-Ops](Settings-Ops) ｜ 下一页：[FAQ](FAQ)
 
-入口：`python main.py <子命令> [参数]`。GUI 能做的 CLI 都能做（共用同一引擎）；打包版用 `VirusPlatform.exe --cli <子命令>` 等价调用。
+入口：`python main.py <子命令> [参数]`。GUI 能做的 CLI 都能做（共用同一引擎）。
 
 ---
 

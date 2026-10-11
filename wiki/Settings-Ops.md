@@ -71,28 +71,10 @@ python main.py db-migrate --to D:\库目录 --check      :: 只校验目标已�
 - 迁移安全：robocopy（多线程+断点续传）→ 文件数与总字节校验 → **通过后才切配置**；任一失败配置不动、源原样，可断点重跑；
 - 目标须在平台目录外，目标盘剩余 ≥ 源体积 + 10GB。
 
-## 打包分发
+## 打包分发（已停用）
 
-```bat
-python dev_tools/package.py                       :: ①程序 + ②示例（~1.5GB）
-python dev_tools/package.py --with-db             :: 再加 ③数据库包（~3.4GB）
-python dev_tools/package.py --db-only             :: 跳过 exe，只补数据库包
-python dev_tools/package.py --no-split            :: 旧布局（示例/数据库进程序目录）
-python dev_tools/package.py --verify              :: 打包后跑 exe --cli selfcheck
-```
-
-```
-dist/
-├─ VirusPlatform/            ① 程序（VirusPlatform.exe + webapp + bin/ + tools/）
-├─ VirusPlatform-Examples/   ② 示例数据（~8MB）
-├─ VirusPlatform-Database/   ③ 数据库包（仅 --with-db）
-└─ 程序与数据说明.txt
-```
-
-- 三包同级放置**自动识别**（零配置；探测结果不写回配置保持跨机可移植）；
-- 程序包可独立升级；`platform.json` 为干净配置不含本机绝对路径；
-- 打包自检：`VirusPlatform.exe --cli selfcheck`（`--cli <子命令>` 等价 `python main.py <子命令>`）；
-- 打包版任务引擎：`engine_entry.py` 处理 `--run-engine` 进程内子任务。
+> **2026-10-11 定案：平台不再打包分发**（`VirusPlatform.exe` 安装包路线停用），以源码仓库为唯一发布形态——克隆、阅读、修改、定制都在源码上完成，也更契合智能体（AI agent）驱动的工作方式。
+> `dev_tools/package.py` 仍保留在仓库中，供有自分发需求的用户自行使用；数据库外置迁移（上文）照常可用。
 
 ## 品牌资产
 

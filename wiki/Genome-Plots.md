@@ -25,7 +25,7 @@
 
 ## Windows 注意：SVG MIME
 
-Windows 注册表把 `.svg` 关联成非标准的 `image/svg`，Python mimetypes 照搬后 Flask 发出的 MIME 会让 Chromium 拒绝解码（`<img>` 裂图 naturalWidth=0）。`app.py` 建应用前已 `mimetypes.add_type('image/svg+xml', '.svg')`——该修复在 app.py 里，**改完需重新打包**才进 exe。
+Windows 注册表把 `.svg` 关联成非标准的 `image/svg`，Python mimetypes 照搬后 Flask 发出的 MIME 会让 Chromium 拒绝解码（`<img>` 裂图 naturalWidth=0）。`app.py` 建应用前已 `mimetypes.add_type('image/svg+xml', '.svg')`——该修复在 app.py 里，源码运行即时生效。
 
 ## CLI
 

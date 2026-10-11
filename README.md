@@ -48,6 +48,74 @@ flowchart LR
     K --> L["溯源 / 分子钟 /<br/>系统地理 / 提交"]
 ```
 
+## 🗺️ 功能全景
+
+> 平台内使用手册顶部有**可交互版功能树**（点击展开、直达对应工具卡）；`docs/功能全景图.html` 为可独立打开的全景页。
+
+```mermaid
+mindmap
+  root((🌿 VirusPlatform 植物病毒分析平台))
+    🌐 数据资源
+      公共数据检索
+      病毒样本预筛
+      Open-Virome 公共病毒组
+      公共数据下载
+      基因组查询下载
+      数据库构建
+    🧹 样本处理
+      一键前处理
+      样品创建 / 批量导入
+      格式转换
+      序列质控
+      宿主去除与序列提取
+    📈 病毒定量与共识
+      一键分析 全流程
+      已知病毒识别与定量
+      共识序列分析
+      病毒变异分析
+    🦠 病毒识别和分类分析
+      一键分析 ②→③→④
+      病毒识别分类与提取
+      提取序列组装
+      组装结果再鉴定
+      候选序列验证
+    🔬 病毒注释分析
+      注释三连 ORF→功能→图谱
+      ORF 预测
+      功能注释
+      同源比对 BLASTN·BLASTX
+      基因组图谱
+    💊 检测与防治
+      引物设计
+      CRISPR 检测试剂设计
+      dsRNA 设计
+      miRNA 靶标预测
+    ⚖️ 比较基因组分析
+      参考序列获取
+      CDS·PEP 提取产物
+      序列比对 MAFFT+trimAl
+      进化树构建 科属级
+      SDT 同一性分析
+    🧬 进化动力学分析
+      数据接入治理
+      RDP5 重组分析
+      时间信号与定年
+      系统地理分析
+      一键分析 定年→地理→溯源
+    📊 结果中心
+      样品结果与专项结果
+      进化树·SDT·MSA 查看器
+    🔍 溯源与提交
+      LOGAN 溯源与批量提交
+      NCBI 数据提交
+    ✨ 平台级能力
+      AI 助手 解读·播报·闸门·检索执行
+      任务中心 并发闸门·进度自学习
+      全量 CLI 40 子命令
+      中英双语界面
+      可视化报告
+```
+
 ## 📦 功能模块总览
 
 > 每个模块的**详细说明（输入输出 · 参数 · CLI · 产物目录 · 注意事项）见 [Wiki](https://github.com/zhangwenda0518/VirusPlatform/wiki)**。
@@ -89,7 +157,7 @@ flowchart LR
 |---|---|---|
 | 数据库与参考库 | [Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases) | Taxonomy、kunpeng 分类库、病毒参考/鉴定库、注释库（RefSeq 蛋白/Pfam）、建树库（plant_tree.db / ictv VMR）、宿主概率表、宿主库构建 |
 | 分析流程编排 | [Pipeline](https://github.com/zhangwenda0518/VirusPlatform/wiki/Pipeline-Overview) | 依赖调度、断点续跑、加权进度与剩余时间自学习、资源预估、并发闸门 |
-| 设置·任务中心·运维 | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | 中英双语、19 项默认参数、磁盘水位、环境自检、tool_runs 归档清理、数据库迁移、打包分发 |
+| 设置·任务中心·运维 | [Settings-Ops](https://github.com/zhangwenda0518/VirusPlatform/wiki/Settings-Ops) | 中英双语、19 项默认参数、磁盘水位、环境自检、tool_runs 归档清理、数据库迁移 |
 | CLI 完整参考 | [CLI-Reference](https://github.com/zhangwenda0518/VirusPlatform/wiki/CLI-Reference) | 40 个子命令全参数速查 |
 | FAQ 与已知事项 | [FAQ](https://github.com/zhangwenda0518/VirusPlatform/wiki/FAQ) | 常见问题、中文路径兼容、大基因组建库、设计说明 |
 
@@ -103,11 +171,11 @@ cd VirusPlatform
 python -m pip install -r requirements.txt
 ```
 
-- 需要 **Windows 10+ 与 Python 3.12+**；**外部工具已全量随仓库分发**（`3rd/`，约 2GB：单文件工具 + 工具套件 + 内置 Python 运行时，克隆即用，30 件工具全在库）。
+- 需要 **Windows 10+ 与 Python 3.12+**；**平台以源码形态发布（2026-10-11 定案），欢迎按需修改定制**。外部工具已预置在 `3rd/`（约 2GB：单文件工具 + 工具套件 + 内置 Python 运行时），克隆即用，**无需也不支持自行编译**（2026-10-11 起不再提供源码构建路线，历史实测记录见 `docs/归档记录_源码构建路线_20261011.md`）。
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
 - 仅两个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
   `3rd/tools/rdp5/3seqTable`（105MB）与 `3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`（168MB）。
-- 数据库（约 3.4GB）仍不进 git：源码运行请从数据库包/打包机拷贝，或用 `dev_tools/package.py` 自建（见下文）。
+- 数据库（约 3.4GB）不进 git：从已有部署机器整体拷贝 `databases/`（跨盘用 `python main.py db-migrate --to D:\库目录`），预置库明细与自建方式见 [Wiki · Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases)。
 
 ### 2. 启动（两种模式）
 
@@ -140,57 +208,14 @@ python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample NX-5
 python main.py report --sample NX-5                        :: 重新生成报告
 ```
 
-## 🧰 附录：外部工具源码构建实测（非发布路线）
+## 🧰 外部工具
 
-> **发布路线以 `3rd/` 预编译为准**（随仓库全量分发，克隆即用；2026-09-28 定案）。
-> 本节仅保留源码构建的实测结论，供自编译 / 二进制审计 / 丢失二进制自救时参考，**不作为推荐安装方式**。
-
-**先回答常见疑问：源码编译不会更省运行内存。** 运行内存由算法与数据规模决定（kunpeng 的 hash 容量、SPAdes 的组装图、DIAMOND 的搜索索引），与二进制从哪来无关——同一份源码，本地编译与官方发行的二进制运行时内存行为一致。
-源码构建真正换来的是**仓库克隆体积**（2GB 预编译 → 几十 MB 源码）与**按需子集**（只编译用到的链路）；代价是编译过程本身更耗资源：C++ 大项目（SPAdes/BLAST）链接阶段峰值内存可达数 GB，中间产物另占 5-10GB 磁盘。
-另：`3rd/python/`（868MB 内置解释器）也可省去——系统 Python 3.12 + `python -m pip install -r requirements.txt` 即可替代（内置解释器仅为打包版准备）。
-
-### 工具链准备
-
-```bat
-winget install MSYS2.MSYS2 Rustlang.Rustup GoLang.Go Kit.CMake
-:: MSYS2/UCRT64 shell 内：
-pacman -S mingw-w64-ucrt-x86_64-gcc make mafft samtools bcftools
-:: 国内网络建议补一条（proxy.golang.org 不可达时）：
-set GOPROXY=https://goproxy.cn,direct
-```
-
-### 分层构建指南
-
-| 层 | 工具（构建后放至） | 语言 | 构建要点 |
-|---|---|---|---|
-| ① 十分钟级 | kunpeng / crabz / sracha → `3rd/bin/` | Rust | `cargo build --release` |
-| ① | seqkit → `3rd/bin/` | Go | `go install github.com/shenwei356/seqkit/v2/seqkit@latest`（主包在模块的 `seqkit/` 子目录） |
-| ① | FastTree / trimAl / minimap2 / minibwa | C | gcc/make 直编；minibwa 的 Windows 移植材料在 `docs/minibwa-build/`（mmap stub 补丁 + 对齐报告） |
-| ② MSYS2 现成包 | mafft / samtools / bcftools | C | `pacman -S` 即装 |
-| ② CMake 级 | diamond / iQ-TREE / RAxML-NG / lsd2 / SPAdes | C++ | CMake + VS Build Tools；SPAdes 更推荐官方安装器 |
-| ③ 不建议本地编译 | Blast+ / salmon / mmseqs | C++ | 工具链极重或 Windows 原生支持退化（salmon 主推 WSL/Docker、mmseqs 原生构建为实验性）——直接用 `3rd/tools/` 预编译 |
-| ④ 仅二进制 | RDP5（VB6，无公开源码）/ table2asn / Gblocks / strawberry-perl / dsrnamax / pandepth / snpgenie / viral_consensus | — | 官方不发源码或平台内部工具，以 `3rd/` 预编译为准 |
-| 附 | SnpEff | Java | 源码公开可自建 jar；`3rd/tools/jre-snpeff/` 精简 JRE 仅服务运行 |
-| 附 | open-virome 前端 | Node | 源码随仓库：`npm ci && npm run build`（`.git-upstream/` 改名回 `.git` 可做上游操作） |
-
-### ✅ 实测记录（2026-09-28，本机 Win11 · MinGW gcc 16.2 / cargo 1.98 / go 1.27 / cmake 4.4）
-
-| 工具 | 结果 | 要点 |
-|---|---|---|
-| crabz | ✅ v0.10.1 | crates.io 直装，约 2 分钟 |
-| sracha | ✅ v0.7.0 | `rnabioco/sracha-rs`，约 3 分钟 |
-| seqkit | ✅ v2.14.0 | `go install .../v2/seqkit@latest`；proxy.golang.org 不可达时用 goproxy.cn |
-| FastTree | ✅ v2.2.0 | 作者镜像 `morgannprice/fasttree`，单文件 gcc 直编 |
-| trimAl | ✅ | `inab/trimal`，`make -C source` |
-| minimap2 | ✅ v2.31 | `lh3/minimap2`，`make` |
-| minibwa | ✅ 0.7-r424-dirty | 应用 `docs/minibwa-build/windows-mmap-stub.patch` 后 **`make mimalloc=0`**（内嵌 mimalloc 是裁剪版、无 Windows 后端，禁用即回退 kalloc）；index+map 冒烟通过 |
-| kunpeng | ⚠️ 阻塞 | crates.io 只有 0.6.9–0.7.5；内置 v0.7.12 含**自改源码**——重编译必须用改动后的 kunpeng 源码树，原版不能替代 |
-| RAxML-NG | ❌ MinGW 路线阻断 | 连闯 4 关（coraxlib 的 `__declspec(dllexport)`×`__thread`、`M_PI`、`asprintf`、size_t 宽度）后卡在 `sysutil.cpp` 的 POSIX 头 `sys/resource.h`——需真移植而非补丁。**② 层现实路线 = 官方 MSVC 发行版/安装器**（SPAdes 安装器、RAxML-NG 官方 release），与表中建议一致 |
-| MSYS2 pacman 路线 | ❌ 未验证 | 静默安装器在本机弹 GUI 未完成；文档路线保留 |
-| RDP5.93（④层实装测试） | ❌ 不采用 | 安装包的 RDP5CL 实为 **5.84**：-f/-ofp 被识别、九方法跑完 exit=0，但**不产出任何结果文件**；内置 **5.69** 维持。两版 3seqTable 字节一致（110,174,436 B）。安装留档 `3rd/tools/rdp5.93/`（已 gitignore） |
-
-- **产物路径**：放进对应 `3rd/` 路径即被自动探测；放别处则在 `platform.json` 的 `tools` 段登记（保存即生效）。
-- **校验**：`python main.py tools`（探测状态）→ `python main.py selfcheck`（全量体检）。缺哪个工具只影响对应步骤——可选步骤（fastp / fq2fa / gbdraw）自动灰显跳过，必需步骤会明确报缺哪件。
+`3rd/` 预编译树随仓库分发、克隆即用（2026-10-11 定案：**不再提供源码构建路线**，
+历史实测见 `docs/归档记录_源码构建路线_20261011.md`）。需要替换个别工具时，
+把新版放进 `3rd/` 对应路径即被自动探测，放别处则在 `platform.json` 的 `tools`
+段登记（保存即生效）；`python main.py tools` 看探测状态，`python main.py
+selfcheck` 全量体检。缺哪个工具只影响对应步骤——可选步骤（fastp / fq2fa /
+gbdraw）自动灰显跳过，必需步骤会明确报缺哪件。
 
 ## 🖥️ 界面导览
 
@@ -218,7 +243,7 @@ VirusPlatform/
 │  └─ mirna_target/          miRNA 靶标预测引擎（5 引擎）
 ├─ webapp/                   页面模板与静态资源（i18n 双语）
 ├─ tests/                    自检/造数/集成测试（pytest 风格）
-├─ dev_tools/                打包与建库脚本（package.py 等）
+├─ dev_tools/                建库与运维脚本（build_virus_db.py / package.py 等）
 ├─ docs/                     开发文档与模块功能清单
 ├─ wiki/                     本仓库 Wiki 的源 Markdown（与线上 Wiki 同步）
 ├─ examples/                 内置示例数据（✨示例按钮共用，~9MB）
@@ -233,16 +258,12 @@ VirusPlatform/
 
 旧路径兼容：`tool_runs/`、`results/` 等平台相对路径自动重定向到 `run/` 下；`tools/`、`bin/` → `3rd/`，历史调用无需修改。
 
-## 📤 打包与分发（软件 / 示例 / 数据库三分离）
+## 📤 分发形态（2026-10-11 定案）
 
-```bat
-python dev_tools/package.py            :: ①程序 + ②示例（~1.5GB）
-python dev_tools/package.py --with-db  :: 再加 ③数据库包（~3.4GB）
-python dev_tools/package.py --db-only  :: 只补/更新数据库包
-python dev_tools/package.py --verify   :: 打包后跑 exe --cli selfcheck
-```
+**不再打包分发**（`VirusPlatform.exe` 安装包路线停用）：本仓库源码即唯一发布形态——克隆、阅读、修改、定制都在源码上完成，也更契合智能体（AI agent）驱动的工作方式。
 
-程序包（`VirusPlatform.exe`）可独立分发升级；示例包、数据库包与程序同级放置即被自动识别，零配置。数据库也可外置任意盘：`python main.py db-migrate --to D:\库目录`（robocopy + 字节校验后才切配置），或「设置 → 数据库目录」直接填路径。
+- 数据库迁移照旧支持：`python main.py db-migrate --to D:\库目录`（robocopy + 字节校验后才切配置），或「设置 → 数据库目录」直接填路径；
+- `dev_tools/package.py` 保留在仓库里，供有自分发需求的用户自行使用，平台官方不再产出安装包。
 
 ## 📚 文档
 

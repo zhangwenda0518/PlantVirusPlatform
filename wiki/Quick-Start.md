@@ -11,9 +11,9 @@
 | 项目 | 要求 |
 |---|---|
 | 操作系统 | Windows 10 / 11（平台按 Windows 原生设计，含中文路径兼容） |
-| Python | 3.12+（打包版内置运行时，无需安装） |
+| Python | 3.12+（源码运行需系统安装；`3rd/python/` 内置解释器为历史打包版遗留，可不用） |
 | 内存 | 建议 ≥16GB（宿主库构建、SPAdes、DIAMOND 为内存大户） |
-| 磁盘 | 平台本体 ~1.5GB；数据库包 ~3.4GB；宿主库 ~1.5GB/物种；样品结果另计 |
+| 磁盘 | 平台本体 ~1.5GB；数据库 ~3.4GB；宿主库 ~1.5GB/物种；样品结果另计 |
 | 网络 | 仅在下载/检索/按需选参时需要（全部走 NCBI/ENA/NGDC/ICTV 官方域名白名单） |
 
 ## 安装依赖
@@ -24,7 +24,7 @@ cd VirusPlatform
 python -m pip install -r requirements.txt
 ```
 
-**外部工具**已内置在平台目录 `3rd/`（bin/ 与 tools/，kunpeng、seqkit、crabz、Blast、mafft、FastTree、iQtree、trimAl、Gblocks、diamond、mmseqs、fastp、salmon、aria2c、sracha 等），**2026-09-28 起全量随 git 仓库分发，克隆即用**；仅两个超 100MB 的文件走 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools)，下载后放回对应路径即可（`3rd/tools/rdp5/3seqTable`、`3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`，各目录内有同名 README 说明）。也可自行放置后用 `platform.json` 的 `tools` 段指定路径。
+**外部工具**已预置在平台目录 `3rd/`（bin/ 与 tools/，kunpeng、seqkit、crabz、Blast、mafft、FastTree、iQtree、trimAl、Gblocks、diamond、mmseqs、fastp、salmon、aria2c、sracha 等），随 git 仓库分发、克隆即用（**2026-10-11 定案：不再提供源码构建路线，无需也不支持自行编译**，历史实测见 `docs/归档记录_源码构建路线_20261011.md`）；仅两个超 100MB 的文件走 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools)，下载后放回对应路径即可（`3rd/tools/rdp5/3seqTable`、`3rd/python/Lib/site-packages/_polars_runtime_32/_polars_runtime.pyd`，各目录内有同名 README 说明）。也可自行放置后用 `platform.json` 的 `tools` 段指定路径。
 
 **需要单独安装的两项**：
 
