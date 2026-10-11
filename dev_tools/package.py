@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """一键打包发布版：PyInstaller exe + 外部工具 + 前端，程序/数据库/示例三分离。
 
-产物（默认分离布局，仓库**上一级**的「植物病毒分析平台-打包产物/」目录——
+产物（默认分离布局，仓库**上一级**的「PVAP/」目录——
 产物 GB 级，不放仓库目录里撑体积）:
-  <打包产物>/VirusPlatform/            ① 程序（exe + webapp + bin/ + tools/，~1GB）
-  <打包产物>/VirusPlatform-Examples/   ② 示例数据（<程序>/examples/，~1MB）
-  <打包产物>/VirusPlatform-Database/   ③ 数据库（仅 --with-db 时生成）
-  <打包产物>/VirusPlatform-Source/     ④ 源码包（仅 --with-source 时生成）
+  <PVAP>/VirusPlatform/            ① 程序（exe + webapp + bin/ + tools/，~1GB）
+  <PVAP>/VirusPlatform-Examples/   ② 示例数据（<程序>/examples/，~1MB）
+  <PVAP>/VirusPlatform-Database/   ③ 数据库（仅 --with-db 时生成）
+  <PVAP>/VirusPlatform-Source/     ④ 源码包（仅 --with-source 时生成）
 
 分发口径（2026-09-19 起）：**原始数据集与数据库区分开**——
   * 随包只发「原始数据集」（参考 FASTA + 注释表 + taxonomy dmp + 第三方
@@ -94,9 +94,9 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
 
-# 产物目录（2026-10-11 起迁出仓库）：固定在仓库**上一级**的独立目录——
+# 产物目录（2026-10-11 起迁出仓库）：固定在仓库**上一级**的 PVAP/ 独立目录——
 # 产物动辄数 GB，不再放仓库目录里撑体积；按仓库位置动态推导，换机仍成立。
-DIST = os.path.join(os.path.dirname(ROOT), '植物病毒分析平台-打包产物')
+DIST = os.path.join(os.path.dirname(ROOT), 'PVAP')
 APP = os.path.join(DIST, 'VirusPlatform')
 EX_DIR = os.path.join(DIST, 'VirusPlatform-Examples')
 DB_DIR = os.path.join(DIST, 'VirusPlatform-Database')
