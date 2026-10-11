@@ -482,6 +482,14 @@ def plot_tree_labeled(nwk_path, out_png, title=''):
     import matplotlib.patheffects as pe
     tree = Phylo.read(check_path(nwk_path, must_exist=True), 'newick')
     n_tips = tree.count_terminals()
+    # 零分化树标注（2026-10-11 目检）：模拟数据/完全一致序列会让全部支长
+    # 为 0，而 Biopython draw 对缺失的根支长按 1 回退——图上会出现"假
+    # 支长 ~1.0"与 Newick 文件矛盾。这里检测全零支长并在标题显式声明，
+    # 不改几何渲染（避免为边角场景改动 Biopython 内部行为）。
+    _bls = [c.branch_length or 0.0 for c in tree.find_clades()
+            if c.branch_length is not None]
+    if _bls and max(_bls) == 0.0 and title:
+        title += '（零分化：序列与参考完全一致，支长均为 0）'
     lab_len = max((len(c.name or '') for c in tree.get_terminals()), default=0)
     fig_w = 10 + min(max(lab_len - 30, 0) * 0.14, 8)   # 长标签适当加宽
     fig, ax = plt.subplots(figsize=(fig_w, max(3.5, 0.32 * n_tips)))
