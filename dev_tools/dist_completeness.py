@@ -72,7 +72,10 @@ def rels(base, extra_ignore=()):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description='产物缺件清点')
-    ap.add_argument('--app', default=os.path.join(ROOT, 'dist', 'VirusPlatform'))
+    ap.add_argument('--app',
+                    default=os.path.join(os.path.dirname(ROOT),
+                                         '植物病毒分析平台-打包产物',
+                                         'VirusPlatform'))
     ap.add_argument('--pair', action='append', default=[],
                     metavar='SRC=DST', help='追加/覆盖比对项（可重复）')
     ap.add_argument('--max-list', type=int, default=12,

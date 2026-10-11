@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """一键打包发布版：PyInstaller exe + 外部工具 + 前端，程序/数据库/示例三分离。
 
-产物（默认分离布局，`dist/` 下三个互不干扰的目录）:
-  dist/VirusPlatform/            ① 程序（exe + webapp + bin/ + tools/，~1GB）
-  dist/VirusPlatform-Examples/   ② 示例数据（<程序>/examples/，~1MB）
-  dist/VirusPlatform-Database/   ③ 数据库（仅 --with-db 时生成）
-  dist/VirusPlatform-Source/     ④ 源码包（仅 --with-source 时生成）
+产物（默认分离布局，仓库**上一级**的「植物病毒分析平台-打包产物/」目录——
+产物 GB 级，不放仓库目录里撑体积）:
+  <打包产物>/VirusPlatform/            ① 程序（exe + webapp + bin/ + tools/，~1GB）
+  <打包产物>/VirusPlatform-Examples/   ② 示例数据（<程序>/examples/，~1MB）
+  <打包产物>/VirusPlatform-Database/   ③ 数据库（仅 --with-db 时生成）
+  <打包产物>/VirusPlatform-Source/     ④ 源码包（仅 --with-source 时生成）
 
 分发口径（2026-09-19 起）：**原始数据集与数据库区分开**——
   * 随包只发「原始数据集」（参考 FASTA + 注释表 + taxonomy dmp + 第三方
@@ -43,7 +44,7 @@
 
 源码包（2026-09-29）：让使用者也能以**源码模式**运行分析——平台源码全树
 + 3rd/python 绿色运行时 + 启动 bat。定位是程序包的「叠加层」：把
-dist/VirusPlatform-Source 的内容并入 dist/VirusPlatform 程序目录，双击
+dist/VirusPlatform-Source 的内容并入 VirusPlatform 程序目录，双击
 启动平台-网页.bat 即源码运行（工具链 3rd/bin、3rd/tools 程序包已带，
 解释器与全部依赖在 3rd/python 里，primer3 亦随包）。exe 分发口径不受影响。
 """
@@ -69,7 +70,7 @@ _parser.add_argument('--no-split', action='store_true',
 _parser.add_argument('--verify', action='store_true',
                      help='打包完成后对产物跑自检（exe --cli selfcheck）')
 _parser.add_argument('--dedupe-only', action='store_true',
-                     help='不打包，只对已有 dist/VirusPlatform 做硬链接去重')
+                     help='不打包，只对已有产物 VirusPlatform 做硬链接去重')
 _parser.add_argument('--no-exe', action='store_true',
                      help='跳过 PyInstaller（exe 已构建好），只补外部工具/示例/说明')
 _parser.add_argument('--with-source', action='store_true',
@@ -93,10 +94,13 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
 
-APP = os.path.join('dist', 'VirusPlatform')
-EX_DIR = os.path.join('dist', 'VirusPlatform-Examples')
-DB_DIR = os.path.join('dist', 'VirusPlatform-Database')
-SRC_DIR = os.path.join('dist', 'VirusPlatform-Source')
+# 产物目录（2026-10-11 起迁出仓库）：固定在仓库**上一级**的独立目录——
+# 产物动辄数 GB，不再放仓库目录里撑体积；按仓库位置动态推导，换机仍成立。
+DIST = os.path.join(os.path.dirname(ROOT), '植物病毒分析平台-打包产物')
+APP = os.path.join(DIST, 'VirusPlatform')
+EX_DIR = os.path.join(DIST, 'VirusPlatform-Examples')
+DB_DIR = os.path.join(DIST, 'VirusPlatform-Database')
+SRC_DIR = os.path.join(DIST, 'VirusPlatform-Source')
 SPLIT = not _args.no_split
 
 
@@ -241,13 +245,13 @@ if _args.dedupe_only:
 # ------------------------------------------------------------------
 if not (_args.db_only or _args.source_only):
     if _args.no_exe:
-        print('== 1/5 跳过 PyInstaller（--no-exe，沿用已有 dist/VirusPlatform）==')
+        print('== 1/5 跳过 PyInstaller（--no-exe，沿用已有产物 VirusPlatform）==')
     else:
         print('== 1/5 PyInstaller 打包 ==')
         _rmtree(APP)
         r = subprocess.run([sys.executable, '-m', 'PyInstaller',
                             os.path.join('dev_tools', 'VirusPlatform.spec'),
-                            '--noconfirm', '--distpath', 'dist',
+                            '--noconfirm', '--distpath', DIST,
                             '--workpath', 'build'])
         if r.returncode != 0:
             sys.exit('打包失败')
@@ -613,6 +617,10 @@ if _args.with_source:
 
     _rt = os.path.join('3rd', 'python')
     if os.path.isdir(_rt):
+        if not os.path.isdir(os.path.join(_rt, 'Lib', 'site-packages')):
+            print('  ! 3rd/python 缺少 site-packages（2026-10-11 起依赖包不随仓库'
+                  '分发）：先执行 3rd\\python\\python.exe -m pip install '
+                  '-r requirements.lock 再打包，否则源码包无法开箱运行')
         _src_tree(_rt, '绿色版 Python 3.12 运行时（依赖与 primer3 已装好）')
     else:
         print('  ! 缺少 3rd/python：源码包将无法开箱运行（需使用者自装 Python 3.12）')
@@ -632,7 +640,7 @@ if _args.with_source:
 + 源码模式启动脚本（bat）。
 
 用法（叠加到程序包，推荐）：
-  ① 先拿到程序包 dist/VirusPlatform/（exe + 3rd/bin + 3rd/tools 工具链）
+  ① 先拿到程序包 VirusPlatform/（exe + 3rd/bin + 3rd/tools 工具链）
   ② 把本目录的全部内容复制进 VirusPlatform 目录内（同名目录合并）
   ③ 双击「启动平台-网页.bat」（或桌面窗口版）→ 源码模式，改代码即时生效
   数据库/示例仍由 VirusPlatform-Database / -Examples 两个包提供（同级自动识别）。
@@ -659,7 +667,7 @@ if _args.with_source:
 # ------------------------------------------------------------------
 print('== 5/5 说明与汇总 ==')
 if SPLIT and os.path.isdir(APP):
-    with open(os.path.join('dist', '程序与数据说明.txt'), 'w',
+    with open(os.path.join(DIST, '程序与数据说明.txt'), 'w',
               encoding='utf-8') as f:
         f.write(
             '植物病毒分析平台 · 分发说明（程序 / 数据库 / 示例 三分离）\n'
@@ -693,7 +701,7 @@ if SPLIT and os.path.isdir(APP):
             '\n'
             '自检：VirusPlatform.exe --cli selfcheck\n'
             '（源码模式：python main.py selfcheck）\n')
-    print('  + dist/程序与数据说明.txt')
+    print('  + 打包产物/程序与数据说明.txt')
 
 for d in (APP, EX_DIR, DB_DIR, SRC_DIR):
     if os.path.isdir(d):

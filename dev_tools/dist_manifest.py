@@ -141,8 +141,11 @@ def diff(a, b, summary_only):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description='分发包构建清单：生成 / 比对')
-    ap.add_argument('--app', default=os.path.join(ROOT, 'dist', 'VirusPlatform'),
-                    help='产物目录（默认 dist/VirusPlatform）')
+    ap.add_argument('--app',
+                    default=os.path.join(os.path.dirname(ROOT),
+                                         '植物病毒分析平台-打包产物',
+                                         'VirusPlatform'),
+                    help='产物目录（默认 仓库上一级/植物病毒分析平台-打包产物/VirusPlatform）')
     ap.add_argument('--out', help='快照输出路径')
     ap.add_argument('--diff', nargs=2, metavar=('A', 'B'), help='比对两份快照')
     ap.add_argument('--summary', action='store_true', help='只输出汇总')
