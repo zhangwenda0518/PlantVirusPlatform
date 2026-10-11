@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VirusPlatform 功能全景 · Feature Map</title>
+<!-- 独立交付版功能全景树（2026-10-11）：自包含、双击即可打开，无需平台服务。
+     数据与 webapp/static/feature-tree.js 同源（平台内版本以该文件为准）；
+     修改功能清单时请同步两处，或以平台内手册页的功能树为准。 -->
+<style>
+  :root { --g900:#0f3d26; --g700:#14532d; --g600:#1e7a4a; --g100:#e7f2ea;
+          --line:#d8e6dd; --bg:#f4f8f5; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px 20px 60px; background:linear-gradient(180deg,#eef5f0,var(--bg));
+         font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif; color:#22352a; }
+  .wrap { max-width:980px; margin:0 auto; }
+  header { text-align:center; margin-bottom:18px; }
+  header h1 { margin:0 0 6px; font-size:26px; color:var(--g900); letter-spacing:.02em; }
+  header p { margin:0; color:#5f7568; font-size:13.5px; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+         background:#fff; border:1px solid var(--line); border-radius:12px;
+         padding:10px 14px; margin-bottom:14px; box-shadow:0 1px 4px rgba(20,50,30,.06); }
+  .bar .count { font-size:13px; color:#4b6355; font-weight:600; }
+  .bar input { flex:1 1 220px; padding:7px 12px; font-size:13.5px;
+               border:1px solid var(--line); border-radius:9px; }
+  .bar input:focus { outline:2px solid #bcd9c6; }
+  .bar button { padding:7px 14px; font-size:13px; border-radius:9px; cursor:pointer;
+                border:1px solid var(--line); background:#fff; color:var(--g700); font-weight:600; }
+  .bar button:hover { background:var(--g100); }
+  ul { list-style:none; margin:0; padding:0; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:12px;
+           margin-bottom:10px; overflow:hidden; box-shadow:0 1px 4px rgba(20,50,30,.05); }
+  .grow { display:flex; align-items:center; gap:10px; padding:12px 16px;
+          cursor:pointer; user-select:none; }
+  .grow:hover { background:var(--g100); }
+  .grow .arr { width:14px; color:var(--g600); font-size:12px; transition:transform .15s; }
+  .group.open .grow .arr { transform:rotate(90deg); }
+  .grow .ico { font-size:19px; }
+  .grow b { font-size:15.5px; color:var(--g900); }
+  .grow .n { margin-left:auto; font-size:11.5px; color:#5f7568; background:var(--g100);
+             border-radius:99px; padding:2px 10px; }
+  .items { display:none; padding:2px 16px 12px 40px; }
+  .group.open .items { display:block; }
+  .items li { margin:2px 0; }
+  .items a { display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13.5px;
+             color:#2c5e43; text-decoration:none; border-radius:8px; }
+  .items a::before { content:""; width:5px; height:5px; border-radius:50%;
+                     background:var(--g600); flex:none; }
+  .items a:hover { background:var(--g100); text-decoration:underline; }
+  .items a .href { margin-left:auto; font-size:11px; color:#93a89a;
+                   font-family:ui-monospace,Consolas,monospace; }
+  footer { text-align:center; color:#8ba194; font-size:12px; margin-top:22px; }
+  footer a { color:#4b7a5c; }
+  @media print { .bar { display:none; } .group { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🌿 VirusPlatform 功能全景</h1>
+    <p>植物病毒分析平台 · 全部功能模块一览 — 点击分组展开，点击功能直达对应页面</p>
+  </header>
+  <div class="bar">
+    <span class="count" id="count"></span>
+    <input id="q" type="search" placeholder="搜索功能…（中英文均可）">
+    <button id="expand">展开全部</button>
+    <button id="collapse">全部收起</button>
+  </div>
+  <div id="tree"></div>
+  <footer>
+    与平台内手册页「功能全景」同源（数据源 <code>webapp/static/feature-tree.js</code>）·
+    生成于 2026-10-11 · <a href="https://github.com/zhangwenda0518/plant-virus-analysis-platform">GitHub 仓库</a>
+  </footer>
+</div>
+<script>
+const TREE = {
+  groups: [
+    { icon: '🌐', zh: '数据资源', en: 'Data Resources', items: [
+      { zh: '公共数据检索', en: 'Public Data Search', href: '/meta' },
+      { zh: '病毒样本预筛', en: 'Virus Sample Prescreen', href: '/prescreen' },
+      { zh: 'Open-Virome 公共病毒组', en: 'Open-Virome Public Virome', href: '/virome' },
+      { zh: '公共数据下载', en: 'Bulk Data Download', href: '/download' },
+      { zh: '基因组查询下载', en: 'Genome Query & Download', href: '/refdata' },
+      { zh: '数据库构建', en: 'Database Builder', href: '/build' } ] },
+    { icon: '🧹', zh: '样本处理', en: 'Sample Processing', items: [
+      { zh: '一键前处理', en: 'One-click Prep Chain', href: '/tools?g=sample#t-prepchain' },
+      { zh: '样品创建 / 批量导入', en: 'Sample Registry & Batch Import', href: '/samples' },
+      { zh: '格式转换', en: 'Format Conversion', href: '/tools?g=sample#t-convert' },
+      { zh: '序列质控', en: 'Read QC (fastp)', href: '/tools?g=sample#t-fastp' },
+      { zh: '宿主去除与序列提取', en: 'Host Removal & Extraction', href: '/hostremoval' } ] },
+    { icon: '📈', zh: '病毒定量与共识', en: 'Virus Quantification & Consensus', items: [
+      { zh: '一键分析（全流程）', en: 'One-click Full Pipeline', href: '/tools?g=kvsuite#t-kvchain' },
+      { zh: '已知病毒识别与定量', en: 'Known-virus ID & Quantification', href: '/tools?g=kvsuite#t-kvsuite' },
+      { zh: '共识序列分析', en: 'Consensus Analysis', href: '/tools?g=kvsuite#t-consensus' },
+      { zh: '病毒变异分析', en: 'Variant Analysis', href: '/tools?g=kvsuite#t-variant' } ] },
+    { icon: '🦠', zh: '病毒识别和分类分析', en: 'Virus Identification & Classification', items: [
+      { zh: '一键分析（②→③→④）', en: 'One-click ②→③→④', href: '/tools?g=virus#t-virchain' },
+      { zh: '病毒识别分类与提取', en: 'Virus ID, Classification & Extraction', href: '/tools?g=virus#t-identify' },
+      { zh: '提取序列组装', en: 'Assembly of Extracted Contigs', href: '/tools?g=virus#t-assemble' },
+      { zh: '组装结果再鉴定', en: 'Re-identification of Assemblies', href: '/tools?g=virus#t-contigs' },
+      { zh: '候选序列验证', en: 'Candidate Verification', href: '/tools?g=virus#t-verify' } ] },
+    { icon: '🔬', zh: '病毒注释分析', en: 'Virus Annotation', items: [
+      { zh: '注释三连（ORF→功能→图谱）', en: 'Annotation Trio (ORF→Func→Map)', href: '/tools?g=annotate#t-annochain' },
+      { zh: 'ORF 预测', en: 'ORF Prediction', href: '/orf' },
+      { zh: '功能注释', en: 'Functional Annotation', href: '/annotation' },
+      { zh: '同源比对（BLASTN · BLASTX）', en: 'Homology BLASTN · BLASTX', href: '/tools?g=annotate#t-hom' },
+      { zh: '基因组图谱', en: 'Genome Plot', href: '/genome' } ] },
+    { icon: '💊', zh: '检测与防治', en: 'Detection & Control', items: [
+      { zh: '引物设计', en: 'Primer Design', href: '/primer' },
+      { zh: 'CRISPR 检测试剂设计', en: 'CRISPR Assay Designer', href: '/tools?g=detect#t-crispr' },
+      { zh: 'dsRNA 设计', en: 'dsRNA Designer', href: '/tools?g=detect#t-dsrna' },
+      { zh: 'miRNA 靶标预测', en: 'miRNA Target Prediction', href: '/tools?g=detect#t-mirna' } ] },
+    { icon: '⚖️', zh: '比较基因组分析', en: 'Comparative Genomics', items: [
+      { zh: '参考序列获取', en: 'Reference Acquisition', href: '/tools?g=compare#t-seqprep' },
+      { zh: 'CDS / PEP 提取产物', en: 'CDS · PEP Export', href: '/cds-export' },
+      { zh: '序列比对（MAFFT + trimAl）', en: 'MSA (MAFFT + trimAl)', href: '/tools?g=compare#t-align' },
+      { zh: '进化树构建（科/属级）', en: 'Tree Building', href: '/tools?g=compare#t-treebuild' },
+      { zh: 'SDT 同一性分析（属级）', en: 'SDT Identity', href: '/tools?g=compare#t-sdt' } ] },
+    { icon: '🧬', zh: '进化动力学分析', en: 'Phylodynamics', items: [
+      { zh: '进化动力学数据接入', en: 'Data Intake & Curation', href: '/tools?g=phylodyn#t-pdprep' },
+      { zh: 'RDP5 重组分析', en: 'RDP5 Recombination', href: '/tools?g=phylodyn#t-rdp' },
+      { zh: '时间信号与定年', en: 'Temporal Signal & Dating', href: '/tools?g=phylodyn#t-rtt' },
+      { zh: '系统地理分析', en: 'Phylogeography', href: '/tools?g=phylodyn#t-phylogeo' },
+      { zh: '一键分析（定年→地理→溯源）', en: 'One-click Dating→Dispersal→Report', href: '/tools?g=phylodyn#t-phylodyn' } ] },
+    { icon: '📊', zh: '结果中心', en: 'Results Center', items: [
+      { zh: '样品结果 / 专项结果', en: 'Sample & Special Results', href: '/results' },
+      { zh: '进化树 · SDT · MSA 查看器', en: 'Tree · SDT · MSA Viewers', href: '/results' } ] },
+    { icon: '🔍', zh: '溯源与提交', en: 'Provenance & Submission', items: [
+      { zh: 'LOGAN 溯源 / 批量提交', en: 'LOGAN Provenance & Bulk Submit', href: '/logan' },
+      { zh: '数据提交（NCBI）', en: 'NCBI Submission Prep', href: '/submit' } ] },
+    { icon: '✨', zh: '平台级能力', en: 'Platform Capabilities', items: [
+      { zh: 'AI 助手（解读 · 播报 · 闸门 · 检索执行）', en: 'AI Assistant (interpret · brief · gates · search-act)', href: '/help' },
+      { zh: '任务中心（并发闸门 · 进度自学习）', en: 'Task Center (gates & ETA learning)', href: '/tasks' },
+      { zh: '全量 CLI（main.py 40 子命令）', en: 'Full CLI (40 subcommands)', href: '/help' },
+      { zh: '中英双语界面', en: 'Bilingual UI (zh/en)', href: '/settings' },
+      { zh: '可视化报告', en: 'Visual Reports', href: '/results' } ] }
+  ]
+};
+
+const tree = document.getElementById('tree');
+document.getElementById('count').textContent =
+  TREE.groups.length + ' 大类 · ' +
+  TREE.groups.reduce((a, g) => a + g.items.length, 0) + ' 项功能';
+
+TREE.groups.forEach(g => {
+  const d = document.createElement('div');
+  d.className = 'group';
+  d.innerHTML =
+    '<div class="grow"><span class="arr">▶</span><span class="ico">' + g.icon +
+    '</span><b>' + g.zh + ' <span style="font-weight:400;color:#7d9384;font-size:12px">' +
+    g.en + '</span></b><span class="n">' + g.items.length + '</span></div>' +
+    '<ul class="items">' + g.items.map(it =>
+      '<li><a href="' + it.href + '" onclick="return false" title="独立版仅作展示：' +
+      '该链接需在平台内打开">' + it.zh +
+      ' <span style="color:#93a89a;font-size:12px">' + it.en + '</span>' +
+      '<span class="href">' + it.href + '</span></a></li>').join('') + '</ul>';
+  d.querySelector('.grow').addEventListener('click', () => d.classList.toggle('open'));
+  tree.appendChild(d);
+});
+
+document.getElementById('expand').onclick = () =>
+  document.querySelectorAll('.group').forEach(d => d.classList.add('open'));
+document.getElementById('collapse').onclick = () =>
+  document.querySelectorAll('.group').forEach(d => d.classList.remove('open'));
+document.getElementById('q').addEventListener('input', ev => {
+  const kw = ev.target.value.trim().toLowerCase();
+  document.querySelectorAll('.group').forEach(d => {
+    let hit = 0;
+    d.querySelectorAll('.items li').forEach(li => {
+      const m = !kw || li.textContent.toLowerCase().includes(kw);
+      li.style.display = m ? '' : 'none';
+      if (m) hit++;
+    });
+    const gHit = !kw || d.querySelector('.grow').textContent.toLowerCase().includes(kw);
+    d.style.display = (kw && !hit && !gHit) ? 'none' : '';
+    d.classList.toggle('open', !!kw && hit > 0);
+  });
+});
+// 默认展开第一组，其余收起，首屏不空也不噪
+if (tree.firstElementChild) tree.firstElementChild.classList.add('open');
+</script>
+</body>
+</html>

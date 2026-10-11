@@ -24,6 +24,31 @@
   .doc code { background:#f1f5f2; border:1px solid #e3e8ee; border-radius:4px;
               padding:1px 5px; font-size:12.5px;
               font-family:ui-monospace,Consolas,monospace; }
+  /* 功能全景树（feature-tree.js 渲染） */
+  .vp-ftree { border:1px solid #dbe7e0; border-radius:10px; padding:10px 12px;
+              margin:0 0 18px; background:#fbfdfc; }
+  .vp-ftree-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+                  margin-bottom:6px; }
+  .vp-ftree-count { font-size:12px; color:#5a6f61; }
+  .vp-ftree-q { flex:1 1 180px; min-width:150px; padding:4px 9px; font-size:12.5px;
+                border:1px solid #cfe0d5; border-radius:7px; }
+  .vp-ftree-bar button { font-size:12px; padding:4px 10px; border-radius:7px;
+                         border:1px solid #cfe0d5; background:#fff; cursor:pointer; }
+  .vp-ftree-bar button:hover { background:#eef6f0; }
+  .vp-ftree-list, .vp-ftree-items { list-style:none; margin:0; padding:0; }
+  .vp-ftree-grow { display:flex; align-items:center; gap:7px; padding:6px 8px;
+                   border-radius:8px; cursor:pointer; user-select:none; }
+  .vp-ftree-grow:hover { background:#eef6f0; }
+  .vp-ftree-g.open > .vp-ftree-grow { background:#e7f2ea; }
+  .vp-ftree-arrow { width:12px; color:#4b7a5c; font-size:11px; }
+  .vp-ftree-gicon { font-size:15px; }
+  .vp-ftree-grow b { font-size:13.5px; color:#14532d; }
+  .vp-ftree-gn { margin-left:auto; font-size:11px; color:#7d9384;
+                 background:#eaf2ec; border-radius:99px; padding:1px 8px; }
+  .vp-ftree-items { padding:2px 0 6px 30px; }
+  .vp-ftree-item a { display:block; padding:4px 8px; font-size:13px;
+                     color:#2c5e43; text-decoration:none; border-radius:7px; }
+  .vp-ftree-item a:hover { background:#eef6f0; text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -31,10 +56,12 @@
 <div class="page">
   <div class="doc">
     <h1 style="margin-top:0" data-i18n="hlp.title">📖 使用手册</h1>
+    <div id="vp-ftree-box"></div>
     <div id="md"></div>
   </div>
 </div>
 <script src="/static/i18n.js?v={{ asset_v }}"></script>
+<script src="/static/feature-tree.js?v={{ asset_v }}"></script>
 <script src="/static/app.js?v={{ asset_v }}"></script>
   <script src="/static/app-compare.js?v={{ asset_v }}"></script>
   <script src="/static/app-runhistory.js?v={{ asset_v }}"></script>
@@ -44,6 +71,9 @@
   <script src="/static/app-storage.js?v={{ asset_v }}"></script>
 <script src="/static/examples.js?v={{ asset_v }}"></script>
 <script>
+  // 功能全景树（数据源 feature-tree.js，节点可点跳对应工具卡）
+  if (window.VPFeatureTree) VPFeatureTree.render('vp-ftree-box');
+
   // Markdown 渲染（覆盖 README.md 实际语法：标题/粗斜体/行内码/链接/图片
   // 徽章/有序无序列表/表格/代码块/引用/分隔线/<details> 折叠块/装饰性
   // HTML 包装行与 <br>、<b> 白名单标签）。先整体转义，再按块解析。
