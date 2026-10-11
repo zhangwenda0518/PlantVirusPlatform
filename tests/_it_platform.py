@@ -22,7 +22,7 @@ from Virus_Platform_Core.config import PLATFORM_ROOT  # noqa: E402
 
 EX = os.path.join(PLATFORM_ROOT, 'examples')
 
-PAGES = ['/', '/pipeline', '/samples', '/hostremoval',
+PAGES = ['/', '/samples', '/hostremoval',
          '/orf', '/annotation', '/genome', '/primer', '/build', '/results',
          '/tools', '/settings', '/meta', '/download', '/logan', '/submit',
          '/virome', '/tools?g=virus', '/tools?g=annotate', '/tools?g=compare',
@@ -43,6 +43,11 @@ def main():
     for p in PAGES:
         r = c.get(p)
         check(r.status_code == 200, f'GET {p} -> {r.status_code}')
+
+    # 2026-10-11 归档守护：/pipeline 不再渲染页面，重定向到总览
+    r = c.get('/pipeline')
+    check(r.status_code == 302 and r.headers.get('Location', '').endswith('/'),
+          f'GET /pipeline（已归档）-> {r.status_code} 重定向 /')
 
     # 页面内含示例按钮（本次补充的示例入口都要真实渲染出来）
     html = c.get('/tools?g=compare').get_data(as_text=True)

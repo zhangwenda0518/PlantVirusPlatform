@@ -39,17 +39,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 # 一级导航链接数 = NAV_GROUPS 每个分组一条（.nav-drop 里的 <a>）
-# + 5 条非分组项（/、/pipeline、/tasks、/settings、/help）。
-# 别写死数字：09-17 恢复 compare 组、09-18 新增 detect 组，两次都会让它陈旧，
-# 而"数字对不上"这种红是噪声红，会掩盖真的溢出问题。
+# + 4 条非分组项（/、/tasks、/settings、/help）。
+# 别写死数字：09-17 恢复 compare 组、09-18 新增 detect 组、10-11 归档
+# /pipeline，三次都会让它陈旧；而"数字对不上"这种红是噪声红，会掩盖真的溢出问题。
 from Virus_Platform_Core.web.pages import NAV_GROUPS as _NAV_GROUPS  # noqa: E402
 
-NON_GROUP_LINKS = 5
+NON_GROUP_LINKS = 4
 EXPECT_LINKS = len(_NAV_GROUPS) + NON_GROUP_LINKS
 
 # 覆盖：宽屏单行 → 逐步变窄到必须换行 → 很窄
 WIDTHS = [1920, 1680, 1560, 1440, 1366, 1280, 1180, 1024, 960, 820, 720, 640]
-PAGES = ['/pipeline', '/tools?g=kvsuite', '/results']
+PAGES = ['/samples', '/tools?g=kvsuite', '/results']
 
 FAIL = []
 
@@ -240,8 +240,12 @@ def main():
                 check(f'{page} {tag} {EXPECT_LINKS} 个一级链接全在',
                       m['links'] == EXPECT_LINKS,
                       f"{m['links']}（期望 {EXPECT_LINKS}）")
-                check(f'{page} {tag} 一级链接最多 2 行（不允许碎成 3 行以上）',
-                      m['linkRows'] <= 2, det)            # 宽屏必须回到"品牌与导航同一行、横条 54px"
+                # 行数预算按宽度分档：640px 下两行物理放不下（14 个一级项
+                # 实测约 1285px，两行上限只有 ~1224px，纯几何），允许 3 行，
+                # 但"被横条完整包住"由上面的 outside 断言另行守住。
+                row_limit = 3 if w <= 640 else 2
+                check(f'{page} {tag} 一级链接最多 {row_limit} 行（不允许再碎）',
+                      m['linkRows'] <= row_limit, det)            # 宽屏必须回到"品牌与导航同一行、横条 54px"
             viewport(1920)
             m = W(MEASURE)
             if m and not m.get('error'):

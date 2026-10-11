@@ -20,13 +20,15 @@
    2026-09-18：新增「检测与防治」一级导航项。引物设计 / dsRNA 设计原先挂在
    「病毒注释分析」组下，但它们不是注释（注释 = 描述序列是什么），而是
    面向下游实验的两条独立业务线：引物设计 → 检测（PCR/qPCR），
-   dsRNA 设计 → 防治（RNAi）。故并列成组，位置紧随注释之后。 #}
+   dsRNA 设计 → 防治（RNAi）。故并列成组，位置紧随注释之后。
+
+   2026-10-11：「自动化分析流程」（/pipeline）归档摘除导航项（用户定案：
+   15 阶段全流程不适合本地电脑运行）。详见 docs/归档记录_自动化分析流程_20261011.md。 #}
 <nav class="topnav">
   <span class="brand"><span class="leaf">🌿</span> 植物病毒分析平台</span>
   <span class="navlinks">
     {%- set _nav_items = [
       ('/', 'nav.home', '总览', ''),
-      ('/pipeline', 'nav.pipeline', '自动化分析流程', ''),
       ('/tools?g=resource', 'nav.g.resource', '数据资源', 'resource'),
       ('/tools?g=sample', 'nav.g.sample', '样本处理', 'sample'),
       ('/tools?g=kvsuite', 'nav.g.kvsuite', '病毒定量与共识', 'kvsuite'),

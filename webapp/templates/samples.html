@@ -20,7 +20,8 @@
       <div class="card">
         <h1 data-i18n="sc.title">🧾 样品创建 / 批量导入</h1>
         <p class="hint">独立模块：登记样品（单个或从文件夹批量扫描），不启动分析。
-        创建后可在本页表格中查看、改名、删除；运行全流程分析请到「自动化分析流程」页选样品。</p>
+        创建后可在本页表格中查看、改名、删除；分析请到顶部各功能模块选样品运行
+        （全流程「自动化分析流程」页已于 2026-10 归档，不适合本地电脑运行）。</p>
 
         <h2 data-i18n="sc.scanTitle">📂 从文件夹批量导入（推荐）</h2>
         <p class="hint" style="margin-top:4px" data-i18n="sc.scanHint">
@@ -44,8 +45,7 @@
           </div>
           <p class="hint" style="margin:0 0 4px" data-i18n="sc.scanNameTip">样品名可直接修改（创建前纠正自动提取的名字）：</p>
           <div class="scroll-md" id="scanTable"></div>
-          <label class="chk" style="margin-top:8px"><input type="checkbox" id="scanEnq">
-            <span> 创建后加入队列（不自动运行，需在分析流程页手动启动）</span></label>
+          <!-- 2026-10-11：「创建后加入队列」选项随批处理队列 UI（原 /pipeline 页）归档移除 -->
           <div style="margin-top:10px">
             <button class="btn primary" onclick="scScanCreate(this)" data-i18n="sc.scanCreate">创建勾选样品 →</button>
           </div>
@@ -109,7 +109,7 @@
   <script src="/static/app-storage.js?v={{ asset_v }}"></script>
 <script src="/static/examples.js?v={{ asset_v }}"></script>
 <script>
-/* $ / esc / browse / toast / startPolling / loadQueue / queueClear 均来自 app.js */
+/* $ / esc / browse / toast / startPolling 均来自 app.js */
 
 function val(id) { return ($(id)?.value || '').trim(); }
 
@@ -206,13 +206,6 @@ async function scScanCreate(btn) {
       t('sc.batchCreated', '已创建 {n} 个样品').replace('{n}', created.length),
       { ttl: 4000 });
     if (adjusted.length) errBox.textContent = adjusted.join('，');
-    // 可选：创建后直接加入批处理队列顺序执行（与 TSV 导入同一能力）
-    if ($('scanEnq')?.checked && created.length) {
-      await fetch('/api/queue/add', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ samples: created, project })});
-      loadQueue();
-    }
     scLoadSamples();
   }, t('sc.creating', '⏳ 创建中…'));
 }

@@ -1664,8 +1664,9 @@ async function loadHome() {
     const list = (await r.json()).slice(0, 6);
     $('homeSamples').innerHTML = list.length ? list.map(s => {
       const pct = Math.round(s.done / (s.total || 7) * 100);
+      /* 2026-10-11：/pipeline 归档后样品卡改跳结果中心（按样品看产物） */
       return `<div class="module-card home-sample"
-        onclick="location.href='/pipeline?sample=${encodeURIComponent(s.name)}'">
+        onclick="location.href='/results'">
         <div class="mc-name">🧪 ${esc(s.name)}</div>
         <div class="pr-bar" style="height:6px;background:var(--line-100);border-radius:4px;overflow:hidden;margin:8px 0 4px">
           <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--green-600),#43b47c)"></div></div>

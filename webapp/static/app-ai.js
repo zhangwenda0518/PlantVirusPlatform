@@ -59,6 +59,14 @@ AI.startEvents = function () {
     AI.renderEvent(ev);
   };
 };
+/* 离开页面时显式关掉 SSE：服务端 SSE 生成器没有客户端断连检测（写心跳到
+ * 半关连接永远不会失败），导航后若不主动 close，旧连接的套接字两头都不释放
+ * ——每次导航泄漏 ~2 条 ESTABLISHED，攒到 ~6 条（HTTP/1.1 同主机上限）后
+ * 新 fetch 全部排队冻死（实测 2026-10-11：连续 6 页后 /api/samples 5s 超时、
+ * kvsuite 选样弹窗打不开）。pagehide 在导航/刷新时都会触发，比 unload 可靠。 */
+window.addEventListener('pagehide', function () {
+  if (AI._es) { AI._es.close(); AI._es = null; }
+});
 
 AI.clearUnread = function () {
   AI.unread = 0;

@@ -177,6 +177,13 @@ a { color: var(--green-700); }
 
 /* 导航宽度阶梯：先收紧自身、再收上下文条，避免任何宽度下溢出。
    断点按实测的"刚好放不下"位置取整（13 个一级链接约占 1130px）。 */
+/* 1920 档：14 个一级链接 + 上下文簇在 1920 宽下距换行只差个位数像素
+   （2026-10-11 实测内容 1674px vs 盒宽 1675px），字体度量随浏览器版本
+   略有抖动就会把 navtail 挤下第二行。在最宽档先收 1px 内边距/间距，
+   留出 ~50px 余量，不再骑在临界点上。 */
+@media (max-width: 1980px) {
+  .navlinks a { padding: 6px 10px; margin-left: 3px; }
+}
 @media (max-width: 1560px) {
   .navctx-chip { max-width: 104px; }
   .navctx-chip .k { display: none; }

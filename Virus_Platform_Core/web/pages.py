@@ -9,8 +9,8 @@ import time
 
 from werkzeug.exceptions import HTTPException
 
-from flask import (Blueprint, abort, current_app, jsonify, render_template,
-                   request, send_file)
+from flask import (Blueprint, abort, current_app, jsonify, redirect,
+                   render_template, request, send_file)
 
 from Virus_Platform_Core.config import DIRS, PLATFORM_ROOT
 from Virus_Platform_Core.utils import (check_path, safe_open)
@@ -300,7 +300,13 @@ def page_index():
 
 @bp.route('/pipeline')
 def page_pipeline():
-    return render_template('pipeline.html')
+    # 2026-10-11：「自动化分析流程」整页归档（用户定案：15 阶段全流程
+    # 不适合本地电脑运行）。页面模板移入 archive/_retire_20261011/pipeline/，
+    # 本路由重定向到总览页兜住旧书签/旧任务卡链接。分析改为经顶部各
+    # 功能模块（/tools）分步进行；样品登记 /api/pipeline/create、
+    # 样品状态 /api/pipeline/<name>（全局样品上下文在用）与队列 API
+    # （纯手动启动，无 UI 入口后自然休眠）原样保留，随时可恢复。
+    return redirect('/')
 
 
 @bp.route('/hostremoval')

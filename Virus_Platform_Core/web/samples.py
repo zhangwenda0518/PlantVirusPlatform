@@ -399,10 +399,13 @@ def bind_queue_entry(it):
             ahead = sum(1 for x in sample_queue.items
                         if x['status'] == 'running')
             if cur.get('status') == 'queued':
+                # 2026-10-11 队列 UI 随 /pipeline 页归档：API 保留但无启动入口，
+                # 文案不再指向「分析流程页」。
                 msg = cfg.tr(
                     f'样品 {sample} 已入队，待手动启动'
-                    '（分析流程页队列点「▶ 启动」或「▶ 全部启动」）',
-                    f'Sample {sample} queued (manual start required)')
+                    '（批处理队列 UI 已随「自动化分析流程」页归档）',
+                    f'Sample {sample} queued (manual start required; '
+                    f'queue UI archived)')
             else:
                 msg = cfg.tr(f'样品 {sample} 等待批处理名额'
                              + (f'（前面有 {ahead} 个在跑）' if ahead else ''),
@@ -412,7 +415,7 @@ def bind_queue_entry(it):
 
     tm.attach(f'排队·{sample}', prov,
               on_cancel=lambda eid=eid: sample_queue.remove(eid),
-              link=f'/pipeline?sample={sample}', key=f'queue:{eid}',
+              link='/results', key=f'queue:{eid}',
               weight='light')
 
 

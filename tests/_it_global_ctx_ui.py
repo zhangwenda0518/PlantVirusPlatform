@@ -8,7 +8,8 @@
   1. 顶部导航注入全局上下文条（当前样品 / 当前项目 / 全局清理）
   2. 样品选择弹窗能列出样品、选中后写入 localStorage 并刷新胶囊
   3. 项目胶囊切换后 localStorage 同步
-  4. 管道页无 ?sample= 时用全局当前样品自动接上（旧实现只认 ?sample=）
+  4. 全局样品选中后页面 JS curSample 同步、刷新后持久化恢复
+     （原「管道页自动接上」断言随 /pipeline 归档移除）
   5. 结果中心按全局项目筛选样品行
   6. 任务中心"只看当前样品"随全局样品出现/消失
   7. 全局清理按钮：弹窗内容正确、确认时发出 POST /api/global/reset
@@ -141,7 +142,7 @@ def main():
 
         # ---- 1. 导航上下文条注入 ----
         print('[1] 顶部导航注入全局上下文条')
-        goto('/pipeline')
+        goto('/samples')
         check('#navCtx 已注入', W("return !!document.getElementById('navCtx')"))
         check('样品胶囊存在', W("return !!document.getElementById('navCtxSample')"))
         check('项目胶囊存在', W("return !!document.getElementById('navCtxProject')"))
@@ -189,24 +190,22 @@ def main():
                   not W("return document.getElementById('navCtxSample')"
                         ".classList.contains('is-empty')"))
 
-            # ---- 4. 管道页自动接上全局样品 ----
-            print('[3] 管道页无 ?sample= 时自动接上全局样品')
-            del_ok = W("return typeof curSample !== 'undefined' && curSample === "
+            # ---- 4. 全局样品上下文同步与持久化 ----
+            # （2026-10-11：原「管道页 curSample 自动接上」断言随 /pipeline 归档
+            #   移除——gxApplyPage 的自动接上挂载点 #samples 只在管道页存在；
+            #   这里改验仍存在的行为：VP_CTX 全局对象同步 + 刷新后持久化恢复。）
+            print('[3] 样品选择后 VP_CTX 全局对象已同步')
+            del_ok = W("return window.VP_CTX && VP_CTX.sample === "
                        + json.dumps(target))
-            check('页面 JS 的 curSample 已同步', del_ok,
-                  str(W("return typeof curSample === 'undefined' ? 'undef' : curSample")))
-            pipe_txt = W("const p=document.getElementById('pipe');"
-                         "return p ? p.textContent.slice(0,200) : ''")
-            check('管道视图已渲染该样品（非空占位）',
-                  target in pipe_txt and 'pp.empty' not in pipe_txt,
-                  pipe_txt[:80].replace('\n', ' '))
+            check('页面 JS 的 VP_CTX.sample 已同步', bool(del_ok),
+                  str(W("return window.VP_CTX ? VP_CTX.sample : 'no-VP_CTX'")))
 
             # 刷新一次（模拟"切模块再回来"），验证持久化恢复
-            goto('/pipeline')
-            check('刷新后仍自动选回该样品',
-                  W("return typeof curSample !== 'undefined' && curSample === "
+            goto('/samples')
+            check('刷新后 VP_CTX 仍从 localStorage 恢复该样品',
+                  W("return window.VP_CTX && VP_CTX.sample === "
                     + json.dumps(target)),
-                  str(W("return typeof curSample === 'undefined' ? 'undef' : curSample")))
+                  str(W("return window.VP_CTX ? VP_CTX.sample : 'no-VP_CTX'")))
 
             # ---- 6. 任务中心"只看当前样品" ----
             print('[4] 任务中心"只看当前样品"')
@@ -245,7 +244,7 @@ def main():
         if projs:
             # ---- 3. 项目胶囊 ----
             print('[5] 项目胶囊与全局项目同步')
-            goto('/pipeline')
+            goto('/samples')
             W("document.getElementById('navCtxProject').click()")
             time.sleep(0.5)
             check('项目弹窗打开', W("return !!document.getElementById('gxList')"))
@@ -256,7 +255,7 @@ def main():
             time.sleep(0.6)
             check('localStorage 已写入 vp_ctx_project',
                   W("return localStorage.getItem('vp_ctx_project')") == projs[0])
-            check('管道页项目下拉已同步到全局项目',
+            check('样品页项目下拉已同步到全局项目',
                   W("const s=document.getElementById('projFilter');"
                     "return s ? s.value : 'no-select'") == projs[0],
                   str(W("const s=document.getElementById('projFilter');"
@@ -307,7 +306,7 @@ def main():
 
             # ---- 7. 全局清理按钮（打桩，不动真实数据） ----
             print('[7] 全局清理按钮（fetch 打桩，不触碰真实数据）')
-            goto('/pipeline')
+            goto('/samples')
             W("""
               window.__cap = null;
               try { sessionStorage.removeItem('vp_reset_capture'); } catch (e) {}
@@ -422,52 +421,10 @@ def main():
                 W("document.getElementById('kvPickCancel').click()")
                 time.sleep(0.3)
 
-        # ---- 9. 管道页阶段卡顺序（③c 可见、②b 不再错位到末尾） ----
-        print('[9] 管道页阶段卡顺序与 ②b 参数框')
-        if names:
-            W(f"window.VP_CTX.setSample({json.dumps(names[0])})")
-            goto('/pipeline')
-            # 等 renderPipe 完成（selectSample 是异步的）
-            for _ in range(20):
-                if W("return document.querySelectorAll('#pipe .stage-card').length") > 0:
-                    break
-                time.sleep(0.5)
-            seq = W("""
-              const pipe = document.getElementById('pipe');
-              const cards = [...pipe.querySelectorAll('.stage-card[data-stage]')];
-              const top = cards.filter(c => !c.closest('.pipe-branch-details'))
-                               .map(c => c.dataset.stage);
-              const nodes = [...pipe.querySelectorAll('.pipe-node[data-stage]')]
-                               .map(c => c.dataset.stage);
-              return {top: top, nodes: nodes};
-            """)
-            top = (seq or {}).get('top') or []
-            print(f'      顶层卡顺序: {top}')
-            print(f'      并行分支节点: {(seq or {}).get("nodes")}')
-            check('顶层卡顺序为 预处理 → ②b → ③组装 → ⑩报告',
-                  top == ['subsample', 'fastp', 'fq2fa', 'host', 'kvsuite',
-                          'assembly', 'report'], str(top))
-            check('②b kvsuite 不在最后（曾因退役键 virus 被塞到报告之后）',
-                  top and top[-1] == 'report', str(top))
-            check('③c consensus 出现在并行分支节点里',
-                  'consensus' in ((seq or {}).get('nodes') or []),
-                  str((seq or {}).get('nodes')))
-            check('并行分支节点顺序与 PIPE_FANOUT 一致',
-                  (seq or {}).get('nodes') == ['verify', 'consensus', 'hostana',
-                                               'orf', 'orfa', 'phylo',
-                                               'primer', 'gbdraw'],
-                  str((seq or {}).get('nodes')))
-            check('13 张阶段卡全部渲染（含 ③c）',
-                  W("return document.querySelectorAll('#pipe .stage-card').length")
-                  == 15,
-                  str(W("return document.querySelectorAll('#pipe .stage-card').length")))
-            check('②b 卡里有病毒库目录输入框（曾挂在退役的 virus 键下，从不渲染）',
-                  W("return !!document.querySelector('.stage-card[data-stage=\"kvsuite\"] #db_virus')"))
-            check('宿主库目录输入框仍在 ① 卡里',
-                  W("return !!document.querySelector('.stage-card[data-stage=\"host\"] #db_host')"))
-            check('③c 卡有「查看」按钮或运行按钮',
-                  W("const c=document.querySelector('.stage-card[data-stage=\"consensus\"]');"
-                    "return !!c && c.querySelectorAll('.stage-btns button').length > 0"))
+        # ---- 9. 管道页阶段卡顺序 ----
+        # （2026-10-11：整段随 /pipeline「自动化分析流程」页归档移除——
+        #   阶段卡/管道 DAG 视图已无活动页面；逻辑本体保留在 app-batch.js，
+        #   恢复页面时从 archive/_retire_20261011/pipeline/ 拷回模板即可。）
 
         # ---- 10. 样品名被规范化时前端显式提示（fetch 打桩，不落盘） ----
         print('[10] 样品名被规范化时前端提示实际登记名')

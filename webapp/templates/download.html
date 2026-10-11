@@ -338,21 +338,21 @@ function renderDlFiles(bid, box) {
 }
 
 async function intoPipeline(bid) {
+  /* 2026-10-11：/pipeline 归档后本流程只做「下载 → 登记样品」，
+     不再提供入队（批处理队列随全流程页归档，无启动入口）；建好跳样品页。 */
   const project = prompt(t('dl.projPrompt', '项目分组名（留空不分组）'), '') || '';
-  const enqueue = confirm(t('dl.enqConfirm', '创建样品后直接加入批处理队列开始分析？\n（确定=入队分析；取消=只建样品稍后手动跑）'));
   try {
     const r = await fetch('/api/dl/to_pipeline', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ batch: bid, project: project || null, enqueue })});
+      body: JSON.stringify({ batch: bid, project: project || null })});
     const d = await r.json();
     if (!r.ok) { alert((d.error) || t('ui.dl.intoFail')); return; }
     toast(t('dl.intoOk', '已转入分析流程'),
           `${(d.created||[]).length} ${t('dl.samples', '个样品')}` +
-          (d.queued ? ` · ${t('dl.enqueued', '已入队')}` : '') +
           (d.skipped && d.skipped.length ? ` · ${t('dl.skipped', '跳过已存在')}: ${d.skipped.join(', ')}` : ''),
           {ttl: 8000});
     if (!POP && d.created && d.created.length) {
-      setTimeout(() => location.href = '/pipeline?sample=' + encodeURIComponent(d.created[0]), 900);
+      setTimeout(() => location.href = '/samples', 900);
     }
   } catch (e) { if (netFail(e)) setConnBanner(true); else console.error(e); }
 }

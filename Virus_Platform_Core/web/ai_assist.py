@@ -216,6 +216,10 @@ def api_ai_events():
       无限流会把它挂死，这条边界必须守住。?since=<id> 增量取。
     """
     since = request.args.get('since')
+    if not since:
+        # EventSource 自动重连带的是 Last-Event-ID 请求头（不是查询参数）；
+        # 不认它的话每次重连都会从头回放整个环形缓冲（前端虽去重，但浪费）。
+        since = request.headers.get('Last-Event-ID')
     try:
         since_id = int(since) if since else 0
     except ValueError:
@@ -229,11 +233,19 @@ def api_ai_events():
     def gen():
         last = since_id
         idle = 0
+        started = time.time()
         # 立即冲一行 SSE 注释：werkzeug 在首个非空块产生前不发响应头，
         # 不冲的话浏览器 EventSource 会一直停在 CONNECTING（实测踩过）
         cutoff = broadcast.current_max_id()
         yield ': hello\n\n'
         while True:
+            # 客户端断连在这里**检测不到**：浏览器半关后（CLOSE_WAIT）写心跳
+            # 依旧"成功"，生成器会永生，每页浏览泄漏一个线程 + 一条套接字。
+            # 所以给连接设寿命上限，到期主动收尾——EventSource 会自动带
+            # Last-Event-ID 重连续传，前端无感（2026-10-11 连接泄漏修复）。
+            if time.time() - started > 300:
+                yield ': rotate\n\n'
+                return
             evs = broadcast.events_since(last)
             for ev in evs:
                 last = ev['id']

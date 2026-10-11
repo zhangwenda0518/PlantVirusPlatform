@@ -300,7 +300,6 @@
 
   function boot() {
     injectButtons();
-    injectIndexButton();
     setTimeout(autoFill, 400);
     /* 独立页主体可能由页内 JS 异步渲染（/logan /primer 实测）：
        标题晚出现 → 首轮 injectButtons 找不到挂点。定时补注入，
@@ -697,56 +696,4 @@
     });
   }
 
-  /* ---------- 全局「示例结果总览」：一次看全部模块（含无卡片的 API 工具） ---------- */
-  function showExamplesIndex() {
-    var mask = document.createElement('div');
-    mask.className = 'dlgmask';
-    mask.style.zIndex = 330;
-    mask.innerHTML = '<div class="dlg" style="width:min(900px,95vw);max-height:85vh;' +
-      'display:flex;flex-direction:column">' +
-      '<div class="dlghead"><b>👁 内置示例结果总览</b>' +
-      '<button class="btn small" id="vpIdxClose">✕</button></div>' +
-      '<div id="vpIdxBody" style="overflow:auto;padding:12px 16px;flex:1 1 auto">' +
-      '<p class="hint">⏳ 加载中…</p></div></div>';
-    document.body.appendChild(mask);
-    mask.querySelector('#vpIdxClose').addEventListener('click', function () {
-      mask.remove();
-    });
-    mask.addEventListener('click', function (e) {
-      if (e.target === mask) mask.remove();
-    });
-    var box = mask.querySelector('#vpIdxBody');
-    fetch('/api/examples').then(function (r) { return r.json(); }).then(function (list) {
-      var h = '<p class="hint">全部产物固化在 <code>examples/results/</code>' +
-        '（只读，与真实运行结果隔离），共 ' + list.length + ' 个模块。</p>' +
-        '<table class="tbl" style="font-size:12px"><tr><th>模块</th><th>说明</th>' +
-        '<th>产物</th><th>生成时间</th><th></th></tr>';
-      list.forEach(function (m) {
-        h += '<tr><td><code>' + esc(m.module) + '</code></td><td>' + esc(m.title) +
-          '</td><td>' + m.n_files + '</td><td>' + esc(m.generated_at) + '</td>' +
-          '<td><button class="btn small" data-mod="' + esc(m.module) +
-          '">👁 查看</button></td></tr>';
-      });
-      box.innerHTML = h + '</table>';
-      box.querySelectorAll('button[data-mod]').forEach(function (b) {
-        b.addEventListener('click', function () { showExampleResult(b.dataset.mod); });
-      });
-    }).catch(function (e) {
-      box.innerHTML = '<p class="hint">加载失败: ' + esc(e.message || e) + '</p>';
-    });
-  }
-
-  function injectIndexButton() {
-    if (document.getElementById('vpExIdxBtn')) return;
-    var b = document.createElement('button');
-    b.id = 'vpExIdxBtn';
-    b.type = 'button';
-    b.className = 'btn small';
-    b.textContent = '👁 示例结果';
-    b.title = '查看全部内置示例结果（只读，与真实结果隔离）';
-    b.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:300;opacity:.92;' +
-      'box-shadow:0 4px 14px rgba(0,0,0,.18)';
-    b.addEventListener('click', showExamplesIndex);
-    document.body.appendChild(b);
-  }
 })();

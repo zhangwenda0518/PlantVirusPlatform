@@ -110,8 +110,9 @@ def main():
             ('/tools', 'defaultCollName', 'function'),
             ('/results', 'pagerHtml', 'function'),
             ('/results', 'rhRefresh', 'function'),
-            ('/pipeline', 'selectSample', 'function'),
-            ('/pipeline', 'pasteSeq', 'function'),
+            # 2026-10-11：/pipeline 归档，全局函数抽查换到 /samples（同一批 app.js 函数）
+            ('/samples', 'selectSample', 'function'),
+            ('/samples', 'pasteSeq', 'function'),
         ]
         if ONLY_PAGE:                      # 单页模式：全局函数抽查只在 /tools /results 上做
             checks = [c for c in checks if c[0] == ONLY_PAGE]

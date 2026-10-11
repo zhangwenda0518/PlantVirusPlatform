@@ -127,8 +127,8 @@ try:
     # 「等待批处理名额」只出现在手动启动后的排队期（samples.py:388）。
     check('（1）文案说明已入队待手动启动', bool(s) and '已入队' in s.get('msg', ''),
           (s or {}).get('msg', '')[:80])
-    check('（1）「前往页面」指向管线页并带样品名',
-          bool(s) and s.get('link') == '/pipeline?sample=ITEXT1',
+    check('（1）「前往页面」指向结果中心（2026-10-11 /pipeline 归档后改指）',
+          bool(s) and s.get('link') == '/results',
           str((s or {}).get('link')))
     check('（1）外部任务不落盘（无 tasks/<tid>.json）',
           not os.path.exists(os.path.join(DIRS['tasks'], f'{tid_q}.json')),
