@@ -639,11 +639,28 @@ def create_authorset_sbt(config_dict, out_dir, metadata_df, log):
         f.write(f"        country \"{addr.get('Country', 'Country')}\",\n")
         f.write(f"        street \"{addr.get('Street', '')}\"\n")
         f.write("      }\n")
-        f.write("    },\n")
-        f.write(f"    title \"{config_dict.get('Publication_Title', 'Viral genome sequencing and assembly')}\",\n")
-        f.write(f"    status \"{config_dict.get('Publication_Status', 'Unpublished')}\"\n")
-        f.write("  }\n")
+        f.write("    }\n")
+        f.write("  },\n")
+        # cit 块内不接受 title/status (ASN.1 加载失败, table2asn 实测 rc=1);
+        # 标题走 Seqdesc ::= pub, 与 store.generate_sbt/NCBI 官方 .sbt 模板同构
+        f.write("  subtype new\n")
         f.write("}\n")
+        title_text = str(config_dict.get('Publication_Title',
+                                         'Viral genome sequencing and assembly'))
+        first_last, first_first = (author_list[0] if author_list else ('Author', 'First'))
+        email = str((config_dict.get('Submitter') or {}).get('Email', '') or '')
+        f.write('Seqdesc ::= pub {\n  pub {\n    gen {\n      cit "unpublished",\n')
+        f.write('      authors {\n        names std {\n')
+        f.write('          { name name { last "%s", first "%s", middle "", '
+                'initials "", suffix "", title "" } } }\n' % (first_last, first_first))
+        f.write('      },\n      title "%s" } } }\n' % title_text)
+        if email:
+            f.write('Seqdesc ::= user { type str "Submission",\n'
+                    '  data { { label str "AdditionalComment", data str "ALT EMAIL:%s" } } }\n'
+                    % email)
+        f.write('Seqdesc ::= user { type str "Submission",\n'
+                '  data { { label str "AdditionalComment", data str "Submission Title:%s" } } }\n'
+                % title_text)
     log.info("  → %s", sbt_path)
 
 
@@ -914,8 +931,12 @@ def main():
 
     # 加载数据
     seqs = load_taxonomy(args.taxonomy)
-    meta_lookup = load_metadata(args.metadata) if args.metadata else {}
-    log.info("  序列: %d, 元数据映射: %d", len(seqs), len(meta_lookup))
+    # --reference-metadata: 上游传 Core14.tsv 时作为元数据源 (旧版只读 args.metadata,
+    # 该参数是死参, 自动回填静默失效)
+    meta_src = args.metadata or getattr(args, 'ref_meta', None)
+    meta_lookup = load_metadata(meta_src) if meta_src else {}
+    log.info("  序列: %d, 元数据映射: %d (源: %s)",
+             len(seqs), len(meta_lookup), meta_src or '(无)')
 
     # 生成统一 CSV
     species_map = {}

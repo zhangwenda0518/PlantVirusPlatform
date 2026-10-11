@@ -121,3 +121,9 @@ tests/._run_all.lock
 
 # RDP5.93 备用安装（2026-09-28 实测其 RDP5CL 5.84 有产出缺陷，不采用；目录仅留档）
 3rd/tools/rdp5.93/
+
+# ---------- 11. table2asn 冗余下载副本（2026-10-11） ----------
+# new/ 为已跟踪 table2asn.exe 的解压重复（字节相同），zip 为 NCBI 下载原件；
+# 工具本体已在 3rd/tools/table2asn/ 跟踪分发，副本勿再入库
+3rd/tools/table2asn/new/
+3rd/tools/table2asn/win64.table2asn.zip
