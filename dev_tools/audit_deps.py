@@ -62,6 +62,12 @@ def _local_submodules():
                  and os.path.isfile(os.path.join(core, d, '__init__.py'))]
     except OSError:
         pass
+    # dev_tools/ 与 tests/ 下的本地脚本模块（test_mcp_e2e 等）也按本地模块
+    # 处理：它们是仓库内的文件，不是 pip 包，判成"必需依赖未装"是假阳性。
+    for extra in ('dev_tools', 'tests'):
+        p = os.path.join(ROOT, extra)
+        if os.path.isdir(p):
+            pkgs.append(p)
     for pkg in pkgs:
         if not os.path.isdir(pkg):
             continue
@@ -134,6 +140,10 @@ def iter_py_files():
             # _bench_kvs/ 里的本地模块 bench_engines 曾被误报为必需依赖）
             '_bench_kvs', '_bench_kvs2', '_bench_cons',
             '_audit_20260916', '_backup_before_raxmlng_20260916',
+            # analysis/ 是运维脚本与一次性实验工作目录（_gcva_phylogeo.py
+            # 用 paramiko 连远端跑任务，平台代码不引用它）；2026-10-20 加入，
+            # 此前它让 paramiko 被误报成"必需依赖未装"。
+            'analysis',
             'archive'}
     for cur, dirs, files in os.walk(ROOT):
         dirs[:] = [d for d in dirs if d not in skip and not d.startswith('.')]
@@ -220,7 +230,14 @@ def analyze():
         if key not in req:
             uncovered.append((m, pip))
 
-    hard_missing = [m for m in missing if m not in OPTIONAL]
+    # hard_missing = 缺失且**运行时**需要。开发链依赖（requirements-dev.txt
+    # 里声明的 pyinstaller/playwright/psutil/pytest 等）缺失不该算"必需
+    # 未装"——源码分发模式下用户不需要它们，报红只会误导。
+    # 2026-10-20 修：此前只在 uncovered 里排除 dev 依赖，hard_missing
+    # 没排除，精简掉 PyInstaller 后自检就误报"必需依赖未装"。
+    hard_missing = [m for m in missing
+                    if m not in OPTIONAL
+                    and PIP_NAME.get(m, m).lower().replace('-', '_') not in dev_req]
     return {'third': third, 'missing': missing, 'uncovered': uncovered,
             'installed': installed, 'hard_missing': hard_missing,
             'req': req,

@@ -133,6 +133,15 @@ tests/._run_all.lock
 # 的机器也能跑"；依赖包不再入库（713MB/1.44 万文件），克隆后由 环境自检.bat
 # 检测缺包自动 pip install -r requirements.lock（清华镜像），或手动执行同命令。
 # 本机 site-packages 保留在磁盘上（gitignore，不影响运行）。
+#
+# 2026-10-20 精简（890MB → 670MB，-220MB）：
+#   ① 删 playwright（106MB）—— 纯开发链浏览器自动化，平台运行不 import；
+#      tests/ 的浏览器探针需要时 pip install playwright 即可
+#   ② 删 pythonwin（5.1MB）—— PythonWin IDE，运行不需要
+#   ③ 清 *.pyc（曾 110MB/7000+ 文件）—— 首次 import 自动重建
+#   ⚠ 不可删：_polars_runtime_32（168MB）—— polars/_plr.py 按
+#      compat→64→32 顺序找运行时，本机只有 32 变体，删了 polars 直接失效，
+#      「已知病毒识别与定量」整段跑不起来。
 3rd/python/Lib/site-packages/
 3rd/python/Scripts/
 # 插件 zip 产物（走 GitHub Release plugin-packs 分发，不进仓库）
