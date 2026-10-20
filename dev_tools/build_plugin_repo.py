@@ -30,6 +30,10 @@ RELEASE_BASE = ('https://github.com/zhangwenda0518/plant-virus-analysis-platform
 # 环境变量 PVAP_PLUGIN_BASE 可覆盖（自建镜像/换域名时用）。
 MIRROR_BASE = os.environ.get('PVAP_PLUGIN_BASE',
                              'http://39.106.101.94/plugins')
+# Gitee Release（国内代码托管，附件单文件上限 100MB）
+GITEE_BASE = ('https://gitee.com/zhang-wenda/plant-virus-analysis-platform'
+              '/releases/download/plugin-packs')
+GITEE_MAX_MB = 100        # 超过此大小的包不挂 Gitee（会 400 拒绝）
 
 # 工具打包表：插件名 → (源路径(相对平台根), 版本, 描述,
 #                     provides{Cfg.tools键: 包内相对路径})
@@ -104,6 +108,24 @@ def sha256_file(path, chunk=1 << 20):
     return h.hexdigest()
 
 
+def _zip_add(z, arcname, src_path=None, data=None):
+    """确定性写 zip：固定时间戳与权限位，保证同一份输入产出逐字节相同的包。
+
+    为什么必须确定性：索引里记录每个包的 sha256，平台下载后校验。zip 默认
+    把「当前时间」写进每个成员头，重打一次哈希就变，线上包与索引立刻失配，
+    用户会看到"校验失败"（实测踩过）。固定成 1980-01-01（zip 纪元起点）
+    后，内容不变则 sha256 不变，索引可以长期有效。
+    """
+    zi = zipfile.ZipInfo(arcname, date_time=(1980, 1, 1, 0, 0, 0))
+    zi.compress_type = zipfile.ZIP_DEFLATED
+    zi.external_attr = 0o644 << 16          # 普通文件，不带执行位
+    if data is not None:
+        z.writestr(zi, data)
+    else:
+        with open(src_path, 'rb') as f:
+            z.writestr(zi, f.read())
+
+
 def build(name, src_rel, version, desc, provides):
     src = os.path.join(ROOT, src_rel)
     if not os.path.isdir(src):
@@ -116,27 +138,34 @@ def build(name, src_rel, version, desc, provides):
     # 只装目标文件，不把整个 bin 目录（其他插件的目标）顺带进去。
     only_bin = os.path.normpath(src_rel) == os.path.normpath('3rd/bin')
     wanted = set(provides.values())
-    with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        z.writestr(f'{name}/plugin.json',
-                   json.dumps(manifest, ensure_ascii=False, indent=1))
-        for cur, _dirs, files in os.walk(src):
-            for fn in files:
-                p = os.path.join(cur, fn)
-                rel = os.path.relpath(p, src).replace(os.sep, '/')
-                if only_bin and rel not in wanted:
-                    continue
-                if '__pycache__' in rel or fn.endswith(('.pyc', '.log')):
-                    continue
-                z.write(p, f'{name}/{rel}')
+    members = []
+    for cur, _dirs, files in os.walk(src):
+        for fn in files:
+            p = os.path.join(cur, fn)
+            rel = os.path.relpath(p, src).replace(os.sep, '/')
+            if only_bin and rel not in wanted:
+                continue
+            if '__pycache__' in rel or fn.endswith(('.pyc', '.log')):
+                continue
+            members.append((f'{name}/{rel}', p))
+    members.sort()                       # 固定顺序（os.walk 顺序依赖文件系统）
+    with zipfile.ZipFile(out_zip, 'w') as z:
+        _zip_add(z, f'{name}/plugin.json',
+                 data=json.dumps(manifest, ensure_ascii=False, indent=1))
+        for arc, p in members:
+            _zip_add(z, arc, src_path=p)
     size = os.path.getsize(out_zip)
     print(f'  ✔ {name}-plugin.zip  {size/1048576:.1f}MB')
+    # 下载源按可用性排序：自建镜像 → Gitee（仅 <100MB 的包）→ GitHub Release
+    urls = [f'{MIRROR_BASE}/{name}-plugin.zip']
+    if size < GITEE_MAX_MB * 1048576:
+        urls.append(f'{GITEE_BASE}/{name}-plugin.zip')
+    urls.append(f'{RELEASE_BASE}/{name}-plugin.zip')
     return {'name': name, 'version': version, 'kind': 'tool',
             'description': desc, 'provides': provides,
             'file': f'{name}-plugin.zip',
-            'url': f'{RELEASE_BASE}/{name}-plugin.zip',
-            # 国内镜像优先（平台按 urls[0] 下载，失败再依次回退）
-            'urls': [f'{MIRROR_BASE}/{name}-plugin.zip',
-                     f'{RELEASE_BASE}/{name}-plugin.zip'],
+            'url': urls[0],
+            'urls': urls,
             'size': size, 'sha256': sha256_file(out_zip)}
 
 
