@@ -43,6 +43,8 @@ def iter_platform_modules():
     （`--run-engine`），kv_stage 本身只 import config/utils，于是 kv_filter /
     kv_identify 在模块级的 `import polars` 缺失时，自检完全看不见。
     2026-09-11 就是这个盲区让「已知病毒识别与定量」整段静默失效。
+    （2026-10-20 起该模块已改用 pandas + numpy，不再依赖 polars；
+     这条历史教训仍成立——子进程调用的引擎必须在自检里覆盖到。）
 
     冻结分发下靠 PyInstaller 的 `pyi_rth_pkgutil` 运行时钩子让 pkgutil 可用，
     打包后同样能遍历。遍历本身若失败（返回空列表），调用方回退到手工清单。

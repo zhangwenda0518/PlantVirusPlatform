@@ -14,7 +14,9 @@ import os
 import sys
 import time
 
-import polars as pl
+# 2026-10-20：polars → pandas（平台已移除 polars 运行时）。
+# 归档脚本一并改写，保证仓库内不再有 `import polars`。
+import pandas as pd
 
 PLATFORM = r'D:\桌面\植物病毒分析平台'
 FULL_INFO = r'D:\桌面\C-host_classify\plant_virus_db_pipeline\docs\data\Plant_Virus_Full.Info.tsv'
@@ -54,24 +56,26 @@ def main():
 
     # 2) 加载全量库信息，找出缺失物种并选最优代表
     print('加载全量库信息 (199k)...')
-    full = pl.scan_csv(FULL_INFO, separator='\t', infer_schema_length=0)
+    # polars scan_csv(lazy) + filter + sort + collect → pandas 一次读入后筛选。
+    # 该表约 20 万行、字段不多，内存足够；dtype=str 对应 infer_schema_length=0。
+    full = pd.read_csv(FULL_INFO, sep='\t', dtype=str, engine='python',
+                       on_bad_lines='skip')
 
     # 只保留 Complete 且长度达标的
-    full = full.filter(
-        (pl.col('Nuc_Completeness') == 'complete') &
-        (pl.col('Length').cast(pl.Int64, strict=False) >= MIN_LEN)
-    )
+    full['_len'] = pd.to_numeric(full['Length'], errors='coerce')
+    full = full[(full['Nuc_Completeness'] == 'complete') &
+                (full['_len'] >= MIN_LEN)]
 
     # 排序优先级: RefSeq > GenBank, 长度降序
-    full = full.sort('Sequence_Type', descending=True).sort('Length', descending=True)
+    full = full.sort_values(['Sequence_Type', '_len'], ascending=False)
 
     # 加载到内存（筛选后应该少很多）
-    full_df = full.collect()
-    print(f'全量库 Complete ≥{MIN_LEN}bp: {full_df.height} 条')
+    full_df = full.drop(columns=['_len'])
+    print(f'全量库 Complete ≥{MIN_LEN}bp: {len(full_df)} 条')
 
     # 找缺失物种
     missing_accs = {}   # {norm_species: best_row}
-    for row in full_df.iter_rows(named=True):
+    for row in full_df.to_dict('records'):
         sp_key = norm_sp(row.get('Species_NCBI') or row.get('Species_ICTV'))
         if not sp_key or sp_key in lib_sp:
             continue
