@@ -10,6 +10,10 @@
   "/api/ai/context": "ai_assist.api_ai_context",
   "/api/ai/events": "ai_assist.api_ai_events",
   "/api/ai/gate": "ai_assist.api_ai_gate",
+  "/api/ai/profiles": "ai_assist.api_ai_profiles_get",
+  "/api/ai/profiles/activate": "ai_assist.api_ai_profiles_activate",
+  "/api/ai/profiles/delete": "ai_assist.api_ai_profiles_delete",
+  "/api/ai/profiles/save": "ai_assist.api_ai_profiles_save",
   "/api/ai/test": "ai_assist.api_ai_test",
   "/api/align/file": "tool_results.api_align_file",
   "/api/align/save": "tool_results.api_align_save",
@@ -26,6 +30,7 @@
   "/api/convert_kraken2": "build.api_convert_kraken2",
   "/api/datasets": "build.api_datasets",
   "/api/datasets_download": "build.api_datasets_download",
+  "/api/datasets_summary": "build.api_datasets_summary",
   "/api/datasets_virus": "build.api_datasets_virus",
   "/api/dbs": "build.api_dbs",
   "/api/dl/batch/<bid>": "download.api_dl_batch",
@@ -67,6 +72,10 @@
   "/api/logan/job/<name>/segment/<int:idx>": "logan.api_logan_segment",
   "/api/logan/jobs": "logan.api_logan_jobs",
   "/api/logan/samples": "logan.api_logan_samples",
+  "/api/mcp/call": "mcpconsole.api_mcp_call",
+  "/api/mcp/restart": "mcpconsole.api_mcp_restart",
+  "/api/mcp/status": "mcpconsole.api_mcp_status",
+  "/api/mcp/tools": "mcpconsole.api_mcp_tools",
   "/api/meta/ai_fill": "meta.api_meta_ai_fill",
   "/api/meta/ai_summary": "meta.api_meta_ai_summary",
   "/api/meta/cell": "meta.api_meta_cell",
@@ -100,9 +109,17 @@
   "/api/pipeline/<sample>": "samples.api_pipeline",
   "/api/pipeline/<sample>/run": "samples.api_pipeline_run",
   "/api/pipeline/create": "samples.api_pipeline_create",
+  "/api/plugin/available": "settings.api_plugin_available",
+  "/api/plugin/install": "settings.api_plugin_install",
+  "/api/plugin/install_modules": "settings.api_plugin_install_modules",
+  "/api/plugin/install_url": "settings.api_plugin_install_url",
+  "/api/plugin/list": "settings.api_plugin_list",
+  "/api/plugin/modules": "settings.api_plugin_modules",
+  "/api/plugin/uninstall": "settings.api_plugin_uninstall",
   "/api/prescreen/projects": "prescreen.api_prescreen_projects",
   "/api/prescreen/result": "prescreen.api_prescreen_result",
   "/api/prescreen/run": "prescreen.api_prescreen_run",
+  "/api/prescreen/running": "prescreen.api_prescreen_running",
   "/api/prescreen/viral": "prescreen.api_prescreen_viral",
   "/api/prescreen/virome": "prescreen.api_prescreen_virome",
   "/api/queue": "samples.api_queue",
@@ -262,6 +279,18 @@
   "/api/ai/gate": [
    "POST"
   ],
+  "/api/ai/profiles": [
+   "GET"
+  ],
+  "/api/ai/profiles/activate": [
+   "POST"
+  ],
+  "/api/ai/profiles/delete": [
+   "POST"
+  ],
+  "/api/ai/profiles/save": [
+   "POST"
+  ],
   "/api/ai/test": [
    "POST"
   ],
@@ -308,6 +337,9 @@
    "GET"
   ],
   "/api/datasets_download": [
+   "POST"
+  ],
+  "/api/datasets_summary": [
    "POST"
   ],
   "/api/datasets_virus": [
@@ -433,6 +465,18 @@
   "/api/logan/samples": [
    "GET"
   ],
+  "/api/mcp/call": [
+   "POST"
+  ],
+  "/api/mcp/restart": [
+   "POST"
+  ],
+  "/api/mcp/status": [
+   "GET"
+  ],
+  "/api/mcp/tools": [
+   "GET"
+  ],
   "/api/meta/ai_fill": [
    "POST"
   ],
@@ -532,6 +576,27 @@
   "/api/pipeline/create": [
    "POST"
   ],
+  "/api/plugin/available": [
+   "GET"
+  ],
+  "/api/plugin/install": [
+   "POST"
+  ],
+  "/api/plugin/install_modules": [
+   "POST"
+  ],
+  "/api/plugin/install_url": [
+   "POST"
+  ],
+  "/api/plugin/list": [
+   "GET"
+  ],
+  "/api/plugin/modules": [
+   "GET"
+  ],
+  "/api/plugin/uninstall": [
+   "POST"
+  ],
   "/api/prescreen/projects": [
    "GET"
   ],
@@ -540,6 +605,9 @@
   ],
   "/api/prescreen/run": [
    "POST"
+  ],
+  "/api/prescreen/running": [
+   "GET"
   ],
   "/api/prescreen/viral": [
    "GET"

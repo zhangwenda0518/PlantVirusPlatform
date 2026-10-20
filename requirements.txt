@@ -78,3 +78,10 @@ openpyxl>=3.1
 # 平台本体与打包分发都不需要它；该 .bat 检测到缺失时会自动 pip 安装。
 # 已登记为**可选**依赖（dev_tools/audit_deps.py 的 OPTIONAL），未装不影响自检结论。
 tkinterdnd2
+# 进化动力学：TreeTime 分子钟定年 + RTT（phylodyn_trees.py:850 的
+# `from treetime import TreeTime`）。2026-10-21 补声明——此前只在维护者
+# 机器的系统 Python 里装过（且是手动拷的、无元数据），内置 3rd/python 与
+# 干净部署都缺，导致 _check_phylodyn_kit / _check_phylodyn_e2e 失败。
+# 注意包名是 **phylo-treetime**（import 名才是 treetime）；裸 `pip install
+# treetime` 装到的是同名但更老的包，会缺 graphviz 等依赖。
+phylo-treetime>=0.11

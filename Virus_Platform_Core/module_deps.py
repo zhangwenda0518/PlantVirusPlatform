@@ -55,7 +55,7 @@ MODULE_TOOLS = {
     'dsrna': ['dsRNAmax'],
     'crispr': ['blastn', 'makeblastdb'],
     'mirna': ['srna-target'],
-    'phylodyn': ['lsd2', 'rscript'],
+    'phylodyn': ['lsd2'],          # rscript 是 TreeDater 可选分支，见 OPTIONAL_TOOLS
     'beastexport': [],
     'conan': [],
     'rtt': [],
@@ -81,6 +81,24 @@ MODULE_TOOLS = {
     'phylo': ['mafft', 'trimal', 'fasttree', 'raxml-ng'],
     'gbdraw': ['gbdraw'],
     'report': [],
+}
+
+# 可选工具：缺了只降级对应子功能，不该阻断整个模块。
+# 与 MODULE_TOOLS 分开：那里是「没有就跑不了」，这里是「没有就少一个分支」。
+# 格式 {模块: {工具键: 缺了之后的影响}}——影响文案直接进日志/自检，让用户
+# 知道少了什么能力，而不是莫名其妙看不到某个结果。
+OPTIONAL_TOOLS = {
+    'phylodyn': {
+        'rscript': 'TreeDater 定年分支不可用（需 R + treedater 包）；'
+                   'LSD2 定年与其余分析不受影响',
+    },
+    'genoplot': {
+        'gbdraw': 'gbdraw 引擎不可用，自动回退纯 Python 引擎 dna_features_viewer'
+                  '（出图样式略简，功能不受影响）',
+    },
+    'kvsuite': {
+        'salmon': 'salmon 定量引擎不可用，需改用 minibwa 比对引擎',
+    },
 }
 
 # 插件源里没有、只能人工装或本机自带的键（自愈时直接给出指引）
@@ -138,10 +156,17 @@ def read_autofix_log():
 
 
 def missing_tools(cfg, module):
-    """模块当前缺哪些工具键（含插件已提供但文件不存在的）。"""
+    """模块当前缺哪些**必需**工具键（可选工具不计入，见 OPTIONAL_TOOLS）。"""
     keys = MODULE_TOOLS.get(module, [])
     st = cfg.tool_status()
     return [k for k in keys if not st.get(k)]
+
+
+def missing_optional(cfg, module):
+    """缺哪些**可选**工具键，返回 {键: 影响说明}（只提示，不阻断）。"""
+    opts = OPTIONAL_TOOLS.get(module, {})
+    st = cfg.tool_status()
+    return {k: why for k, why in opts.items() if not st.get(k)}
 
 
 def ensure_tools(cfg, module, auto_install=True, log=None, timeout_s=600):
@@ -155,7 +180,7 @@ def ensure_tools(cfg, module, auto_install=True, log=None, timeout_s=600):
     """
     miss = missing_tools(cfg, module)
     result = {'missing': miss, 'installed': [], 'still_missing': [],
-              'hints': {}}
+              'hints': {}, 'optional_missing': missing_optional(cfg, module)}
     if not miss:
         return result
 

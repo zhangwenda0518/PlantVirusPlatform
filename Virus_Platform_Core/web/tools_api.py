@@ -496,6 +496,9 @@ def api_tool_run():
                 raise RuntimeError(format_error(tool, _pf))
             if _pf['installed']:
                 log(f"已自动安装插件: {', '.join(_pf['installed'])}")
+            # 可选工具缺失：只提示降级，不拦运行
+            for _k, _why in (_pf.get('optional_missing') or {}).items():
+                log(f"提示：可选工具 {_k} 未安装 — {_why}")
         except RuntimeError:
             raise
         except Exception as e:
