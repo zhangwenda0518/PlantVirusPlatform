@@ -364,3 +364,56 @@ def test_install_urls_all_fail(plugin_root):
 def test_install_urls_empty():
     with pytest.raises(pm.PluginError, match='未提供下载地址'):
         pm.install_urls([], root='x')
+
+
+# ------------------------------------------------------------------
+# install_to：硬编码路径工具还原到平台原路径
+# ------------------------------------------------------------------
+def _make_path_plugin_zip(path, name='path-tool', install_to='3rd/tools/path-tool'):
+    with zipfile.ZipFile(path, 'w') as z:
+        z.writestr(f'{name}/plugin.json', json.dumps({
+            'name': name, 'version': '1.0', 'kind': 'tool',
+            'provides': {'path-tool': 'tool.exe'}, 'install_to': install_to}))
+        z.writestr(f'{name}/tool.exe', 'MZ')
+        z.writestr(f'{name}/data/x.txt', 'x')
+    return path
+
+
+def test_install_to_restores_original_path(tmp_path, monkeypatch):
+    """install_to 型：内容摊到平台原路径，不进 plugins/<name>/。"""
+    fake_root = tmp_path / 'platform'
+    fake_root.mkdir()
+    proot = fake_root / 'plugins'
+    proot.mkdir()
+    monkeypatch.setattr(pm, 'PLATFORM_ROOT', str(fake_root))
+    zp = _make_path_plugin_zip(str(tmp_path / 'p.zip'))
+    mf = pm.install_zip(zp, root=str(proot))
+    assert mf['install_to'] == '3rd/tools/path-tool'
+    tgt = fake_root / '3rd' / 'tools' / 'path-tool'
+    assert (tgt / 'tool.exe').is_file()
+    assert (tgt / 'data' / 'x.txt').is_file()
+    assert not (tgt / 'plugin.json').exists()      # 清单不摊到目标目录
+    assert not (proot / 'path-tool').exists()      # 不落 plugins/
+    # 登记表 + 扫描
+    assert 'path-tool' in pm._read_registry(str(proot))
+    items = pm.installed_plugins(str(proot))
+    assert [i['name'] for i in items] == ['path-tool']
+    assert items[0]['ok'] is True
+    # 卸载清目录 + 清登记
+    pm.uninstall('path-tool', root=str(proot))
+    assert not tgt.exists()
+    assert pm._read_registry(str(proot)) == {}
+
+
+def test_install_to_rejects_escape(tmp_path):
+    zp = str(tmp_path / 'p.zip')
+    _make_path_plugin_zip(zp, install_to='../../etc')
+    with pytest.raises(pm.PluginError, match='install_to'):
+        pm.install_zip(zp, root=str(tmp_path / 'plugins'))
+
+
+def test_install_to_rejects_absolute(tmp_path):
+    zp = str(tmp_path / 'p.zip')
+    _make_path_plugin_zip(zp, install_to='C:/Windows/System32')
+    with pytest.raises(pm.PluginError, match='install_to'):
+        pm.install_zip(zp, root=str(tmp_path / 'plugins'))
