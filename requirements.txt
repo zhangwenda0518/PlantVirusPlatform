@@ -35,6 +35,10 @@ pyrodigal-rv>=0.1.0; platform_system == "Windows"
 primer3-py>=2.0
 # LOGAN 溯源「一键批量提交」依赖（方式二；未安装时该功能灰显，手动方式不受影响）
 selenium>=4.15
+# 跨样本 SNP 分型图（known_virus_suite/kv_variant_plot.py 变异段可视化；
+# GPL-3.0，纯 Python，仅依赖 biopython+matplotlib——平台既有版本即满足）。
+# 未安装时变异绘图静默跳过该图型，其余图件不受影响。
+snipit>=1.7
 
 # ViennaRNA 的 Python 绑定（import RNA）：miRNA 靶标预测的
 # RNAhybrid / psRNATarget / TAPIR 复刻引擎用其折叠能项
@@ -47,12 +51,11 @@ pyhmmer>=0.11
 pywebview>=4.0
 # 病毒基因组图（⑨ 基因组图阶段，DFV 备选引擎，纯 Python）
 dna_features_viewer>=3.1
-# 已知病毒识别与定量（kv_filter / kv_identify 在**模块级** import polars，
-# 无 try/except 兜底）。此前漏声明，导致打包 spec 误把它当"平台从不 import"
-# 的库排除掉，打包版该功能整段静默失效（2026-09-11 修复）。
-# 注意：polars 的 Rust 运行时在独立的 _polars_runtime_32 包里（约 174MB），
-# 打包时两者必须同进同出，spec 的 excludes 里不能出现这两个名字。
-polars>=1.0
+# 已知病毒识别与定量（kv_filter / kv_identify）已改用 pandas + numpy
+# （2026-10-20），不再依赖 polars。原因：polars 的 Rust 运行时
+# _polars_runtime_32 解压后 167.7MB，是 site-packages 里最大的单项，
+# 且 compat/64/32 三个变体体积相同、没有更小的替代；改用平台本就硬依赖
+# 的 pandas 后，这套运行时可以整个删掉（对拍验证见 tests/test_kv_pandas.py）。
 # ── 公共数据检索模块（meta_search，源自 MMPV-RNA public_metadata_pipeline）──
 requests>=2.28
 xmltodict>=0.13

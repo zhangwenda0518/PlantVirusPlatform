@@ -36,15 +36,18 @@ LIBS = [
 
 def build_acc_context(data_dir):
     """accession(去版本号) → (family, molecule)。"""
-    import polars as pl
+    # 2026-10-20：polars → pandas（与 kv_identify/kv_filter 同步，去掉
+    # polars 依赖）。dtype=str 等价于 polars 的 infer_schema_length=0
+    # （全部按字符串读，避免 accession 被推断成数字丢前导零）。
+    import pandas as pd
     ctx = {}
     src = os.path.join(data_dir, 'Plant_Virus_Full.Info.tsv')
     if os.path.isfile(src):
-        df = pl.read_csv(src, separator='\t', infer_schema_length=0,
-                         truncate_ragged_lines=True)
-        for acc, fam, mol in zip(df['Accession'].to_list(),
-                                 df['Family'].to_list(),
-                                 df['Molecule_type'].to_list()):
+        df = pd.read_csv(src, sep='\t', dtype=str, engine='python',
+                         on_bad_lines='skip')
+        for acc, fam, mol in zip(df['Accession'].tolist(),
+                                 df['Family'].tolist(),
+                                 df['Molecule_type'].tolist()):
             key = (acc or '').split('.')[0]
             if key and key not in ctx:
                 ctx[key] = (fam or '', mol or '')

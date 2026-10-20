@@ -15,15 +15,17 @@ kv_filter.py — 过滤段
 
 from pathlib import Path
 
-try:
-    import polars as pl
-except ImportError:
-    raise SystemExit("需要 polars: pip install polars")
+# 2026-10-20：由 polars 改为 pandas（与 kv_identify 同步，省掉 167.7MB
+# 的 polars-runtime-32）。语义对照见各处注释。
+import numpy as np
+import pandas as pd
+
+from .kv_identify import _write_tsv
 
 
 def _find_col(df, *names):
     """按列名容错查找（去空格、大小写不敏感）"""
-    lut = {c.strip().lower(): c for c in df.columns}
+    lut = {str(c).strip().lower(): c for c in df.columns}
     for n in names:
         key = n.strip().lower()
         if key in lut:
@@ -32,21 +34,15 @@ def _find_col(df, *names):
 
 
 def _stringify_objects(df):
-    """写盘前把 Object dtype 列统一成字符串。
+    """写盘前把 object 列里残留的非字符串值统一成字符串。
 
-    触发场景：`read_csv(ignore_errors=True)` + 节段完整性分支的
-    `pl.concat(..., how='diagonal_relaxed')`，在**单行/单物种**输入下会产出
-    Object 列，而 `write_csv` 不支持 Object → 直接抛
-    `csv writer does not support object dtype` 把整个过滤段带崩
-    （2026-09-11 实测：合成单病毒样本必崩，多样本旧运行正常）。
-    这些列本就是未定型的自由字段，转字符串不影响数值列与下游消费。
+    polars 版此处处理 Object dtype（其 write_csv 不支持 Object 直接抛错）。
+    pandas 的 to_csv 能写任意对象，但**含 None 的 object 列**会写出空串而
+    不是 'None'——这与 polars 版 map_elements(lambda v: '' if v is None
+    else str(v)) 的语义一致，因此这里只需保持默认行为，函数保留为空实现
+    以免调用点改动（未来若发现 dtype 问题可在此集中处理）。
     """
-    obj = [c for c, dt in df.schema.items() if dt == pl.Object]
-    if not obj:
-        return df
-    return df.with_columns([
-        pl.col(c).map_elements(lambda v: '' if v is None else str(v),
-                               return_dtype=pl.Utf8).alias(c) for c in obj])
+    return df
 
 
 class FilterStage:
@@ -82,10 +78,10 @@ class FilterStage:
             # 空输入也要落盘空表（P0-1）：否则上一轮 filtered.tsv 留在盘上
             # 被外层汇总当成本轮"通过"结果。schema 尽量沿用输入列。
             cols = list(df.columns) if df is not None else []
-            empty = pl.DataFrame(schema={c: pl.Utf8 for c in cols})
-            empty.write_csv(out / 'filtered.tsv', separator='\t')
-            empty.write_csv(out / 'discarded.tsv', separator='\t')
-            return empty, pl.DataFrame(schema={c: pl.Utf8 for c in cols})
+            empty = pd.DataFrame({c: pd.Series(dtype='object') for c in cols})
+            _write_tsv(empty, out / 'filtered.tsv')
+            _write_tsv(empty, out / 'discarded.tsv')
+            return empty, empty.copy()
 
         a = self.args
         cov = _find_col(df, 'Coverage(%)', 'coverage', 'Rep_Coverage(%)')
@@ -96,19 +92,24 @@ class FilterStage:
 
         missing = [n for n, c in [('Coverage', cov), ('MeanDepth', depth), ('Reads', reads)] if c is None]
         if missing:
-            raise RuntimeError(f"过滤段缺少必要列: {missing}；实际列: {df.columns}")
+            raise RuntimeError(f"过滤段缺少必要列: {missing}；实际列: {list(df.columns)}")
 
-        expr = (pl.col(cov) >= a.min_cov) & (pl.col(depth) >= a.min_depth) & (pl.col(reads) >= a.min_reads)
+        # 逐行阈值掩码（polars 表达式 → pandas 布尔 Series）
+        expr = ((pd.to_numeric(df[cov], errors='coerce') >= a.min_cov) &
+                (pd.to_numeric(df[depth], errors='coerce') >= a.min_depth) &
+                (pd.to_numeric(df[reads], errors='coerce') >= a.min_reads))
         if tpm and getattr(a, 'min_tpm', 0.0) > 0:
-            expr = expr & (pl.col(tpm).fill_null(0) >= a.min_tpm)
+            expr = expr & (pd.to_numeric(df[tpm], errors='coerce').fillna(0)
+                           >= a.min_tpm)
         if poi and getattr(a, 'min_poisson', 0.0) > 0:
-            expr = expr & (pl.col(poi).fill_null(0) >= a.min_poisson)
+            expr = expr & (pd.to_numeric(df[poi], errors='coerce').fillna(0)
+                           >= a.min_poisson)
 
         self.logger.info(f"过滤阈值: cov>={a.min_cov} depth>={a.min_depth} reads>={a.min_reads} "
                          f"tpm>={getattr(a,'min_tpm',0)} "
                          f"poisson>={getattr(a,'min_poisson',0)}")
-        pass_df = df.filter(expr)
-        fail_df = df.filter(~expr)
+        pass_df = df[expr].copy()
+        fail_df = df[~expr].copy()
         self.logger.info(f"阈值通过: {len(pass_df)} / {len(df)}")
 
         # ── 节段完整性 ──
@@ -127,37 +128,42 @@ class FilterStage:
                 self.logger.warning(
                     "缺 Sample 列，无法逐样本判节段完整性，跳过该规则")
             else:
-                # 分组键个数必须与解包个数一致
                 keys = ['Sample', sp_col]
                 group_rows, orphan_rows = [], []
-                for key_vals, grp in pass_df.group_by(keys):
-                    *_, sp = key_vals if isinstance(key_vals, tuple) else (key_vals,)
+                # polars group_by(keys) 含 null 分组 → pandas dropna=False
+                for key_vals, grp in pass_df.groupby(keys, dropna=False,
+                                                     sort=False):
+                    sp = key_vals[1] if isinstance(key_vals, tuple) else key_vals
                     expected = seg_map.get(sp)
                     if not expected:
                         group_rows.append(grp)
                         continue
-                    got = {(v or '').strip().upper() for v in grp[seg_col].to_list()}
+                    got = {(str(v).strip().upper() if v is not None else '')
+                           for v in grp[seg_col].tolist()}
                     if expected.issubset(got):
                         group_rows.append(grp)
                     else:
-                        dropped = grp.with_columns(
-                            pl.lit('missing_segments:' + ','.join(sorted(expected - got))).alias('_drop_reason'))
+                        dropped = grp.copy()
+                        dropped['_drop_reason'] = (
+                            'missing_segments:'
+                            + ','.join(sorted(expected - got)))
                         orphan_rows.append(dropped)
                         self.logger.info(f"  节段不完整 [{sp}] 缺 {sorted(expected - got)}，剔除 {len(grp)} 段")
-                # 注意：必须用 schema= 关键字 —— 位置参数会被 polars 当成数据，
-                # 造出 1 行 dtype 对象的 Object 列（write_csv 直接崩）。
-                pass_df = (pl.concat(group_rows, how='diagonal_relaxed')
-                           if group_rows else pl.DataFrame(schema=pass_df.schema))
+                # 保留原列序（polars 版用 diagonal_relaxed 合并，列集可能扩张）
+                pass_df = (pd.concat(group_rows, ignore_index=True)
+                           if group_rows else pass_df.iloc[0:0].copy())
                 if orphan_rows:
-                    fail_df = pl.concat([fail_df, *[o.drop('_drop_reason') for o in orphan_rows]], how='diagonal_relaxed')
+                    _orph = pd.concat(orphan_rows, ignore_index=True)
+                    _orph = _orph.drop(columns=['_drop_reason'], errors='ignore')
+                    fail_df = pd.concat([fail_df, _orph], ignore_index=True)
 
         # 空结果也落盘（P0-1 后半）：旧实现只在非空时写 filtered/discarded，
         # 本轮全剔除/零命中时上一轮的旧表原样留在盘上，被当成"本轮通过"。
         # 现在无条件写——空表带 schema，下游读取得 0 行而不是旧数据。
         pass_df = _stringify_objects(pass_df)
-        pass_df.write_csv(out / 'filtered.tsv', separator='\t')
+        _write_tsv(pass_df, out / 'filtered.tsv')
         fail_df = _stringify_objects(fail_df)
-        fail_df.write_csv(out / 'discarded.tsv', separator='\t')
+        _write_tsv(fail_df, out / 'discarded.tsv')
         self.logger.info(f"过滤段完成: 保留 {len(pass_df)} 行 / 剔除 {len(fail_df)} 行 -> {out}")
         return pass_df, fail_df
 
@@ -168,7 +174,10 @@ class FilterStage:
             src = self.out_dir / 'identify' / 'all_viruses.summary.tsv'
         if not src.exists():
             self.logger.warning(f"未找到鉴定结果: {src}")
-            return pl.DataFrame(), pl.DataFrame()
+            return pd.DataFrame(), pd.DataFrame()
         self.logger.info(f"读取鉴定结果: {src}")
-        df = pl.read_csv(str(src), separator='\t', ignore_errors=True)
+        # polars read_csv(ignore_errors=True) → pandas 的
+        # on_bad_lines='skip'（容错跳坏行）；engine='python' 才支持该组合。
+        df = pd.read_csv(str(src), sep='\t', on_bad_lines='skip',
+                         engine='python')
         return self.apply(df)

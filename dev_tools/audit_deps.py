@@ -144,6 +144,10 @@ def iter_py_files():
             # 用 paramiko 连远端跑任务，平台代码不引用它）；2026-10-20 加入，
             # 此前它让 paramiko 被误报成"必需依赖未装"。
             'analysis',
+            # dev_tools/archive_202610/ 是 2026-10 的归档探针脚本，平台不
+            # 引用；里面 fill_species_gaps.py 还用着已移除的 polars，扫到会
+            # 让自检误报"必需依赖未装 polars"（2026-10-20）。
+            'archive_202610',
             'archive'}
     for cur, dirs, files in os.walk(ROOT):
         dirs[:] = [d for d in dirs if d not in skip and not d.startswith('.')]
