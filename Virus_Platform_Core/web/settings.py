@@ -10,6 +10,8 @@
     GET  /api/selfcheck         环境自检（模块/工具/数据库/磁盘；?force=1 强制重跑）
     GET  /api/plugin/list       插件清单（plugins/ 目录扫描）
     GET  /api/plugin/available  插件源索引 × 本机现状（自动检测缺失工具）
+    GET  /api/plugin/modules    模块视图（每模块依赖哪些工具、还缺哪些）
+    POST /api/plugin/install_modules 按模块安装（工具去重、跳过已有）
     POST /api/plugin/install    安装插件 zip（multipart file= 或 JSON path=）
     POST /api/plugin/install_url 从 URL 下载安装（可带 sha256 校验）
     POST /api/plugin/uninstall  卸载插件（JSON name=）
@@ -498,6 +500,57 @@ def api_plugin_install_url():
     except Exception as e:
         return jsonify({'ok': False, 'error': f'{type(e).__name__}: {e}',
                         'hint': '下载失败可手动下载 zip 后在「本地安装」里指定'}), 502
+
+
+@bp.route('/api/plugin/modules', methods=['GET'])
+def api_plugin_modules():
+    """模块视图：每个功能模块依赖哪些工具包、本机还缺哪些。
+
+    ?ids=a,b 只算指定模块；?force=1 跳过索引缓存。返回里 plan 已去重
+    （同一工具被多模块共用只算一次）并跳过本机已有/已装。"""
+    from Virus_Platform_Core import plugin_manager as pm
+    force = request.args.get('force') in ('1', 'true')
+    ids = [x for x in (request.args.get('ids') or '').split(',') if x.strip()]
+    url = (cfg.plugin_index_url or '').strip() or None
+    try:
+        items, err = pm.available_from_index(cfg, index_url=url, force=force)
+        if err:
+            return jsonify({'ok': False, 'error': err}), 502
+        plan = pm.plan_module_install(cfg, ids, items=items,
+                                      index_url=url, force=force)
+        # 每个模块单独标注「还需装几个 / 共几个」
+        by_name = {p['name']: p for p in items}
+        for m in plan['modules']:
+            names = m.get('plugins') or []
+            m['total'] = len(names)
+            m['missing'] = [n for n in names
+                            if (by_name.get(n) or {}).get('needed')
+                            and not (by_name.get(n) or {}).get('installed')]
+            m['ready'] = not m['missing']
+        return jsonify({'ok': True, 'index_url': url or pm.DEFAULT_INDEX_URL,
+                        **plan})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'{type(e).__name__}: {e}'}), 500
+
+
+@bp.route('/api/plugin/install_modules', methods=['POST'])
+def api_plugin_install_modules():
+    """按模块安装（自动去重 + 跳过已有）。JSON: {"modules": ["tree", ...]}"""
+    from Virus_Platform_Core import plugin_manager as pm
+    ids = (request.json or {}).get('modules') or []
+    if not isinstance(ids, list) or not ids:
+        return jsonify({'ok': False, 'error': '未指定模块'}), 400
+    url = (cfg.plugin_index_url or '').strip() or None
+    try:
+        r = pm.install_modules(cfg, ids, index_url=url)
+        resp = _plugin_describe_payload()
+        resp.update({'ok': True, **r})
+        return jsonify(resp)
+    except pm.PluginError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False,
+                        'error': f'{type(e).__name__}: {e}'}), 500
 
 
 @bp.route('/api/plugin/uninstall', methods=['POST'])

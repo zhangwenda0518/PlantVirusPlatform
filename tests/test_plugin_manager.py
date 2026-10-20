@@ -417,3 +417,88 @@ def test_install_to_rejects_absolute(tmp_path):
     _make_path_plugin_zip(zp, install_to='C:/Windows/System32')
     with pytest.raises(pm.PluginError, match='install_to'):
         pm.install_zip(zp, root=str(tmp_path / 'plugins'))
+
+
+# ------------------------------------------------------------------
+# 模块层：并集去重 + 跳过已有（共享工具只下载一次）
+# ------------------------------------------------------------------
+def _make_module_index(tmp_path, modules, plugins):
+    idx = tmp_path / 'index.json'
+    idx.write_text(json.dumps({'schema': 2, 'plugins': plugins,
+                               'modules': modules}), encoding='utf-8')
+    return idx.as_uri()
+
+
+def test_plan_module_dedup_and_skip(tmp_path, monkeypatch):
+    """3 个模块共用 blast：只算一次；本机已有 trimal → 跳过。"""
+    plugins = [
+        {'name': 'blast', 'url': 'http://x/b.zip', 'provides': {'blastn': 'x'},
+         'size': 10},
+        {'name': 'trimal', 'url': 'http://x/t.zip', 'provides': {'trimal': 'x'},
+         'size': 1},
+        {'name': 'mafft', 'url': 'http://x/m.zip', 'provides': {'mafft': 'x'},
+         'size': 2},
+        {'name': 'diamond', 'url': 'http://x/d.zip',
+         'provides': {'diamond': 'x'}, 'size': 3},
+    ]
+    modules = {
+        'sdt': {'title': 'SDT', 'plugins': ['blast']},
+        'crispr': {'title': 'CRISPR', 'plugins': ['blast']},
+        'primer': {'title': 'Primer', 'plugins': ['blast']},
+        'align': {'title': 'Align', 'plugins': ['mafft', 'trimal']},
+        'verify': {'title': 'Verify', 'plugins': ['blast', 'diamond']},
+    }
+    uri = _make_module_index(tmp_path, modules, plugins)
+    monkeypatch.setattr(pm, 'PLUGIN_DIR', str(tmp_path / 'plugins'))
+    cfg = _stub_cfg({'trimal': 'x'}, {})      # 本机已有 trimal
+
+    r = pm.plan_module_install(cfg, ['sdt', 'crispr', 'primer', 'align', 'verify'],
+                               index_url=uri, force=True)
+    names = [p['name'] for p in r['plan']]
+    assert names.count('blast') == 1, names       # 5 个模块共用 → 只一次
+    assert 'trimal' not in names                  # 本机已有 → 跳过
+    assert set(names) == {'blast', 'mafft', 'diamond'}
+    assert [s['name'] for s in r['skipped']] == ['trimal']
+    assert r['total_size'] == 15                  # 10+2+3，未重复计
+
+
+def test_plan_module_all_selected_by_default(tmp_path, monkeypatch):
+    plugins = [{'name': 'a', 'url': 'http://x/a.zip', 'provides': {'a': 'x'}}]
+    modules = {'m1': {'title': 'M1', 'plugins': ['a']}}
+    uri = _make_module_index(tmp_path, modules, plugins)
+    monkeypatch.setattr(pm, 'PLUGIN_DIR', str(tmp_path / 'plugins'))
+    r = pm.plan_module_install(_stub_cfg({}, {}), [], index_url=uri, force=True)
+    assert [m['id'] for m in r['modules']] == ['m1']   # 空选 = 全部模块
+    assert [p['name'] for p in r['plan']] == ['a']
+
+
+def test_plan_module_unknown_id(tmp_path, monkeypatch):
+    plugins = [{'name': 'a', 'url': 'http://x/a.zip', 'provides': {'a': 'x'}}]
+    uri = _make_module_index(tmp_path, {'m1': {'title': 'M1', 'plugins': ['a']}},
+                             plugins)
+    monkeypatch.setattr(pm, 'PLUGIN_DIR', str(tmp_path / 'plugins'))
+    r = pm.plan_module_install(_stub_cfg({}, {}), ['nope'], index_url=uri,
+                               force=True)
+    assert r['plan'] == []
+    assert r['skipped'][0]['reason'] == '模块不存在'
+
+
+def test_install_modules_skips_existing(tmp_path, monkeypatch):
+    """install_modules：已装的跳过，只下载真正缺的。"""
+    zp = _make_plugin_zip(str(tmp_path / 'a.zip'), name='aaa')
+    plugins = [{'name': 'aaa', 'url': 'http://x/a.zip',
+                'provides': {'aaa': 'bin/demo_tool.bat'},
+                'sha256': pm._sha256_file(zp), 'size': 1}]
+    uri = _make_module_index(tmp_path, {'m1': {'title': 'M1', 'plugins': ['aaa']}},
+                             plugins)
+    root = tmp_path / 'plugins'
+    root.mkdir()
+    monkeypatch.setattr(pm, 'PLUGIN_DIR', str(root))
+    cfg = _stub_cfg({}, {})
+    cfg.refresh_plugins = lambda: None
+    # 先装一遍
+    pm.install_zip(zp, root=str(root))
+    r = pm.install_modules(cfg, ['m1'], index_url=uri)
+    assert r['installed'] == []
+    assert r['skipped'][0]['name'] == 'aaa'
+    assert r['skipped'][0]['reason'] == '已安装'

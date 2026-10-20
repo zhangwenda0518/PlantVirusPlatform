@@ -3,11 +3,15 @@
 
 产物：
     plugins-dist/<name>-plugin.zip     每工具一包，顶层 <name>/plugin.json + 工具本体
-    plugins-repo/index.json            插件源索引（提交进仓库，raw URL 稳定可拉）
+    plugins-repo/index.json            插件源索引（工具包 + 模块分组）
 
-zip 本体不上传 git（体积），走 GitHub Release（tag: plugin-packs）分发，
-索引里记录 Release 资产的下载 URL 与 sha256，平台「插件管理 → 插件源」
-按索引自动检测缺失并一键下载解压。
+zip 本体不上传 git（体积），走 Release（tag: plugin-packs）分发，索引里记录
+下载 URL 与 sha256，平台「插件管理 → 插件源」按索引自动检测缺失并一键下载解压。
+
+模块层（MODULES）：把「工具」与「功能模块」解耦——同一个工具常被多个模块
+共用（mafft 被 align/quicktree/kvchain 都用），所以**不按模块重复打包**，
+而是索引里额外给一份 modules 分组；平台按模块安装时先算工具并集，再跳过
+本机已有/已装的，只下载真正缺的（见 plugin_manager.plan_module_install）。
 
 用法：
     python dev_tools/build_plugin_repo.py            # 打全部包
@@ -114,6 +118,136 @@ PATH_TOOLS = {
                  {'datasets': 'datasets.exe'}),
 }
 
+# ----------------------------------------------------------------------
+# 模块层：功能模块 → 依赖的插件（工具包）名
+# 键名与 web/tools_api.py 的 TOOL_REGISTRY 对齐，另加管道阶段与专项页。
+# 工具可被多个模块共用，模块安装时取并集后去重（不重复下载）。
+# ----------------------------------------------------------------------
+MODULES = {
+    'preprocess': {
+        'title': '⓪ 质控与宿主去除',
+        'title_en': 'QC & host removal',
+        'desc': 'fastp 质控 + seqkit 序列处理 + 宿主比对（minibwa）',
+        'plugins': ['fastp', 'seqkit', 'minibwa'],
+    },
+    'assemble': {
+        'title': '① 病毒组装',
+        'title_en': 'Viral assembly',
+        'desc': 'SPAdes 从头组装 + BLAST 骨架比对',
+        'plugins': ['spades', 'blast'],
+    },
+    'identify': {
+        'title': '② 病毒鉴定（kunpeng）',
+        'title_en': 'Virus identification',
+        'desc': 'kunpeng 核酸分类引擎 + seqkit 预处理',
+        'plugins': ['kunpeng', 'seqkit'],
+    },
+    'contigs': {
+        'title': '④ contig 分类',
+        'title_en': 'Contig classification',
+        'desc': 'kunpeng 分类 + 序列整理',
+        'plugins': ['kunpeng', 'seqkit'],
+    },
+    'orf': {
+        'title': '⑤ ORF 预测与注释',
+        'title_en': 'ORF prediction & annotation',
+        'desc': 'orfipy 预测 + BLAST 比对注释',
+        'plugins': ['blast'],
+    },
+    'genome': {
+        'title': '⑥ 基因组图谱',
+        'title_en': 'Genome plots',
+        'desc': 'gbdraw 出图（随 3rd/python 运行时，另装）；无则回退纯 Python 引擎',
+        'plugins': [],
+    },
+    'align': {
+        'title': '⑦ 多序列比对',
+        'title_en': 'Multiple alignment',
+        'desc': 'MAFFT 比对 + trimAl 清剪',
+        'plugins': ['mafft', 'trimal'],
+    },
+    'tree': {
+        'title': '⑧ 建树',
+        'title_en': 'Tree building',
+        'desc': 'RAxML-NG 最大似然 / FastTree 快速 / IQ-TREE 3',
+        'plugins': ['raxml-ng', 'fasttree', 'iqtree', 'trimal'],
+    },
+    'kvsuite': {
+        'title': '⑨ 已知病毒识别与定量',
+        'title_en': 'Known virus suite',
+        'desc': 'minimap2 比对 + samtools 处理 + snpEff 注释 + SNPGenie 选择压力',
+        'plugins': ['minimap2', 'samtools', 'bcftools', 'snpeff',
+                    'jre-snpeff', 'snpgenie', 'strawberry-perl', 'salmon'],
+    },
+    'rdp': {
+        'title': 'RDP 重组分析',
+        'title_en': 'Recombination (RDP5)',
+        'desc': 'RDP5 重组检测（含 clustalw2 与 3seqTable）',
+        'plugins': ['rdp5'],
+    },
+    'phylogeo': {
+        'title': '系统地理分析',
+        'title_en': 'Phylogeography',
+        'desc': 'LSD2 定年 + 地理迁移推断',
+        'plugins': ['lsd2'],
+    },
+    'sdt': {
+        'title': 'SDT 精确分析',
+        'title_en': 'SDT identity',
+        'desc': 'BLAST 两两比对计算同一性',
+        'plugins': ['blast'],
+    },
+    'verify': {
+        'title': '候选序列验证',
+        'title_en': 'Candidate verification',
+        'desc': 'BLAST / DIAMOND / MMseqs2 三引擎交叉验证',
+        'plugins': ['blast', 'diamond', 'mmseqs'],
+    },
+    'dsrna': {
+        'title': 'dsRNA 设计',
+        'title_en': 'dsRNA design',
+        'desc': 'dsRNAmax siRNA 位点筛选',
+        'plugins': ['dsrnamax'],
+    },
+    'crispr': {
+        'title': 'CRISPR 检测设计',
+        'title_en': 'CRISPR design',
+        'desc': 'BLAST 特异性检查',
+        'plugins': ['blast'],
+    },
+    'primer': {
+        'title': '引物设计',
+        'title_en': 'Primer design',
+        'desc': 'BLAST 特异性检查',
+        'plugins': ['blast'],
+    },
+    'mirna': {
+        'title': 'miRNA 靶标预测',
+        'title_en': 'miRNA target',
+        'desc': 'miRanda / RNAhybrid / PITA 三引擎',
+        'plugins': ['srna-target'],
+    },
+    'public_meta': {
+        'title': '公共数据检索',
+        'title_en': 'Public data search',
+        'desc': 'NCBI datasets 命令行 + 多线程下载',
+        'plugins': ['datasets', 'aria2c'],
+    },
+    'phylodyn': {
+        'title': '进化动力学',
+        'title_en': 'Evolutionary dynamics',
+        'desc': 'BEAST 作业包导出与结果解析（R 由用户环境提供）',
+        'plugins': ['blast'],
+    },
+    'misc': {
+        'title': '通用工具',
+        'title_en': 'General tools',
+        'desc': '压缩/解压等基础设施',
+        'plugins': ['crabz', 'aria2c', 'sracha', 'table2asn',
+                    'viral-consensus', 'pandepth'],
+    },
+}
+
 
 def sha256_file(path, chunk=1 << 20):
     h = hashlib.sha256()
@@ -214,14 +348,35 @@ def main():
             entries.append(r)
     if only:
         return
+    # 模块层：只做「模块 → 插件名」引用，不重复打包。校验引用完整性，
+    # 打错的模块名会让用户装出半残环境，必须在生成索引时就报错。
+    known = {e['name'] for e in entries}
+    modules = {}
+    for mid, m in MODULES.items():
+        unknown = [p for p in m['plugins'] if p not in known]
+        if unknown:
+            raise SystemExit(f'[MODULES] {mid} 引用了不存在的插件: {unknown}')
+        modules[mid] = {'title': m['title'], 'title_en': m['title_en'],
+                        'desc': m['desc'], 'plugins': list(m['plugins'])}
     index_path = os.path.join(INDEX_DIR, 'index.json')
     with open(index_path, 'w', encoding='utf-8') as f:
-        json.dump({'schema': 1, 'source': 'PVAP plugin repo',
-                   'release_tag': 'plugin-packs', 'plugins': entries},
+        json.dump({'schema': 2, 'source': 'PVAP plugin repo',
+                   'release_tag': 'plugin-packs',
+                   'plugins': entries, 'modules': modules},
                   f, ensure_ascii=False, indent=1)
     total = sum(e['size'] for e in entries)
+    # 共享工具统计：被多个模块引用的插件只打一个包
+    refs = {}
+    for m in modules.values():
+        for p in m['plugins']:
+            refs[p] = refs.get(p, 0) + 1
+    shared = {k: v for k, v in sorted(refs.items(), key=lambda x: -x[1])
+              if v > 1}
     print(f'\n索引: {index_path}（{len(entries)} 个插件, '
-          f'zip 合计 {total/1048576:.0f}MB）')
+          f'{len(modules)} 个模块, zip 合计 {total/1048576:.0f}MB）')
+    if shared:
+        print('共享工具（多模块引用，只打一个包）: '
+              + ', '.join(f'{k}×{v}' for k, v in shared.items()))
 
 
 if __name__ == '__main__':

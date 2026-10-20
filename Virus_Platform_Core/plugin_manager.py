@@ -526,6 +526,108 @@ def available_from_index(cfg, index_url=None, force=False):
 
 
 # ------------------------------------------------------------------
+# 模块层：按功能模块安装（工具去重，跳过已有）
+# ------------------------------------------------------------------
+def fetch_modules(index_url=None, force=False):
+    """索引里的模块分组（{mid: {title, desc, plugins[]}}）。
+
+    与 fetch_index 走同一套地址回退（国内镜像 → GitHub raw），复用其缓存，
+    避免一次请求拉两遍索引。"""
+    plugins, err = fetch_index(index_url, force=force)
+    if err:
+        return {}, err
+    # fetch_index 只返回 plugins 数组；模块表从同一份缓存里取
+    import urllib.request
+    urls = [index_url] if index_url else list(DEFAULT_INDEX_URLS)
+    for u in urls:
+        try:
+            req = urllib.request.Request(u, headers={'User-Agent': 'PVAP-Plugin/1.0'})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            mods = data.get('modules')
+            if isinstance(mods, dict):
+                return mods, None
+            return {}, None            # 旧版索引没有 modules 段
+        except Exception:
+            continue
+    return {}, '模块索引不可用'
+
+
+def plan_module_install(cfg, module_ids, items=None, index_url=None,
+                        force=False):
+    """模块 → 待装插件计划（自动去重 + 跳过本机已有）。
+
+    同一个工具被多个模块共用时只算一次；本机已探测到（3rd/ 或
+    platform.json）或已装插件覆盖的，直接跳过不下载。
+
+    返回 {modules: [{id,title,desc,plugins}], plan: [插件条目],
+          skipped: [{name, reason}], total_size}。
+    """
+    if items is None:
+        items, err = available_from_index(cfg, index_url=index_url, force=force)
+        if err:
+            raise PluginError(f'插件源不可用: {err}')
+    mods, err = fetch_modules(index_url, force=force)
+    if err and not mods:
+        raise PluginError(f'模块索引不可用: {err}')
+    by_name = {p['name']: p for p in items}
+    want_ids = list(module_ids) if module_ids else list(mods)
+    chosen, plan, skipped = [], [], []
+    seen = set()
+    for mid in want_ids:
+        m = mods.get(mid)
+        if not m:
+            skipped.append({'name': mid, 'reason': '模块不存在'})
+            continue
+        chosen.append({'id': mid, **m})
+        for pname in m.get('plugins') or []:
+            if pname in seen:
+                continue
+            seen.add(pname)
+            p = by_name.get(pname)
+            if not p:
+                skipped.append({'name': pname, 'reason': '索引中无此插件'})
+                continue
+            if p.get('installed'):
+                skipped.append({'name': pname, 'reason': '已安装'})
+                continue
+            if not p.get('needed'):
+                skipped.append({'name': pname, 'reason': '本机已具备'})
+                continue
+            plan.append(p)
+    plan.sort(key=lambda x: (x.get('size') or 0, x['name']))
+    return {'modules': chosen, 'plan': plan, 'skipped': skipped,
+            'total_size': sum((p.get('size') or 0) for p in plan)}
+
+
+def install_modules(cfg, module_ids, progress=None, index_url=None):
+    """按模块安装：规划（去重/跳过）→ 逐个下载安装 → 刷新 cfg。
+
+    progress(done, total, name) 可选回调，供前端显示进度。
+    返回 {installed: [...], failed: [{name,error}], skipped: [...],
+          total_size}。
+    """
+    pl = plan_module_install(cfg, module_ids, index_url=index_url, force=True)
+    plan, skipped = pl['plan'], list(pl['skipped'])
+    installed, failed = [], []
+    for i, p in enumerate(plan, 1):
+        if progress:
+            progress(i, len(plan), p['name'])
+        try:
+            urls = p.get('urls') or [p.get('url')]
+            mf = install_urls([u for u in urls if u],
+                              expected_sha256=p.get('sha256'))
+            installed.append(mf['name'])
+        except Exception as e:
+            failed.append({'name': p['name'],
+                           'error': f'{type(e).__name__}: {e}'})
+    if installed:
+        cfg.refresh_plugins()
+    return {'installed': installed, 'failed': failed, 'skipped': skipped,
+            'total_size': pl['total_size'], 'modules': pl['modules']}
+
+
+# ------------------------------------------------------------------
 # Cfg 集成
 # ------------------------------------------------------------------
 def refresh_cfg_plugins(cfg):

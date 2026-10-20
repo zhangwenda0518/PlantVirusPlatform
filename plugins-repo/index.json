@@ -1,5 +1,5 @@
 {
- "schema": 1,
+ "schema": 2,
  "source": "PVAP plugin repo",
  "release_tag": "plugin-packs",
  "plugins": [
@@ -587,5 +587,189 @@
    "sha256": "b5bdeaeb5567ec170d6cfeed791a5c58b65b8f358407bf2ee857e393bea99d1f",
    "install_to": "3rd/tools/datasets"
   }
- ]
+ ],
+ "modules": {
+  "preprocess": {
+   "title": "⓪ 质控与宿主去除",
+   "title_en": "QC & host removal",
+   "desc": "fastp 质控 + seqkit 序列处理 + 宿主比对（minibwa）",
+   "plugins": [
+    "fastp",
+    "seqkit",
+    "minibwa"
+   ]
+  },
+  "assemble": {
+   "title": "① 病毒组装",
+   "title_en": "Viral assembly",
+   "desc": "SPAdes 从头组装 + BLAST 骨架比对",
+   "plugins": [
+    "spades",
+    "blast"
+   ]
+  },
+  "identify": {
+   "title": "② 病毒鉴定（kunpeng）",
+   "title_en": "Virus identification",
+   "desc": "kunpeng 核酸分类引擎 + seqkit 预处理",
+   "plugins": [
+    "kunpeng",
+    "seqkit"
+   ]
+  },
+  "contigs": {
+   "title": "④ contig 分类",
+   "title_en": "Contig classification",
+   "desc": "kunpeng 分类 + 序列整理",
+   "plugins": [
+    "kunpeng",
+    "seqkit"
+   ]
+  },
+  "orf": {
+   "title": "⑤ ORF 预测与注释",
+   "title_en": "ORF prediction & annotation",
+   "desc": "orfipy 预测 + BLAST 比对注释",
+   "plugins": [
+    "blast"
+   ]
+  },
+  "genome": {
+   "title": "⑥ 基因组图谱",
+   "title_en": "Genome plots",
+   "desc": "gbdraw 出图（随 3rd/python 运行时，另装）；无则回退纯 Python 引擎",
+   "plugins": []
+  },
+  "align": {
+   "title": "⑦ 多序列比对",
+   "title_en": "Multiple alignment",
+   "desc": "MAFFT 比对 + trimAl 清剪",
+   "plugins": [
+    "mafft",
+    "trimal"
+   ]
+  },
+  "tree": {
+   "title": "⑧ 建树",
+   "title_en": "Tree building",
+   "desc": "RAxML-NG 最大似然 / FastTree 快速 / IQ-TREE 3",
+   "plugins": [
+    "raxml-ng",
+    "fasttree",
+    "iqtree",
+    "trimal"
+   ]
+  },
+  "kvsuite": {
+   "title": "⑨ 已知病毒识别与定量",
+   "title_en": "Known virus suite",
+   "desc": "minimap2 比对 + samtools 处理 + snpEff 注释 + SNPGenie 选择压力",
+   "plugins": [
+    "minimap2",
+    "samtools",
+    "bcftools",
+    "snpeff",
+    "jre-snpeff",
+    "snpgenie",
+    "strawberry-perl",
+    "salmon"
+   ]
+  },
+  "rdp": {
+   "title": "RDP 重组分析",
+   "title_en": "Recombination (RDP5)",
+   "desc": "RDP5 重组检测（含 clustalw2 与 3seqTable）",
+   "plugins": [
+    "rdp5"
+   ]
+  },
+  "phylogeo": {
+   "title": "系统地理分析",
+   "title_en": "Phylogeography",
+   "desc": "LSD2 定年 + 地理迁移推断",
+   "plugins": [
+    "lsd2"
+   ]
+  },
+  "sdt": {
+   "title": "SDT 精确分析",
+   "title_en": "SDT identity",
+   "desc": "BLAST 两两比对计算同一性",
+   "plugins": [
+    "blast"
+   ]
+  },
+  "verify": {
+   "title": "候选序列验证",
+   "title_en": "Candidate verification",
+   "desc": "BLAST / DIAMOND / MMseqs2 三引擎交叉验证",
+   "plugins": [
+    "blast",
+    "diamond",
+    "mmseqs"
+   ]
+  },
+  "dsrna": {
+   "title": "dsRNA 设计",
+   "title_en": "dsRNA design",
+   "desc": "dsRNAmax siRNA 位点筛选",
+   "plugins": [
+    "dsrnamax"
+   ]
+  },
+  "crispr": {
+   "title": "CRISPR 检测设计",
+   "title_en": "CRISPR design",
+   "desc": "BLAST 特异性检查",
+   "plugins": [
+    "blast"
+   ]
+  },
+  "primer": {
+   "title": "引物设计",
+   "title_en": "Primer design",
+   "desc": "BLAST 特异性检查",
+   "plugins": [
+    "blast"
+   ]
+  },
+  "mirna": {
+   "title": "miRNA 靶标预测",
+   "title_en": "miRNA target",
+   "desc": "miRanda / RNAhybrid / PITA 三引擎",
+   "plugins": [
+    "srna-target"
+   ]
+  },
+  "public_meta": {
+   "title": "公共数据检索",
+   "title_en": "Public data search",
+   "desc": "NCBI datasets 命令行 + 多线程下载",
+   "plugins": [
+    "datasets",
+    "aria2c"
+   ]
+  },
+  "phylodyn": {
+   "title": "进化动力学",
+   "title_en": "Evolutionary dynamics",
+   "desc": "BEAST 作业包导出与结果解析（R 由用户环境提供）",
+   "plugins": [
+    "blast"
+   ]
+  },
+  "misc": {
+   "title": "通用工具",
+   "title_en": "General tools",
+   "desc": "压缩/解压等基础设施",
+   "plugins": [
+    "crabz",
+    "aria2c",
+    "sracha",
+    "table2asn",
+    "viral-consensus",
+    "pandepth"
+   ]
+  }
+ }
 }

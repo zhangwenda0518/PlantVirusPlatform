@@ -227,6 +227,19 @@
     <div id="pluginAvailable" class="tools" style="margin-top:8px">
       <span class="hint" data-i18n="se.pluginsSrcIdle">尚未检测</span>
     </div>
+    <hr style="margin:14px 0 10px;border:none;border-top:1px solid var(--border,#ddd)">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <b data-i18n="se.pluginsByModule">📦 按模块安装</b>
+      <span class="hint" data-i18n="se.pluginsByModuleHint">勾选功能模块 → 自动算所需工具（多模块共用的只下一次）→ 跳过本机已有的，只装缺的。</span>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="loadModules(true)">⟳ <span data-i18n="se.pluginsModuleRefresh">刷新</span></button>
+      <button class="btn" id="moduleInstallBtn" onclick="installSelectedModules()" style="display:none">
+        ⏬ <span data-i18n="se.pluginsModuleInstall">安装选中模块</span>
+      </button>
+    </div>
+    <div id="moduleList" class="tools" style="margin-top:8px">
+      <span class="hint" data-i18n="se.pluginsModuleIdle">尚未加载模块列表</span>
+    </div>
   </section>
 
   <!-- 环境自检（模块 / 数据库 / 磁盘；工具明细见上方「工具探测」）。
@@ -595,6 +608,7 @@ loadSettings();
 loadTools();
 loadPlugins(false);
 loadPluginsAvailable(false);
+loadModules(false);
 runSelfcheck(false);   // 进页展示缓存结果；强制重跑点按钮
 
 /* ---- 插件管理（/api/plugin/*，机制见 Virus_Platform_Core/plugin_manager.py）---- */
@@ -786,6 +800,103 @@ async function pluginInstallMissing() {
   }
   pluginMsg(`${t('se.pluginsFixDone', '补齐完成')}：✔${okN}${failN ? ` ✘${failN}` : ''}`, !failN);
   loadPlugins(false); loadTools(); loadPluginsAvailable(false);
+}
+
+/* ---- 按模块安装（/api/plugin/modules）：勾选模块 → 自动算依赖 → 只装缺的 ---- */
+let MODULE_DATA = null;
+let MODULE_SELECTED = new Set();
+
+async function loadModules(force) {
+  const box = $('moduleList');
+  if (!box) return;
+  box.innerHTML = `<span class="hint">${t('se.pluginsModuleLoading', '加载模块列表…')}</span>`;
+  try {
+    const d = await (await fetch('/api/plugin/modules' + (force ? '?force=1' : ''))).json();
+    if (!d.ok) {
+      box.innerHTML = `<span class="no">✘ ${esc(d.error || '')}</span>`;
+      return;
+    }
+    MODULE_DATA = d;
+    const mods = d.modules || [];
+    if (!mods.length) {
+      box.innerHTML = `<span class="hint">${t('se.pluginsModuleEmpty', '索引里没有模块分组（插件源版本较旧）')}</span>`;
+      return;
+    }
+    // 保留用户已勾选、且仍存在的模块
+    const valid = new Set(mods.map(m => m.id));
+    MODULE_SELECTED = new Set([...MODULE_SELECTED].filter(x => valid.has(x)));
+    box.innerHTML = mods.map(m => {
+      const miss = m.missing || [];
+      const badge = m.ready
+        ? `<span class="ok">✔ ${t('se.pluginsModuleReady', '就绪')}</span>`
+        : `<span class="no">缺 ${miss.length}/${m.total}</span>`;
+      const deps = (m.plugins || []).map(n => {
+        const bad = miss.includes(n);
+        return `<span class="${bad ? 'no' : 'ok'}" style="margin-left:6px">${bad ? '○' : '●'} ${esc(n)}</span>`;
+      }).join('');
+      return `<div class="trow" style="display:block">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" value="${esc(m.id)}" ${MODULE_SELECTED.has(m.id) ? 'checked' : ''}
+                 onchange="toggleModule(this.value, this.checked)">
+          <b>${esc(m.title)}</b>
+          <small>${esc(m.desc || '')}</small>
+          <span style="flex:1"></span>${badge}
+        </label>
+        <div style="margin:4px 0 0 24px;font-size:12px">${deps || '<span class="hint">无外部工具依赖</span>'}</div>
+      </div>`;
+    }).join('');
+    updateModuleBtn();
+  } catch (e) {
+    box.innerHTML = `<span class="no">✘ ${esc(e)}</span>`;
+  }
+}
+
+function toggleModule(id, on) {
+  if (on) MODULE_SELECTED.add(id); else MODULE_SELECTED.delete(id);
+  updateModuleBtn();
+}
+
+function updateModuleBtn() {
+  const btn = $('moduleInstallBtn');
+  if (!btn) return;
+  const n = MODULE_SELECTED.size;
+  btn.style.display = n ? '' : 'none';
+  if (!n) return;
+  // 预估：所选模块待装插件的并集大小
+  const mods = (MODULE_DATA && MODULE_DATA.modules) || [];
+  const plan = (MODULE_DATA && MODULE_DATA.plan) || [];
+  const byName = {};
+  for (const p of plan) byName[p.name] = p;
+  const want = new Set();
+  for (const m of mods) {
+    if (MODULE_SELECTED.has(m.id)) (m.plugins || []).forEach(p => want.add(p));
+  }
+  let size = 0;
+  for (const n of want) if (byName[n]) size += byName[n].size || 0;
+  btn.querySelector('span').textContent =
+    `${t('se.pluginsModuleInstall', '安装选中模块')}（${n} 个模块, ${(size / 1048576).toFixed(0)}MB）`;
+}
+
+async function installSelectedModules() {
+  const ids = [...MODULE_SELECTED];
+  if (!ids.length) return;
+  if (!confirm(`${t('se.pluginsModuleConfirm', '安装所选模块所需工具（自动去重、跳过已有）')} (${ids.length})?`))
+    return;
+  pluginMsg(t('se.pluginsInstalling', '安装中…'), true);
+  try {
+    const r = await fetch('/api/plugin/install_modules', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({modules: ids})});
+    const d = await r.json();
+    if (!d.ok) { pluginMsg(`${t('se.pluginsFail', '操作失败')}: ${d.error || ''}`, false); return; }
+    const ins = d.installed || [], fail = d.failed || [], skip = d.skipped || [];
+    pluginMsg(`${t('se.pluginsModuleDone', '模块安装完成')}：✔${ins.length} 新装, `
+      + `${skip.length} 跳过(已有), ${fail.length} 失败`
+      + (fail.length ? ' — ' + fail.map(f => f.name).join(', ') : ''), !fail.length);
+    loadPlugins(false); loadTools(); loadPluginsAvailable(false); loadModules(false);
+  } catch (e) {
+    pluginMsg(`${t('se.pluginsFail', '操作失败')}: ${e}`, false);
+  }
 }
 
 
