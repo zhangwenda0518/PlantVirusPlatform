@@ -82,11 +82,12 @@ def test_p0_1():
     os.makedirs(fdir, exist_ok=True)
     # 上一轮残留的旧通过表
     open(os.path.join(fdir, 'filtered.tsv'), 'w').write(hdr + 'stale\n')
-    import polars as pl
+    # 2026-10-20：polars → pandas（FilterStage 已改用 pandas）
+    import pandas as pd
     fs = FilterStage(SimpleNamespace(min_reads=0, min_depth=0, min_cov=0,
                                      ratio=0, ani_thresh=95, min_tpm=0),
                      _L(), d)
-    fs.apply(pl.DataFrame(schema={'Sample': pl.Utf8}))
+    fs.apply(pd.DataFrame({'Sample': pd.Series(dtype='object')}))
     check('filter：空输入覆盖旧 filtered.tsv',
           open(os.path.join(fdir, 'filtered.tsv'), encoding='utf-8').read()
           .count('\n') <= 1)
@@ -156,6 +157,7 @@ def test_p1_2_random():
     check('覆盖后段（非前缀）', max(int(i[1:]) for i in ids) > 10)
 
 
+
 def test_p1_1_host_reuse():
     """P1-1 host 复用三路：命中 / 相对路径同库（口径修复）/ 参数变重跑。"""
     import gzip as gzm
@@ -211,6 +213,10 @@ def test_wiring():
 
     check('P1-1 subsample 指纹含 mode/seed/inputs',
           has('Virus_Platform_Core/pipeline.py', "prev.get('mode') == C.subsample_mode"))
+    check('proportion 子采样三路接线（CLI/Web/AI）',
+          has('main.py', 'subsample_mode=args.subsample_mode')
+          and has('Virus_Platform_Core/web/samples.py', "subsample_mode=_val('subsample_mode'")
+          and has('Virus_Platform_Core/ai_agent/executors.py', "'subsample_mode'"))
     check('P1-1 fastp 指纹含 params',
           has('Virus_Platform_Core/preprocess.py', "'params': {'dedup': bool(dedup), 'min_len': min_len}"))
     check('P1-1 host 复用校验输入/库/参数',
@@ -263,12 +269,14 @@ def main():
     test_p0_1()
     test_p1_6_ani_status()
     test_p1_2_random()
+    test_prop_subsample()
     test_p1_1_host_reuse()
     test_wiring()
     import shutil
     shutil.rmtree(os.path.join(ROOT, 'run', 'logs', '_rvw_p01'), ignore_errors=True)
     shutil.rmtree(os.path.join(ROOT, 'run', 'logs', '_rvw_p16'), ignore_errors=True)
     shutil.rmtree(os.path.join(ROOT, 'run', 'logs', '_rvw_p12'), ignore_errors=True)
+    shutil.rmtree(os.path.join(ROOT, 'run', 'logs', '_rvw_psub'), ignore_errors=True)
     shutil.rmtree(os.path.join(ROOT, 'run', 'logs', '_rvw_p11h'), ignore_errors=True)
     print()
     if FAIL:
