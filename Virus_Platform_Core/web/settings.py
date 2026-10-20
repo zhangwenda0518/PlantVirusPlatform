@@ -8,12 +8,18 @@
     GET  /api/storage           磁盘容量 + 目录占用（占用走后台扫描 + 缓存）
     POST /api/storage/rescan    强制重新统计目录占用
     GET  /api/selfcheck         环境自检（模块/工具/数据库/磁盘；?force=1 强制重跑）
+    GET  /api/plugin/list       插件清单（plugins/ 目录扫描）
+    GET  /api/plugin/available  插件源索引 × 本机现状（自动检测缺失工具）
+    POST /api/plugin/install    安装插件 zip（multipart file= 或 JSON path=）
+    POST /api/plugin/install_url 从 URL 下载安装（可带 sha256 校验）
+    POST /api/plugin/uninstall  卸载插件（JSON name=）
 
 设计要点：磁盘剩余用 shutil.disk_usage 毫秒级实时算；目录占用要遍历
 6 万+ 文件（databases 12GB+），实测数十秒，因此走后台线程 + 10 分钟缓存，
 绝不放在请求路径上同步扫描。
 """
 import os
+import tempfile
 import threading
 import time
 
@@ -386,3 +392,126 @@ def api_storage_rescan():
                      name='storage-scan').start()
     _bind_storage_scan()
     return jsonify({'ok': True})
+
+
+# ------------------------------------------------------------------
+# 插件管理（plugins/ 目录，机制见 plugin_manager.py）
+# ------------------------------------------------------------------
+def _plugin_describe_payload():
+    """扫描结果 → 前端载荷（附当前生效路径与来源标记）。"""
+    from Virus_Platform_Core import plugin_manager as pm
+    items = []
+    for it in pm.installed_plugins():
+        items.append({
+            'name': it['name'], 'kind': it['kind'],
+            'version': it['version'], 'description': it['description'],
+            'ok': it['ok'], 'error': it.get('error'),
+            'map': {k: v for k, v in (it.get('map') or {}).items()},
+            'active': {k: (cfg.plugin_tools.get(k) == v
+                           or cfg.plugin_databases.get(k) == v)
+                       for k, v in (it.get('map') or {}).items()},
+        })
+    return {'items': items, 'plugin_dir': pm.PLUGIN_DIR,
+            'plugin_tools': cfg.plugin_tools,
+            'plugin_databases': cfg.plugin_databases}
+
+
+@bp.route('/api/plugin/list', methods=['GET'])
+def api_plugin_list():
+    return jsonify(_plugin_describe_payload())
+
+
+@bp.route('/api/plugin/install', methods=['POST'])
+def api_plugin_install():
+    """安装插件 zip：multipart 上传（file=...）或 JSON {"path": 本地 zip 路径}。"""
+    from Virus_Platform_Core import plugin_manager as pm
+    tmp_zip = None
+    try:
+        f = request.files.get('file')
+        if f is not None:
+            os.makedirs(pm.PLUGIN_DIR, exist_ok=True)
+            fd, tmp_zip = tempfile.mkstemp(prefix='.up-', suffix='.zip',
+                                           dir=pm.PLUGIN_DIR)
+            os.close(fd)
+            f.save(tmp_zip)
+            src = tmp_zip
+        else:
+            src = (request.json or {}).get('path') or ''
+        if not src:
+            return jsonify({'ok': False,
+                            'error': '缺少插件包：请上传 zip（file=）或给出本地路径（path=）'}), 400
+        mf = pm.install_zip(src)
+        cfg.refresh_plugins()
+        resp = _plugin_describe_payload()
+        resp['ok'] = True
+        resp['installed'] = mf.get('name')
+        return jsonify(resp)
+    except pm.PluginError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False,
+                        'error': f'{type(e).__name__}: {e}'}), 500
+    finally:
+        if tmp_zip:
+            try:
+                os.remove(tmp_zip)
+            except OSError:
+                pass
+
+
+@bp.route('/api/plugin/available', methods=['GET'])
+def api_plugin_available():
+    """插件源索引 × 本机现状：自动检测缺失工具，标注 needed/missing_keys。
+
+    ?force=1 跳过索引缓存。索引 URL 取 cfg.plugin_index_url（空 = 内置默认，
+    即本仓库 plugins-repo/index.json 的 raw 地址）。"""
+    from Virus_Platform_Core import plugin_manager as pm
+    force = request.args.get('force') in ('1', 'true')
+    url = (cfg.plugin_index_url or '').strip() or None
+    items, err = pm.available_from_index(cfg, index_url=url, force=force)
+    if err:
+        return jsonify({'ok': False, 'error': err,
+                        'index_url': url or pm.DEFAULT_INDEX_URL}), 502
+    return jsonify({'ok': True, 'items': items,
+                    'index_url': url or pm.DEFAULT_INDEX_URL})
+
+
+@bp.route('/api/plugin/install_url', methods=['POST'])
+def api_plugin_install_url():
+    """从 URL 下载安装（对齐 PhyloSuite 的镜像直装）。下载失败时提示用户
+    手动下载后走 /api/plugin/install 上传或指定本地路径。
+    JSON 可带 sha256（索引条目自带）→ 下载后先验哈希再解压。"""
+    from Virus_Platform_Core import plugin_manager as pm
+    body = request.json or {}
+    url = body.get('url') or ''
+    sha = body.get('sha256') or None
+    try:
+        mf = pm.install_url(url, expected_sha256=sha)
+        cfg.refresh_plugins()
+        resp = _plugin_describe_payload()
+        resp['ok'] = True
+        resp['installed'] = mf.get('name')
+        return jsonify(resp)
+    except pm.PluginError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'{type(e).__name__}: {e}',
+                        'hint': '下载失败可手动下载 zip 后在「本地安装」里指定'}), 502
+
+
+@bp.route('/api/plugin/uninstall', methods=['POST'])
+def api_plugin_uninstall():
+    from Virus_Platform_Core import plugin_manager as pm
+    name = (request.json or {}).get('name') or ''
+    try:
+        pm.uninstall(name)
+        cfg.refresh_plugins()
+        resp = _plugin_describe_payload()
+        resp['ok'] = True
+        resp['uninstalled'] = name
+        return jsonify(resp)
+    except pm.PluginError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False,
+                        'error': f'{type(e).__name__}: {e}'}), 500

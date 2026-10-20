@@ -1,0 +1,348 @@
+{
+ "schema": 1,
+ "source": "PVAP plugin repo",
+ "release_tag": "plugin-packs",
+ "plugins": [
+  {
+   "name": "kunpeng",
+   "version": "0.7.12",
+   "kind": "tool",
+   "description": "kunpeng 病毒核酸分类引擎（k-mer 精确版）",
+   "provides": {
+    "kunpeng": "kun_peng-v0.7.12-x86_64-pc-windows-msvc.exe"
+   },
+   "file": "kunpeng-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/kunpeng-plugin.zip",
+   "size": 1131476,
+   "sha256": "ccb72d75e519d86bf654249379a24a85b5f52d3fd381a65306180a3fc641d73d"
+  },
+  {
+   "name": "seqkit",
+   "version": "2.x",
+   "kind": "tool",
+   "description": "FASTA/FASTQ 序列工具箱",
+   "provides": {
+    "seqkit": "seqkit.exe"
+   },
+   "file": "seqkit-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/seqkit-plugin.zip",
+   "size": 8740683,
+   "sha256": "246aa28749a1456f83f8fb08028223c4f9b37ae64283f6eb8e33d8ec9a86d19c"
+  },
+  {
+   "name": "crabz",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "并行 gzip/pigz 压缩解压",
+   "provides": {
+    "crabz": "crabz.exe"
+   },
+   "file": "crabz-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/crabz-plugin.zip",
+   "size": 1163468,
+   "sha256": "b31b06e8b7728f24cce2aca1fa791ce80b631d752d765d83a100b42715f77714"
+  },
+  {
+   "name": "aria2c",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "多线程下载器（公共数据检索用）",
+   "provides": {
+    "aria2c": "aria2c.exe"
+   },
+   "file": "aria2c-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/aria2c-plugin.zip",
+   "size": 2450418,
+   "sha256": "49b776314cf59b49ed7caa0e88fba67ee072bc3920e9802c93a4dab01fae77b2"
+  },
+  {
+   "name": "minibwa",
+   "version": "0.x",
+   "kind": "tool",
+   "description": "轻量 BWA 比对（宿主去除用）",
+   "provides": {
+    "minibwa": "minibwa.exe"
+   },
+   "file": "minibwa-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/minibwa-plugin.zip",
+   "size": 750757,
+   "sha256": "9609dc89a7f2e68fdf437df3e58c59ac482b1d003cf4cfb9f99efc94b08012ef"
+  },
+  {
+   "name": "sracha",
+   "version": "0.x",
+   "kind": "tool",
+   "description": "sracha 序列校正",
+   "provides": {
+    "sracha": "sracha.exe"
+   },
+   "file": "sracha-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/sracha-plugin.zip",
+   "size": 3536216,
+   "sha256": "0f2f1f944b99cc3edc0ac50528ef61993fc39b2598578d952224bade635b1f58"
+  },
+  {
+   "name": "blast",
+   "version": "2.x",
+   "kind": "tool",
+   "description": "NCBI BLAST+ 套件（blastn/blastp/blastx）",
+   "provides": {
+    "blastn": "bin/blastn.exe",
+    "makeblastdb": "bin/makeblastdb.exe",
+    "blastp": "bin/blastp.exe",
+    "blastx": "bin/blastx.exe"
+   },
+   "file": "blast-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/blast-plugin.zip",
+   "size": 26254213,
+   "sha256": "b6541d33a76d69ee3408211701d6535449a19892009f280b8d4d352d81c468a0"
+  },
+  {
+   "name": "spades",
+   "version": "4.x",
+   "kind": "tool",
+   "description": "SPAdes 基因组从头组装",
+   "provides": {
+    "spades": "bin/spades.bat"
+   },
+   "file": "spades-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/spades-plugin.zip",
+   "size": 38248573,
+   "sha256": "966aeae3d408401f24cbaa63491cd9618f0de5ac60343b43b3b5219d1fd54900"
+  },
+  {
+   "name": "mafft",
+   "version": "7.x",
+   "kind": "tool",
+   "description": "MAFFT 多序列比对",
+   "provides": {
+    "mafft": "mafft.bat"
+   },
+   "file": "mafft-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/mafft-plugin.zip",
+   "size": 27489533,
+   "sha256": "cb57a6a196ab70b12c3896591255ce17401c72a51f59defe4c0fcb592fe402ed"
+  },
+  {
+   "name": "fasttree",
+   "version": "2.1.x",
+   "kind": "tool",
+   "description": "FastTree 快速建树",
+   "provides": {
+    "fasttree": "FastTree.exe"
+   },
+   "file": "fasttree-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/fasttree-plugin.zip",
+   "size": 140224,
+   "sha256": "c1a6470084db30230484cc8beaaadb50c29715eb1a5c4da5607377162f49d825"
+  },
+  {
+   "name": "raxml-ng",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "RAxML-NG 最大似然建树",
+   "provides": {
+    "raxml-ng": "raxml-ng.exe"
+   },
+   "file": "raxml-ng-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/raxml-ng-plugin.zip",
+   "size": 2999242,
+   "sha256": "b04dd5f2dc6529441d22c40c9ff1661909d2d0d1c92acad77610601ba9aae958"
+  },
+  {
+   "name": "iqtree",
+   "version": "3.0.1",
+   "kind": "tool",
+   "description": "IQ-TREE 3 建树（v3）",
+   "provides": {
+    "iqtree3": "iqtree-3.0.1-Windows/bin/iqtree3.exe"
+   },
+   "file": "iqtree-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/iqtree-plugin.zip",
+   "size": 5732371,
+   "sha256": "65b2015aa7c6098e8c0b8dff1234374c17d512deec94c0ee596fae8f3c879815"
+  },
+  {
+   "name": "trimal",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "trimAl 比对清剪",
+   "provides": {
+    "trimal": "trimal.exe"
+   },
+   "file": "trimal-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/trimal-plugin.zip",
+   "size": 364820,
+   "sha256": "5de1d52b22ffe98847ed53a94fbdcc5ded06de7632a00811165644e53d5d7652"
+  },
+  {
+   "name": "diamond",
+   "version": "2.x",
+   "kind": "tool",
+   "description": "DIAMOND 蛋白/核酸快速比对",
+   "provides": {
+    "diamond": "diamond.exe"
+   },
+   "file": "diamond-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/diamond-plugin.zip",
+   "size": 3356729,
+   "sha256": "f477144c021d42e450a4ac4067218343e47430b40a377455f2fe5484317a6ed2"
+  },
+  {
+   "name": "mmseqs",
+   "version": "x",
+   "kind": "tool",
+   "description": "MMseqs2 超快序列搜索",
+   "provides": {
+    "mmseqs": "bin/mmseqs.exe"
+   },
+   "file": "mmseqs-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/mmseqs-plugin.zip",
+   "size": 124693558,
+   "sha256": "93091a2e2c5bb0cb6a6114de5d8748ec3467c6577e29b5b5391ee101e2cde3c5"
+  },
+  {
+   "name": "minimap2",
+   "version": "2.x",
+   "kind": "tool",
+   "description": "minimap2 长读长/参考比对",
+   "provides": {
+    "minimap2": "minimap2.exe"
+   },
+   "file": "minimap2-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/minimap2-plugin.zip",
+   "size": 619350,
+   "sha256": "f74d724627a366542951a749684a99122a2dc6ea83ddf69915e721b22251b6c7"
+  },
+  {
+   "name": "samtools",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "SAM/BAM 处理套件",
+   "provides": {
+    "samtools": "bin/samtools.exe"
+   },
+   "file": "samtools-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/samtools-plugin.zip",
+   "size": 13235586,
+   "sha256": "9c371c4e3b095773c8ddef6e0450e4928b7db0e07d268df63619323a86ebf3ec"
+  },
+  {
+   "name": "bcftools",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "VCF/BCF 变异调用",
+   "provides": {
+    "bcftools": "bin/bcftools.exe"
+   },
+   "file": "bcftools-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/bcftools-plugin.zip",
+   "size": 17353741,
+   "sha256": "47c9fbb569f463b8149acc8291f8c66776f0e0bfb1ec246972c8f5cf7369f42e"
+  },
+  {
+   "name": "salmon",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "Salmon 转录本定量",
+   "provides": {
+    "salmon": "salmon.exe"
+   },
+   "file": "salmon-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/salmon-plugin.zip",
+   "size": 4084757,
+   "sha256": "4ed6feb1da4178d25ce45904dade08e109715ee56c64568b9fef641908029085"
+  },
+  {
+   "name": "fastp",
+   "version": "0.x",
+   "kind": "tool",
+   "description": "fastp FASTQ 质控",
+   "provides": {
+    "fastp": "fastp.exe"
+   },
+   "file": "fastp-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/fastp-plugin.zip",
+   "size": 7158687,
+   "sha256": "978108f27365807e9045688c15534a6651bc09e2eb917f465aa01b8e82200603"
+  },
+  {
+   "name": "table2asn",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "NCBI table2asn 提交工具",
+   "provides": {
+    "table2asn": "table2asn.exe"
+   },
+   "file": "table2asn-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/table2asn-plugin.zip",
+   "size": 13584326,
+   "sha256": "8a59349e9d048795256350107027f7901cdfa949f76caee14b8ec02663734488"
+  },
+  {
+   "name": "pandepth",
+   "version": "0.x",
+   "kind": "tool",
+   "description": "pandepth 覆盖度统计",
+   "provides": {
+    "pandepth": "pandepth.exe"
+   },
+   "file": "pandepth-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/pandepth-plugin.zip",
+   "size": 9725198,
+   "sha256": "7a87516d6ac2870c0b26f7d2b476798b394cd41524a4daf65a62a87dfe9f4414"
+  },
+  {
+   "name": "viral-consensus",
+   "version": "0.x",
+   "kind": "tool",
+   "description": "病毒共识序列生成",
+   "provides": {
+    "viral_consensus": "viral_consensus.exe"
+   },
+   "file": "viral-consensus-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/viral-consensus-plugin.zip",
+   "size": 8167036,
+   "sha256": "1d53ac131d46ecaf80c033b4b7cefe4fc42d1799662b380c2c30d31b42b8282b"
+  },
+  {
+   "name": "lsd2",
+   "version": "2.x",
+   "kind": "tool",
+   "description": "LSD2 最小进化定年",
+   "provides": {
+    "lsd2": "lsd2.exe"
+   },
+   "file": "lsd2-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/lsd2-plugin.zip",
+   "size": 965920,
+   "sha256": "e8650fe68cecaee9540399d16f987455a1d67916bb2d3ca171d7284391e88494"
+  },
+  {
+   "name": "dsrnamax",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "dsRNAmax siRNA 设计",
+   "provides": {
+    "dsRNAmax": "dsRNAmax_det.exe"
+   },
+   "file": "dsrnamax-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/dsrnamax-plugin.zip",
+   "size": 1848217,
+   "sha256": "08c1cee11edec9c7603d37ae149a4f94dc90d573380a1e26791f7f30e5b7f0fa"
+  },
+  {
+   "name": "rdp5",
+   "version": "5.x",
+   "kind": "tool",
+   "description": "RDP5 重组检测（含 clustalw2/3seqTable）",
+   "provides": {
+    "RDP5CL": "RDP5CL.exe"
+   },
+   "file": "rdp5-plugin.zip",
+   "url": "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/rdp5-plugin.zip",
+   "size": 67901432,
+   "sha256": "cfff4ba2e0028201f18ace2bffc6c4bceb5f1491d989ec8f5880073b31e20d4e"
+  }
+ ]
+}

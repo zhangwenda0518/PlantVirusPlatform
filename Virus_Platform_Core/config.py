@@ -1032,6 +1032,16 @@ class Config:
     def __init__(self):
         self.threads = max(1, (os.cpu_count() or 4) - 1)
         self.tools = detect_tools()
+        # 插件层（plugins/ 目录，机制见 plugin_manager.py）：独立于 tools/
+        # databases 存放，tool()/tool_status() 只把它当「填缺」备份，save()
+        # 不落盘——卸载插件后配置零残留。_platform_tool_keys 记录 platform.json
+        # 显式指定的工具键（插件不得压过用户手工配置）。
+        self.plugin_tools = {}
+        self.plugin_databases = {}
+        self._platform_tool_keys = set()
+        # 插件源索引 URL（'' = 用 plugin_manager.DEFAULT_INDEX_URL，即本仓库
+        # plugins-repo/index.json 的 raw 地址）；国内网络可换成镜像地址。
+        self.plugin_index_url = ''
         self.email = ''            # NCBI EUtils 联系邮箱（可选，礼貌性参数）
         self.language = 'zh'       # 界面语言: zh | en
         # AI 助手（对话驱动智能代理）：OpenAI 兼容端点配置。键结构与预设
@@ -1051,7 +1061,10 @@ class Config:
                    # exec_auto     = 第二级：阶段失败后原参数自动重试（限1次）
                    # exec_auto_tune= 第三级：AI 提参自动重跑闭环（限1次，
                    #                 调参失败回落第二级）。两者默认关。
-                   'exec_auto': False, 'exec_auto_tune': False}
+                   'exec_auto': False, 'exec_auto_tune': False,
+                   # 供应商档案（ZCode 式多端点并存）：每套 name/base_url/model，
+                   # Key 永不进本文件（分离在 run/ai_local.json provider_keys）
+                   'providers': [], 'active_profile': ''}
         # 分析默认参数（预填硬编码缺省，platform.json 的已存值在 _load_extras 覆盖）
         self.defaults = {k: v for k, _t, v, *_r in self.DEFAULT_FIELDS}
         self.databases = {
@@ -1128,6 +1141,12 @@ class Config:
                 # 抢走用户在 databases.host 里显式配置的宿主库。
                 continue
             self.databases[k] = pv
+        # 插件最后挂载：platform.json 覆盖与注册表解析已就位，插件只填缺
+        # （tools 的填缺在 tool()/tool_status() 里做，见 plugin_manager.py）。
+        try:
+            self.refresh_plugins()
+        except Exception as e:            # 坏插件/坏清单不拦启动
+            sys.stderr.write(f'[config] 插件扫描失败（已跳过）: {e}\n')
         for d in ('databases', 'taxonomy', 'results', 'downloads', 'logan',
                   'submissions', 'meta_search', 'tasks', 'logs', 'ai_audit'):
             os.makedirs(DIRS[d], exist_ok=True)
@@ -1155,6 +1174,8 @@ class Config:
                 self.threads = _t
             if data.get('email'):
                 self.email = str(data['email'])
+            if data.get('plugin_index_url') is not None:
+                self.plugin_index_url = str(data['plugin_index_url']).strip()
             for k, v in data.get('tools', {}).items():
                 if not v:
                     continue
@@ -1164,6 +1185,7 @@ class Config:
                                                                  str(v))
                 if os.path.isfile(p):
                     self.tools[k] = os.path.abspath(p)
+                    self._platform_tool_keys.add(k)
             # databases 覆盖延后到根目录应用之后再校验（见 __init__）
             self._db_override = {}
             for k, v in data.get('databases', {}).items():
@@ -1214,9 +1236,20 @@ class Config:
         try:
             lp = _ai_local_path()
             os.makedirs(os.path.dirname(lp), exist_ok=True)
+            # 合并写：保留 ai_local.json 里的其他本地字段（如供应商档案
+            # 的 provider_keys）——整文件覆盖会把它们抹掉。
+            prev = {}
+            if os.path.isfile(lp):
+                try:
+                    with open(lp, encoding='utf-8') as f:
+                        prev = json.load(f)
+                    if not isinstance(prev, dict):
+                        prev = {}
+                except (OSError, ValueError):
+                    prev = {}
+            prev['api_key'] = ai_out.get('api_key', '')
             with open(lp, 'w', encoding='utf-8') as f:
-                json.dump({'api_key': ai_out.get('api_key', '')}, f,
-                          ensure_ascii=False, indent=1)
+                json.dump(prev, f, ensure_ascii=False, indent=1)
         except OSError as e:
             if ai_out.get('api_key'):
                 sys.stderr.write(f'[config] 警告：密钥文件写入失败（{e}），'
@@ -1226,9 +1259,12 @@ class Config:
         # 盘符仍可用（_load 侧按 PLATFORM_ROOT 解析回来）；平台外的路径
         # （外置库等）保持绝对，属用户显式登记的外部资源。
         data = {'threads': self.threads,
+                'plugin_index_url': self.plugin_index_url,
                 'tools': {k: _rel_if_under(v) for k, v in self.tools.items()},
-                'databases': {k: _rel_if_under(v)
-                              for k, v in self.databases.items()},
+                # 插件提供的库不落盘（值与 plugin_databases 相同即为插件来源）：
+                # 卸载插件后 platform.json 里不能残留死路径
+                'databases': {k: _rel_if_under(v) for k, v in self.databases.items()
+                              if self.plugin_databases.get(k) != v},
                 'defaults': self.defaults, 'language': self.language,
                 'ai': ai_out,
                 'output_root': self.output_root,
@@ -1401,6 +1437,32 @@ class Config:
                         32768, int(ai.get('max_tokens', merged['max_tokens']))))
                 except (TypeError, ValueError):
                     pass
+                # 供应商档案：白名单清洗（Key 永不从 platform.json 读）
+                clean, _seen = [], set()
+                for _pr in (ai.get('providers') or []):
+                    if not isinstance(_pr, dict):
+                        continue
+                    _nm = str(_pr.get('name') or '').strip()
+                    if not _nm or _nm in _seen:
+                        continue
+                    _seen.add(_nm)
+                    try:
+                        _tp = min(2.0, max(0.0, float(
+                            _pr.get('temperature', 0.3))))
+                    except (TypeError, ValueError):
+                        _tp = 0.3
+                    try:
+                        _mt = max(64, min(32768, int(
+                            _pr.get('max_tokens', 2048))))
+                    except (TypeError, ValueError):
+                        _mt = 2048
+                    clean.append({'name': _nm,
+                                  'base_url': str(_pr.get('base_url') or '').strip(),
+                                  'model': str(_pr.get('model') or '').strip(),
+                                  'temperature': _tp, 'max_tokens': _mt})
+                merged['providers'] = clean
+                merged['active_profile'] = str(
+                    ai.get('active_profile') or '').strip()
                 # 主动驱动三层开关与闸门超时
                 for _bk in ('explain', 'broadcast', 'gate',
                             'exec_auto', 'exec_auto_tune'):
@@ -1466,13 +1528,35 @@ class Config:
         if path and path.startswith('bundled:'):
             return path          # 随包 Python 引擎哨兵，由调用方进程内处理
         if not path or not os.path.isfile(path):
+            # 插件只填缺：3rd/ 与 platform.json 都没有时才落到插件提供的副本
+            path = self.plugin_tools.get(name)
+        if not path or not os.path.isfile(path):
             raise FileNotFoundError(
-                f"未找到工具 [{name}]。请在平台配置(platform.json 或 GUI 设置页)中手动指定路径。")
+                f"未找到工具 [{name}]。请在平台配置(platform.json 或 GUI 设置页)"
+                "中手动指定路径，或在设置页「插件管理」安装对应插件。")
         return path
 
     def tool_status(self):
-        """GUI 用：返回各工具探测状态。"""
-        return dict(self.tools)
+        """GUI 用：返回各工具探测状态（插件提供的键一并在列，来源见
+        /api/plugin/list 的 plugin_tools 标记）。"""
+        out = dict(self.tools)
+        for k, v in self.plugin_tools.items():
+            if not out.get(k):
+                out[k] = v
+        return out
+
+    def refresh_plugins(self):
+        """重扫 plugins/ 并挂载插件提供的工具/数据库（填缺，不覆盖既有）。
+
+        安装/卸载插件后调用；启动时在 __init__ 末尾调用一次。"""
+        from Virus_Platform_Core import plugin_manager as _pm
+        self.plugin_tools, self.plugin_databases = _pm.resolve_plugins()
+        # 插件数据库同样只填缺：platform.json 覆盖与注册表解析优先
+        for k, v in self.plugin_databases.items():
+            cur = self.databases.get(k)
+            if not cur or not os.path.isdir(cur):
+                self.databases[k] = v
+        return self.plugin_tools, self.plugin_databases
 
     def ensure_dir(self, key):
         d = DIRS[key]

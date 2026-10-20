@@ -135,3 +135,5 @@ tests/._run_all.lock
 # 本机 site-packages 保留在磁盘上（gitignore，不影响运行）。
 3rd/python/Lib/site-packages/
 3rd/python/Scripts/
+# 插件 zip 产物（走 GitHub Release plugin-packs 分发，不进仓库）
+plugins-dist/

@@ -7,6 +7,44 @@
 <title>设置 - 植物病毒分析平台</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
+<style>
+  /* 设置页侧边导航（2026-10-16）：窄屏自动退化为横向词条 */
+  .se-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr);
+               gap: 18px; align-items: start; }
+  .se-side { position: sticky; top: 14px; max-height: calc(100vh - 28px);
+             overflow: auto; padding: 6px 4px;
+             border-right: 1px solid rgba(127, 140, 120, .18); }
+  .se-group { font-size: 11.5px; color: var(--ink-400, #7b8a99);
+              padding: 10px 10px 4px; letter-spacing: .4px; }
+  .se-side a { display: block; padding: 7px 10px; border-radius: 8px;
+               font-size: 13px; color: var(--ink-700, #2c3a4b);
+               text-decoration: none; cursor: pointer; }
+  .se-side a:hover { background: rgba(26, 122, 73, .10); }
+  .se-side a.on { background: var(--green-50, #f2f8f4);
+                  color: var(--green-700, #14603b); font-weight: 600; }
+  .se-main { min-width: 0; }
+  .se-main section, .se-main h2[id] { scroll-margin-top: 14px; }
+    .pf-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-chip { display: inline-flex; align-items: center; gap: 6px;
+               padding: 4px 10px; border: 1px solid var(--ink-400, #cbd5e1);
+               border-radius: 999px; font-size: 12.5px; cursor: pointer; }
+    .pf-chip:hover { background: rgba(26, 122, 73, .08); }
+    .pf-chip.on { background: var(--green-50, #f2f8f4);
+                  border-color: var(--green-600, #1a7a49); }
+    .pf-chip .dot { width: 7px; height: 7px; border-radius: 50%;
+                    background: var(--ink-400, #9aa6b2); }
+    .pf-chip.on .dot { background: #16a34a; }
+    .pf-chip small { color: var(--ink-400, #7b8a99); }
+    .pf-chip .x { color: var(--ink-400, #94a3b8); padding: 0 2px; }
+    .pf-chip .x:hover { color: #b91c1c; }
+  @media (max-width: 980px) {
+    .se-layout { display: block; }
+    .se-side { position: static; max-height: none; border-right: none;
+               display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+    .se-side .se-group { width: 100%; padding: 6px 2px 2px; }
+    .se-side a { display: inline-block; }
+  }
+</style>
 </head>
 <body>
 {% include "_nav.html" %}
@@ -19,9 +57,12 @@
     </div>
   </div>
 
+  <div class="se-layout">
+  <aside class="se-side" id="seSide" aria-label="settings sections"></aside>
+  <div class="se-main">
   <div class="settings-grid">
     <!-- 通用设置 -->
-    <section class="card">
+    <section id="sec-outputs" class="card">
       <h2 data-i18n="se.outRoot">📁 输出目录</h2>
       <p class="hint" data-i18n="se.outRootHint">所有分析产物写入此目录，并按推荐结构自动创建子目录：
          results（样品结果）/ tool_runs（工具运行）/ downloads（数据下载）/
@@ -39,7 +80,7 @@
       <div id="outRootMsg" class="hint" style="margin-top:6px"></div>
   </section>
 
-  <section class="card">
+  <section id="sec-inputs" class="card">
       <h2 data-i18n="se.inRoot">📥 输入目录</h2>
       <p class="hint" data-i18n="se.inRootHint">测序数据与上传文件的位置，自动创建子目录：fastq（测序数据）/ uploads（拖拽上传）。留空 = 使用平台目录。文件选择对话框默认从这里打开。</p>
       <div class="set-row stack">
@@ -54,7 +95,7 @@
       <div id="inRootMsg" class="hint" style="margin-top:6px"></div>
   </section>
 
-  <section class="card">
+  <section id="sec-dbdir" class="card">
       <h2 data-i18n="se.dbRoot">🗄 数据库目录</h2>
       <p class="hint" data-i18n="se.dbRootHint">kunpeng 库、taxonomy、palmdb 等大数据目录与建库源数据（host-db，以及 databases/virusref_db 病毒参考）的位置，自动创建子目录：databases / host-db。留空 = 使用平台目录。⚠ 切换后需把原 databases、host-db 内容复制到新位置（或在「数据库构建」页重建），否则工具②④不可用。</p>
       <div class="set-row stack">
@@ -69,7 +110,7 @@
       <div id="dbRootMsg" class="hint" style="margin-top:6px"></div>
   </section>
 
-  <section class="card">
+  <section id="sec-examples" class="card">
       <h2 data-i18n="se.exRoot">📦 示例数据目录</h2>
       <p class="hint" data-i18n="se.exRootHint">内置示例（各工具「✨ 示例」/「👁 示例结果」按钮）所在目录。留空 = 自动探测：程序根目录下的 examples/，或与程序同级的 VirusPlatform-Examples/examples（程序 / 数据库 / 示例 三分离打包时用）。</p>
       <div class="set-row stack">
@@ -84,7 +125,7 @@
       <div id="exRootMsg" class="hint" style="margin-top:6px"></div>
   </section>
 
-  <section class="card">
+  <section id="sec-general" class="card">
       <h2 data-i18n="se.general">通用设置</h2>
       <div class="set-row">
         <div class="s-label" data-i18n="se.theme">界面主题</div>
@@ -113,7 +154,7 @@
     </section>
 
     <!-- 数据库状态 -->
-    <section class="card">
+    <section id="sec-dbs" class="card">
       <h2 data-i18n="se.dbs">数据库</h2>
       <div id="setDbBadges" class="dbbadge"></div>
       <div id="setDbRows"></div>
@@ -121,7 +162,7 @@
   </div>
 
   <!-- 存储与磁盘（目录占用表格较长，通栏放置避免网格内卡片高度失衡） -->
-  <section class="card" style="margin-top:18px">
+  <section id="sec-storage" class="card" style="margin-top:18px">
       <h2 data-i18n="se.storage">💾 存储与磁盘</h2>
       <p class="hint" data-i18n="se.storageHint">磁盘剩余空间与各目录占用。
          目录占用为后台统计（数据库较大时约需几十秒），结果缓存 10 分钟。
@@ -130,14 +171,14 @@
   </section>
 
   <!-- 分析默认参数 -->
-  <section class="card" style="margin-top:18px">
+  <section id="sec-defaults" class="card" style="margin-top:18px">
     <h2 data-i18n="se.defaults">分析默认参数</h2>
     <p class="hint" data-i18n="se.defaultsHint">管道页与 CLI 未显式传参时使用这里的值；随时可在各步骤卡片上覆盖。</p>
     <div class="settings-grid" id="defaultsGrid"></div>
   </section>
 
   <!-- 平台目录 -->
-  <section class="card" style="margin-top:18px">
+  <section id="sec-paths" class="card" style="margin-top:18px">
     <h2 data-i18n="se.paths">平台目录</h2>
     <p class="hint" data-i18n="se.pathsHint">数据与产物的存放位置（打开目录）</p>
     <div id="setDirRows"></div>
@@ -151,9 +192,46 @@
     <div id="toolList" class="tools"></div>
   </section>
 
+  <!-- 插件管理（plugins/ 目录；zip 顶层带 plugin.json 清单，见
+       Virus_Platform_Core/plugin_manager.py）。插件只「填缺」：3rd/ 与
+       platform.json 优先，卸载后配置零残留。 -->
+  <section id="sec-plugins" class="card" style="margin-top:18px">
+    <h2 id="m-plugins" data-i18n="se.plugins">🧩 插件管理</h2>
+    <p class="hint" data-i18n="se.pluginsHint">外部工具/数据库包的一键安装：zip 顶层需带
+       plugin.json 清单（name / version / kind / provides），安装到平台
+       plugins/ 目录后自动接入工具探测。同色样例见帮助文档；缺失的工具
+       也可在此安装对应插件补齐。</p>
+    <div id="pluginList" class="tools"><span class="hint">…</span></div>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <input id="pluginZipPath" type="text" style="flex:1;min-width:220px"
+             placeholder="本地插件包路径（…\plugin.zip）" data-i18n-ph="se.pluginsPathPh">
+      <button class="btn" onclick="pluginInstallLocal()">📦 <span data-i18n="se.pluginsInstallLocal">本地安装</span></button>
+      <input id="pluginUrl" type="text" style="flex:1;min-width:220px"
+             placeholder="或插件包 URL（https://…/plugin.zip）" data-i18n-ph="se.pluginsUrlPh">
+      <button class="btn" onclick="pluginInstallUrl()">🌐 <span data-i18n="se.pluginsInstallUrl">URL 安装</span></button>
+      <button class="btn" onclick="pluginInstallPick()">📂 <span data-i18n="se.pluginsPick">选择文件</span></button>
+      <input id="pluginZipFile" type="file" accept=".zip" style="display:none">
+      <button class="btn" onclick="loadPlugins(true)">⟳ <span data-i18n="se.pluginsRefresh">刷新</span></button>
+    </div>
+    <p class="hint" id="pluginMsg" style="margin-top:8px"></p>
+    <hr style="margin:14px 0 10px;border:none;border-top:1px solid var(--border,#ddd)">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <b data-i18n="se.pluginsSrc">🛰 插件源（自动检测缺失工具）</b>
+      <span class="hint" id="pluginSrcUrl" style="max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="loadPluginsAvailable(true)">⟳ <span data-i18n="se.pluginsSrcRefresh">检测</span></button>
+      <button class="btn" id="pluginFixAllBtn" onclick="pluginInstallMissing()" style="display:none">
+        ⏬ <span data-i18n="se.pluginsFixAll">一键补齐缺失</span>
+      </button>
+    </div>
+    <div id="pluginAvailable" class="tools" style="margin-top:8px">
+      <span class="hint" data-i18n="se.pluginsSrcIdle">尚未检测</span>
+    </div>
+  </section>
+
   <!-- 环境自检（模块 / 数据库 / 磁盘；工具明细见上方「工具探测」）。
        结果来自 /api/selfcheck（进程内缓存 5 分钟），按钮强制重跑。 -->
-  <section class="card" style="margin-top:18px">
+  <section id="sec-selfcheck" class="card" style="margin-top:18px">
     <h2 data-i18n="se.selfcheck">🩺 环境自检</h2>
     <p class="hint" data-i18n="se.selfcheckHint">四项一键体检：模块导入 / 外部工具 / 数据库 / 磁盘空间。
        首次运行需数秒（递归导入全部模块），结果缓存 5 分钟；与 CLI
@@ -179,6 +257,17 @@
         <option value="false" data-i18n="se.off">关</option>
         <option value="true" data-i18n="se.on">开</option>
       </select></div>
+    </div>
+    <div class="set-row">
+      <div class="s-label"><span data-i18n="ai.pf.title">供应商档案</span>
+        <small data-i18n="ai.pf.hint">多套端点并存，点档案名即切换当前使用（对话坞/执行单立即生效）；Key 只存本机 run/ai_local.json</small></div>
+      <div class="s-ctrl">
+        <div id="aiPfList" class="pf-list"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input id="aiPfName" placeholder="档案名（如 DeepSeek / 内网 vLLM）" style="flex:1">
+          <button class="btn small" onclick="aiPfSave()">存为档案</button>
+        </div>
+      </div>
     </div>
     <div class="set-row">
       <div class="s-label"><span data-i18n="ai.se.provider">提供方预设</span></div>
@@ -276,6 +365,7 @@
     <span class="hint" id="saveHint"></span>
     <button class="btn primary" onclick="saveSettings()" data-i18n="se.save">💾 保存设置</button>
   </div>
+  </div></div>
 </div>
 
 {% include "_browse_dlg.html" %}
@@ -503,7 +593,201 @@ async function runSelfcheck(force) {
 
 loadSettings();
 loadTools();
+loadPlugins(false);
+loadPluginsAvailable(false);
 runSelfcheck(false);   // 进页展示缓存结果；强制重跑点按钮
+
+/* ---- 插件管理（/api/plugin/*，机制见 Virus_Platform_Core/plugin_manager.py）---- */
+let PLUGIN_ITEMS = [];
+
+async function loadPlugins(showMsg) {
+  const box = $('pluginList');
+  if (!box) return;
+  try {
+    const d = await (await fetch('/api/plugin/list')).json();
+    PLUGIN_ITEMS = d.items || [];
+    if (!PLUGIN_ITEMS.length) {
+      box.innerHTML = `<span class="hint">${t('se.pluginsNone',
+        '尚未安装插件。把带 plugin.json 清单的 zip 包放到下方安装即可。')}</span>`;
+      return;
+    }
+    box.innerHTML = PLUGIN_ITEMS.map(p => {
+      const st = p.ok
+        ? `<span class="ok">✔ ${esc(p.version || '')}</span>`
+        : `<span class="no">✘ ${esc(p.error || '无效插件')}</span>`;
+      const provides = Object.entries(p.map || {}).map(([k, v]) => {
+        const on = p.active && p.active[k];
+        return `<div class="trow"><span>↳ ${esc(k)}</span>
+          <span class="${on ? 'ok' : 'no'}" title="${esc(v)}">${on ? '✔ 生效' : '（未启用：已有同键来源）'}</span></div>`;
+      }).join('');
+      return `<div class="trow" style="display:block">
+        <div style="display:flex;justify-content:space-between;gap:10px">
+          <span>🧩 <b>${esc(p.name)}</b> <small>${esc(p.description || '')}</small></span>
+          <span>${st}
+            <button class="btn small danger" onclick="pluginUninstall('${esc(p.name)}')">${t('se.pluginsUninstall', '卸载')}</button>
+          </span>
+        </div>${provides}</div>`;
+    }).join('');
+    if (showMsg) pluginMsg(`${t('se.pluginsRefreshed', '已刷新')}（${PLUGIN_ITEMS.length}）`, true);
+  } catch (e) {
+    box.innerHTML = `<span class="no">✘ ${t('se.pluginsLoadFail', '插件列表加载失败')}</span>`;
+  }
+}
+
+function pluginMsg(msg, ok) {
+  const el = $('pluginMsg');
+  if (el) el.innerHTML = `<span class="${ok ? 'ok' : 'no'}">${esc(msg)}</span>`;
+}
+
+async function pluginInstallLocal() {
+  const path = $('pluginZipPath') && $('pluginZipPath').value.trim();
+  if (!path) { pluginMsg(t('se.pluginsNeedPath', '请先填本地插件包路径'), false); return; }
+  await pluginInstallPost('/api/plugin/install', {path});
+}
+
+async function pluginInstallUrl() {
+  const url = $('pluginUrl') && $('pluginUrl').value.trim();
+  if (!url) { pluginMsg(t('se.pluginsNeedUrl', '请先填插件包 URL'), false); return; }
+  await pluginInstallPost('/api/plugin/install_url', {url});
+}
+
+function pluginInstallPick() {
+  const inp = $('pluginZipFile');
+  if (!inp) return;
+  inp.onchange = async () => {
+    if (!inp.files || !inp.files.length) return;
+    const fd = new FormData();
+    fd.append('file', inp.files[0]);
+    pluginMsg(t('se.pluginsInstalling', '安装中…'), true);
+    try {
+      const r = await fetch('/api/plugin/install', {method: 'POST', body: fd});
+      const d = await r.json();
+      pluginMsg(d.ok ? `${t('se.pluginsDone', '安装成功')}: ${d.installed}`
+                     : `${t('se.pluginsFail', '安装失败')}: ${d.error || ''}`, !!d.ok);
+      if (d.ok) { loadPlugins(false); loadTools(); }
+    } catch (e) {
+      pluginMsg(`${t('se.pluginsFail', '安装失败')}: ${e}`, false);
+    }
+    inp.value = '';
+  };
+  inp.click();
+}
+
+async function pluginInstallPost(api, body) {
+  pluginMsg(t('se.pluginsInstalling', '安装中…（大包下载/解压需要一点时间）'), true);
+  try {
+    const r = await fetch(api, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)});
+    const d = await r.json();
+    pluginMsg(d.ok ? `${t('se.pluginsDone', '安装成功')}: ${d.installed}`
+                   : `${t('se.pluginsFail', '安装失败')}: ${d.error || ''}${d.hint ? ' — ' + d.hint : ''}`, !!d.ok);
+    if (d.ok) { loadPlugins(false); loadTools(); }
+  } catch (e) {
+    pluginMsg(`${t('se.pluginsFail', '安装失败')}: ${e}`, false);
+  }
+}
+
+async function pluginUninstall(name) {
+  if (!confirm(t('se.pluginsConfirm', '卸载插件') + ` ${name}？`)) return;
+  try {
+    const r = await fetch('/api/plugin/uninstall', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name})});
+    const d = await r.json();
+    pluginMsg(d.ok ? `${t('se.pluginsUninstalled', '已卸载')}: ${d.uninstalled}`
+                   : `${t('se.pluginsFail', '操作失败')}: ${d.error || ''}`, !!d.ok);
+    if (d.ok) { loadPlugins(false); loadTools(); }
+  } catch (e) {
+    pluginMsg(`${t('se.pluginsFail', '操作失败')}: ${e}`, false);
+  }
+}
+
+/* ---- 插件源：自动检测缺失工具 → 一键下载解压（/api/plugin/available）---- */
+let PLUGIN_AVAIL = [];
+
+async function loadPluginsAvailable(force) {
+  const box = $('pluginAvailable');
+  if (!box) return;
+  box.innerHTML = `<span class="hint">${t('se.pluginsSrcChecking', '检测中…（拉取插件源索引）')}</span>`;
+  try {
+    const d = await (await fetch('/api/plugin/available' + (force ? '?force=1' : ''))).json();
+    if (!d.ok) {
+      box.innerHTML = `<span class="no">✘ ${t('se.pluginsSrcFail', '插件源拉取失败')}: ${esc(d.error || '')}</span>`;
+      $('pluginSrcUrl').textContent = d.index_url || '';
+      return;
+    }
+    PLUGIN_AVAIL = d.items || [];
+    $('pluginSrcUrl').textContent = d.index_url || '';
+    $('pluginSrcUrl').title = d.index_url || '';
+    if (!PLUGIN_AVAIL.length) {
+      box.innerHTML = `<span class="hint">${t('se.pluginsSrcEmpty', '插件源为空')}</span>`;
+      return;
+    }
+    const needCnt = PLUGIN_AVAIL.filter(p => p.needed && !p.installed).length;
+    $('pluginFixAllBtn').style.display = needCnt ? '' : 'none';
+    if (needCnt) {
+      $('pluginFixAllBtn').querySelector('span').textContent =
+        `${t('se.pluginsFixAll', '一键补齐缺失')}（${needCnt}）`;
+    }
+    box.innerHTML = PLUGIN_AVAIL.map(p => {
+      const size = p.size ? ` · ${(p.size / 1048576).toFixed(1)}MB` : '';
+      const badge = p.installed
+        ? `<span class="ok">✔ ${t('se.pluginsInstalledTag', '已安装')}</span>`
+        : p.needed
+          ? `<span class="no">● ${t('se.pluginsNeededTag', '缺失')}</span>`
+          : `<span class="hint">○ ${t('se.pluginsOptionalTag', '本机已具备')}</span>`;
+      const keys = (p.missing_keys && p.missing_keys.length)
+        ? ` → ${t('se.pluginsMissingKeys', '缺')}: ${p.missing_keys.map(esc).join(', ')}`
+        : '';
+      const btn = (p.installed || !p.url) ? '' :
+        `<button class="btn small" onclick="pluginInstallAvail('${esc(p.name)}')">${t('se.pluginsInstall', '安装')}</button>`;
+      return `<div class="trow"><span>📦 <b>${esc(p.name)}</b> <small>${esc(p.version || '')}${size}${keys}</small></span>
+        <span>${badge} ${btn}</span></div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = `<span class="no">✘ ${t('se.pluginsSrcFail', '插件源拉取失败')}: ${esc(e)}</span>`;
+  }
+}
+
+async function pluginInstallAvail(name) {
+  const p = PLUGIN_AVAIL.find(x => x.name === name);
+  if (!p || !p.url) return;
+  pluginMsg(`${t('se.pluginsInstalling', '安装中…')} ${name}`, true);
+  try {
+    const r = await fetch('/api/plugin/install_url', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url: p.url, sha256: p.sha256 || ''})});
+    const d = await r.json();
+    pluginMsg(d.ok ? `${t('se.pluginsDone', '安装成功')}: ${d.installed}`
+                   : `${t('se.pluginsFail', '安装失败')}: ${d.error || ''}`, !!d.ok);
+    if (d.ok) { loadPlugins(false); loadTools(); loadPluginsAvailable(false); }
+  } catch (e) {
+    pluginMsg(`${t('se.pluginsFail', '安装失败')}: ${e}`, false);
+  }
+}
+
+async function pluginInstallMissing() {
+  const todo = PLUGIN_AVAIL.filter(p => p.needed && !p.installed && p.url);
+  if (!todo.length) return;
+  const total = todo.reduce((s, p) => s + (p.size || 0), 0);
+  if (!confirm(`${t('se.pluginsConfirmFix', '自动下载并安装缺失的工具插件')} (${todo.length}, ${(total / 1048576).toFixed(0)}MB)?`))
+    return;
+  let okN = 0, failN = 0;
+  for (const p of todo) {
+    pluginMsg(`${t('se.pluginsInstalling', '安装中…')} ${p.name}（${okN + failN + 1}/${todo.length}）`, true);
+    try {
+      const r = await fetch('/api/plugin/install_url', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: p.url, sha256: p.sha256 || ''})});
+      const d = await r.json();
+      if (d.ok) okN++; else { failN++; pluginMsg(`${p.name}: ${d.error || ''}`, false); }
+    } catch (e) { failN++; }
+  }
+  pluginMsg(`${t('se.pluginsFixDone', '补齐完成')}：✔${okN}${failN ? ` ✘${failN}` : ''}`, !failN);
+  loadPlugins(false); loadTools(); loadPluginsAvailable(false);
+}
+
 
 /* ---- AI 助手配置 ----
  * Key 输入框留空 = 不修改已保存的 Key（后端把掩码回传识别为"未变"）。
@@ -617,7 +901,101 @@ async function aiTest() {
   } catch (e) { $('aiMsg').textContent = String(e); }
 }
 
+
+/* 设置页侧边导航（2026-10-16）：分组锚点 + IntersectionObserver 滚动高亮。
+   标签取各卡 h2 的既有 i18n 键（双语零维护）；深链 #aiCard / #m-tools 不受影响。 */
+(function () {
+  const GROUPS = [
+    { key: 'se.nav.storage', fb: '目录与存储', items: [
+      ['sec-outputs', 'se.outRoot'], ['sec-inputs', 'se.inRoot'],
+      ['sec-dbdir', 'se.dbRoot'], ['sec-examples', 'se.exRoot'],
+      ['sec-storage', 'se.storage'], ['sec-paths', 'se.paths']] },
+    { key: 'se.nav.analysis', fb: '分析与工具', items: [
+      ['sec-general', 'se.general'], ['sec-dbs', 'se.dbs'],
+      ['sec-defaults', 'se.defaults'], ['m-tools', 'bd.toolDetect'],
+      ['sec-plugins', 'se.plugins'], ['sec-selfcheck', 'se.selfcheck']] },
+    { key: 'se.nav.ai', fb: 'AI 助手', items: [['aiCard', 'ai.se.title']] },
+  ];
+  const side = document.getElementById('seSide');
+  if (!side) return;
+  let html = ''; const ids = [];
+  for (const g of GROUPS) {
+    html += `<div class="se-group">${esc(t(g.key, g.fb))}</div>`;
+    for (const [id, key] of g.items) {
+      if (!document.getElementById(id)) continue;
+      html += `<a href="#${id}" data-for="${id}">${esc(t(key, id))}</a>`;
+      ids.push(id);
+    }
+  }
+  side.innerHTML = html;
+  const setActive = (id) => side.querySelectorAll('a').forEach(a =>
+    a.classList.toggle('on', a.dataset.for === id));
+  const obs = new IntersectionObserver((ents) => {
+    for (const en of ents) if (en.isIntersecting) setActive(en.target.id);
+  }, { rootMargin: '-15% 0px -70% 0px' });
+  ids.forEach(id => obs.observe(document.getElementById(id)));
+  if (ids.length) setActive(ids[0]);
+})();
+
 loadAiConfig();
+
+/* 供应商档案（ZCode 风格多端点并存）：列表/存档/一键切换/删除。
+   「存为档案」取当前表单值（含 Key，空 Key=保留已存）；点档案名=激活。 */
+async function aiPfLoad() {
+  try {
+    const d = await (await fetch('/api/ai/profiles')).json();
+    const box = $('aiPfList');
+    if (!d.profiles || !d.profiles.length) {
+      box.innerHTML = `<span class="hint">${t('ai.pf.empty', '暂无档案——填好下方端点后「存为档案」')}</span>`;
+      return;
+    }
+    box.innerHTML = d.profiles.map(p => `
+      <span class="pf-chip ${p.active ? 'on' : ''}" title="${esc(p.base_url || '')}"
+            onclick="aiPfUse('${esc(p.name)}')">
+        <span class="dot"></span><b>${esc(p.name)}</b>
+        <small>${esc(p.model || '')}${p.key_set ? ' · 🔑' : ''}</small>
+        <span class="x" title="删除档案"
+              onclick="event.stopPropagation();aiPfDel('${esc(p.name)}')">✕</span>
+      </span>`).join('');
+  } catch (e) { /* 静默：档案属增强功能 */ }
+}
+async function aiPfSave() {
+  const name = ($('aiPfName').value || '').trim();
+  if (!name) { alert(t('ai.pf.nameNeed', '请先填档案名')); return; }
+  const r = await fetch('/api/ai/profiles/save', { method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, base_url: $('aiBaseUrl').value.trim(),
+      model: $('aiModel').value.trim(), api_key: $('aiKey').value.trim(),
+      temperature: parseFloat($('aiTemp').value) || 0,
+      max_tokens: parseInt($('aiMaxTok').value, 10) || 2048}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return alert(d.detail || d.error || ('HTTP ' + r.status));
+  $('aiPfName').value = '';
+  toast(t('ai.pf.saved', '✔ 档案已保存'), '', {ttl: 2500});
+  await aiPfLoad();
+}
+async function aiPfUse(name) {
+  const r = await fetch('/api/ai/profiles/activate', { method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return alert(d.detail || d.error || ('HTTP ' + r.status));
+  await loadAiConfig();
+  await aiPfLoad();
+  toast(t('ai.pf.active', '✔ 已切换当前供应商：') + name
+        + (d.ready ? '' : t('ai.pf.notReady', '（注意：配置尚不完整/未启用）')),
+        '', {ttl: 3000});
+}
+async function aiPfDel(name) {
+  if (!confirm(t('ai.pf.delConfirm', '删除供应商档案') + '「' + name + '」?')) return;
+  const r = await fetch('/api/ai/profiles/delete', { method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return alert(d.detail || d.error || ('HTTP ' + r.status));
+  await aiPfLoad();
+}
+aiPfLoad();
 </script>
 </body>
 </html>
