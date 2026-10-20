@@ -96,6 +96,24 @@ TOOLS = {
     # 单拷 exe 依赖完整 Python 环境，拆出无法独立运行。
 }
 
+# 「硬编码路径」类工具：模块内直接拼 PLATFORM_ROOT/3rd/tools/<x>（不查
+# Cfg.tools），装在 plugins/ 下永远找不到 → 用 install_to 还原到原路径。
+# provides 的键仅供展示/状态判断，实际生效靠路径还原。
+PATH_TOOLS = {
+    'snpeff': ('3rd/tools/snpeff', '5.x', 'snpEff 变异注释（需 jre-snpeff）',
+               {'snpeff': 'snpEff/snpEff.jar'}),
+    'jre-snpeff': ('3rd/tools/jre-snpeff', '17', 'snpEff 专用精简 JRE',
+                   {'jre-snpeff': 'bin/java.exe'}),
+    'snpgenie': ('3rd/tools/snpgenie', '1.x', 'SNPGenie 选择压力分析',
+                 {'snpgenie': 'snpgenie.pl'}),
+    'srna-target': ('3rd/tools/srna-target', '1.x', 'siRNA 靶点预测三引擎（miranda/pita/rnahybrid）',
+                    {'srna-target': 'miranda'}),
+    'strawberry-perl': ('3rd/tools/strawberry-perl', '5.32', '便携 Perl（snpgenie/脚本依赖）',
+                        {'strawberry-perl': 'perl/bin/perl.exe'}),
+    'datasets': ('3rd/tools/datasets', '1.x', 'NCBI datasets 命令行',
+                 {'datasets': 'datasets.exe'}),
+}
+
 
 def sha256_file(path, chunk=1 << 20):
     h = hashlib.sha256()
@@ -126,7 +144,7 @@ def _zip_add(z, arcname, src_path=None, data=None):
             z.writestr(zi, f.read())
 
 
-def build(name, src_rel, version, desc, provides):
+def build(name, src_rel, version, desc, provides, install_to=None):
     src = os.path.join(ROOT, src_rel)
     if not os.path.isdir(src):
         print(f'  ✘ 源目录不存在，跳过 {name}: {src}')
@@ -134,6 +152,9 @@ def build(name, src_rel, version, desc, provides):
     out_zip = os.path.join(DIST, f'{name}-plugin.zip')
     manifest = {'name': name, 'version': version, 'kind': 'tool',
                 'description': desc, 'provides': provides}
+    if install_to:
+        # 内容装到平台原路径（不落 plugins/），给硬编码路径的工具用
+        manifest['install_to'] = install_to
     # 3rd/bin = 自包含单 exe 清单（kunpeng/seqkit/crabz/aria2c/minibwa/sracha）：
     # 只装目标文件，不把整个 bin 目录（其他插件的目标）顺带进去。
     only_bin = os.path.normpath(src_rel) == os.path.normpath('3rd/bin')
@@ -161,12 +182,15 @@ def build(name, src_rel, version, desc, provides):
     if size < GITEE_MAX_MB * 1048576:
         urls.append(f'{GITEE_BASE}/{name}-plugin.zip')
     urls.append(f'{RELEASE_BASE}/{name}-plugin.zip')
-    return {'name': name, 'version': version, 'kind': 'tool',
-            'description': desc, 'provides': provides,
-            'file': f'{name}-plugin.zip',
-            'url': urls[0],
-            'urls': urls,
-            'size': size, 'sha256': sha256_file(out_zip)}
+    entry = {'name': name, 'version': version, 'kind': 'tool',
+             'description': desc, 'provides': provides,
+             'file': f'{name}-plugin.zip',
+             'url': urls[0],
+             'urls': urls,
+             'size': size, 'sha256': sha256_file(out_zip)}
+    if install_to:
+        entry['install_to'] = install_to
+    return entry
 
 
 def main():
@@ -178,6 +202,14 @@ def main():
         if only and name not in only:
             continue
         r = build(name, *spec)
+        if r:
+            entries.append(r)
+    for name, (src_rel, version, desc, provides) in PATH_TOOLS.items():
+        if only and name not in only:
+            continue
+        # install_to = 源目录相对平台根的路径（原样还原）
+        r = build(name, src_rel, version, desc, provides,
+                  install_to=src_rel)
         if r:
             entries.append(r)
     if only:

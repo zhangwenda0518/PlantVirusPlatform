@@ -97,6 +97,18 @@ def _validate_manifest(mf, base_dir):
     if kind not in KINDS:
         return f'kind 必须是 {" / ".join(KINDS)}，当前: {kind!r}'
     mf['kind'] = kind
+    # install_to：把包内容装到平台根下的指定相对路径，而不是 plugins/<name>/。
+    # 给「模块内硬编码路径」的工具用（如 srna-target 的
+    # TOOL_ROOT = PLATFORM_ROOT/3rd/tools/srna-target）——这类工具不查
+    # Cfg.tools，装在 plugins/ 下永远找不到，必须还原到原路径。
+    it = mf.get('install_to')
+    if it is not None:
+        if not isinstance(it, str) or not it.strip():
+            return 'install_to 必须是非空相对路径'
+        norm = os.path.normpath(it)
+        if os.path.isabs(norm) or norm.startswith('..'):
+            return f'install_to 必须是平台内的相对路径: {it!r}'
+        mf['install_to'] = norm.replace(os.sep, '/')
     key = 'provides' if kind == 'tool' else 'databases'
     mapping = mf.get(key)
     if not isinstance(mapping, dict) or not mapping:
@@ -116,20 +128,35 @@ def _validate_manifest(mf, base_dir):
 # 扫描与解析
 # ------------------------------------------------------------------
 def installed_plugins(root=None):
-    """扫描 plugins/ 下已安装的插件，返回清单列表（含 bad 标记的坏插件）。"""
+    """扫描已安装的插件，返回清单列表（含 bad 标记的坏插件）。
+
+    两个来源：plugins/ 下的目录（常规），以及 _REGISTRY 里登记的
+    install_to 型插件（内容装到平台原路径，目录本身不在 plugins/ 下）。"""
     root = root or PLUGIN_DIR
     out = []
-    if not os.path.isdir(root):
-        return out
-    for entry in sorted(os.listdir(root)):
-        pdir = os.path.join(root, entry)
-        if entry.startswith('.') or not os.path.isdir(pdir):
-            continue
-        mf, err = read_manifest(pdir)
-        if mf is None:
-            out.append({'name': entry, 'kind': 'unknown', 'version': '',
-                        'description': '', 'dir': pdir,
-                        'provides': {}, 'ok': False, 'error': err})
+    if os.path.isdir(root):
+        for entry in sorted(os.listdir(root)):
+            pdir = os.path.join(root, entry)
+            if entry.startswith('.') or not os.path.isdir(pdir):
+                continue
+            mf, err = read_manifest(pdir)
+            if mf is None:
+                out.append({'name': entry, 'kind': 'unknown', 'version': '',
+                            'description': '', 'dir': pdir,
+                            'provides': {}, 'ok': False, 'error': err})
+                continue
+            out.append(_describe(mf, pdir))
+    # install_to 型：清单存在 _REGISTRY 里，路径按平台根还原
+    for name, rec in _read_registry(root).items():
+        if any(o['name'] == name for o in out):
+            continue          # plugins/ 下有同名的以目录为准
+        mf = rec.get('manifest') or {}
+        pdir = os.path.join(PLATFORM_ROOT,
+                            str(mf.get('install_to') or '').replace('/', os.sep))
+        if not mf or not os.path.isdir(pdir):
+            out.append({'name': name, 'kind': 'unknown', 'version': '',
+                        'description': '', 'dir': pdir, 'map': {},
+                        'ok': False, 'error': '安装目录缺失（可能被手动删除）'})
             continue
         out.append(_describe(mf, pdir))
     return out
@@ -147,7 +174,34 @@ def _describe(mf, pdir):
     return {'name': mf['name'], 'kind': kind,
             'version': str(mf.get('version') or ''),
             'description': str(mf.get('description') or ''),
-            'dir': pdir, 'map': resolved, 'ok': ok, 'error': None}
+            'dir': pdir, 'map': resolved, 'ok': ok, 'error': None,
+            'install_to': mf.get('install_to') or ''}
+
+
+def _registry_path(root=None):
+    return os.path.join(root or PLUGIN_DIR, '_registry.json')
+
+
+def _read_registry(root=None):
+    """读 install_to 型插件登记表（{name: {manifest: {...}, installed_at}}）。"""
+    p = _registry_path(root)
+    if not os.path.isfile(p):
+        return {}
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_registry(data, root=None):
+    p = _registry_path(root)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, p)
 
 
 def resolve_plugins(cfg=None, root=None):
@@ -197,8 +251,27 @@ def install_zip(zip_path, root=None, expected_sha256=None):
         err = _validate_manifest(mf, sub)
         if err:
             raise PluginError(err)
-        dest = os.path.join(root, mf['name'])
-        _swap_into_place(sub, dest)
+        if mf.get('install_to'):
+            # 还原到平台内原路径（给硬编码路径的工具用）。内容 = 包内除
+            # plugin.json 外的全部文件，直接摊到目标目录。
+            dest = os.path.join(PLATFORM_ROOT,
+                                mf['install_to'].replace('/', os.sep))
+            staged = os.path.join(tmp, '.stage')
+            os.makedirs(staged, exist_ok=True)
+            for entry in os.listdir(sub):
+                if entry == MANIFEST_NAME:
+                    continue
+                os.rename(os.path.join(sub, entry),
+                          os.path.join(staged, entry))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            _swap_into_place(staged, dest)
+            reg = _read_registry(root)
+            reg[mf['name']] = {'manifest': mf,
+                               'installed_at': time.strftime('%Y-%m-%d %H:%M:%S')}
+            _write_registry(reg, root)
+        else:
+            dest = os.path.join(root, mf['name'])
+            _swap_into_place(sub, dest)
         return mf
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -288,15 +361,30 @@ def _rmtree_force(path):
 
 
 def uninstall(name, root=None):
-    """卸载插件：删除目录。运行中的任务若正引用该插件工具会失败——
-    与 PhyloSuite 同口径（直接删），安装器不替代任务中心的并发管理。"""
+    """卸载插件：删除目录（install_to 型删平台原路径并清登记）。运行中的
+    任务若正引用该插件工具会失败——与 PhyloSuite 同口径（直接删），
+    安装器不替代任务中心的并发管理。"""
     root = root or PLUGIN_DIR
     if not _NAME_RE.match(name or ''):
         raise PluginError(f'插件名非法: {name!r}')
     pdir = os.path.join(root, name)
-    if not os.path.isdir(pdir):
-        raise PluginError(f'插件未安装: {name}')
-    _rmtree_force(pdir)
+    reg = _read_registry(root)
+    if os.path.isdir(pdir):
+        _rmtree_force(pdir)
+        return
+    rec = reg.get(name)
+    if rec:
+        it = (rec.get('manifest') or {}).get('install_to') or ''
+        target = os.path.join(PLATFORM_ROOT, it.replace('/', os.sep)) if it else ''
+        # 只删 install_to 指向的目录，且必须在平台根之内（防御清单被篡改）
+        if target and os.path.isdir(target) and \
+                os.path.normpath(target).startswith(
+                    os.path.normpath(PLATFORM_ROOT) + os.sep):
+            _rmtree_force(target)
+        reg.pop(name, None)
+        _write_registry(reg, root)
+        return
+    raise PluginError(f'插件未安装: {name}')
 
 
 # ------------------------------------------------------------------

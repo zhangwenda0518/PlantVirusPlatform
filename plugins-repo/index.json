@@ -472,6 +472,120 @@
    ],
    "size": 67901432,
    "sha256": "d353ebafc4bb940631d25b6cccbd6b6733df11a68b2b74e1a95b10b7ce9895d2"
+  },
+  {
+   "name": "snpeff",
+   "version": "5.x",
+   "kind": "tool",
+   "description": "snpEff 变异注释（需 jre-snpeff）",
+   "provides": {
+    "snpeff": "snpEff/snpEff.jar"
+   },
+   "file": "snpeff-plugin.zip",
+   "url": "http://39.106.101.94/plugins/snpeff-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/snpeff-plugin.zip",
+    "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/snpeff-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/snpeff-plugin.zip"
+   ],
+   "size": 27636386,
+   "sha256": "4f8c670a630592d3d3865414915019152a493ae3e57e276aadba768b9999482f",
+   "install_to": "3rd/tools/snpeff"
+  },
+  {
+   "name": "jre-snpeff",
+   "version": "17",
+   "kind": "tool",
+   "description": "snpEff 专用精简 JRE",
+   "provides": {
+    "jre-snpeff": "bin/java.exe"
+   },
+   "file": "jre-snpeff-plugin.zip",
+   "url": "http://39.106.101.94/plugins/jre-snpeff-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/jre-snpeff-plugin.zip",
+    "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/jre-snpeff-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/jre-snpeff-plugin.zip"
+   ],
+   "size": 33928541,
+   "sha256": "97f00852659650daa32e38b550af4d7f4088ea0b9dbdf669d8dcd5cee94056da",
+   "install_to": "3rd/tools/jre-snpeff"
+  },
+  {
+   "name": "snpgenie",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "SNPGenie 选择压力分析",
+   "provides": {
+    "snpgenie": "snpgenie.pl"
+   },
+   "file": "snpgenie-plugin.zip",
+   "url": "http://39.106.101.94/plugins/snpgenie-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/snpgenie-plugin.zip",
+    "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/snpgenie-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/snpgenie-plugin.zip"
+   ],
+   "size": 245285,
+   "sha256": "60607c9c6fbf2abcf21e13d58e5d74196cc44561a09dda7addb86f7e28d3d9fc",
+   "install_to": "3rd/tools/snpgenie"
+  },
+  {
+   "name": "srna-target",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "siRNA 靶点预测三引擎（miranda/pita/rnahybrid）",
+   "provides": {
+    "srna-target": "miranda"
+   },
+   "file": "srna-target-plugin.zip",
+   "url": "http://39.106.101.94/plugins/srna-target-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/srna-target-plugin.zip",
+    "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/srna-target-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/srna-target-plugin.zip"
+   ],
+   "size": 32892408,
+   "sha256": "32615104c674da3e2dac6b884b56f46e2b8fdca7d70f8286726418f1235f9329",
+   "install_to": "3rd/tools/srna-target"
+  },
+  {
+   "name": "strawberry-perl",
+   "version": "5.32",
+   "kind": "tool",
+   "description": "便携 Perl（snpgenie/脚本依赖）",
+   "provides": {
+    "strawberry-perl": "perl/bin/perl.exe"
+   },
+   "file": "strawberry-perl-plugin.zip",
+   "url": "http://39.106.101.94/plugins/strawberry-perl-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/strawberry-perl-plugin.zip",
+    "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/strawberry-perl-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/strawberry-perl-plugin.zip"
+   ],
+   "size": 18394201,
+   "sha256": "d0739fda966cb8ac2fc1e74dd4901a50143716dd8ad8b5c092dc3340d4ef6812",
+   "install_to": "3rd/tools/strawberry-perl"
+  },
+  {
+   "name": "datasets",
+   "version": "1.x",
+   "kind": "tool",
+   "description": "NCBI datasets 命令行",
+   "provides": {
+    "datasets": "datasets.exe"
+   },
+   "file": "datasets-plugin.zip",
+   "url": "http://39.106.101.94/plugins/datasets-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/datasets-plugin.zip",
+    "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/datasets-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/datasets-plugin.zip"
+   ],
+   "size": 9546463,
+   "sha256": "b5bdeaeb5567ec170d6cfeed791a5c58b65b8f358407bf2ee857e393bea99d1f",
+   "install_to": "3rd/tools/datasets"
   }
  ]
 }
