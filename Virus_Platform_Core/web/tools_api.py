@@ -43,6 +43,7 @@ from Virus_Platform_Core.web.tool_jobs import (
     _tool_job_phylogeo,
     _tool_job_dsrna,
     _tool_job_crispr,
+    _tool_job_conan,
     _tool_job_rtt,
     _tool_job_pdprep,
     _tool_job_phylodyn,
@@ -117,6 +118,13 @@ TOOL_REGISTRY = {
     'crispr':   {'title': 'CRISPR 检测试剂设计',
                  'title_en': 'CRISPR assay design',
                  'need_db': False, 'job': _tool_job_crispr},
+    # 2026-10-20：CONAN-SWIFT（Cas3 / I-E）crRNA 设计（t-conan 卡）。
+    # 引擎 Virus_Platform_Core/conan_design.py（净室实现，规则来源见模块头）。
+    # 与 crispr（Cas12a/Cas13a）的区别：负组同源位点双重失配评分 +
+    # 纯 crRNA 输出（无引物协同），详见模块头「为什么独立成模块」。
+    'conan':    {'title': 'CONAN-SWIFT 检测设计（Cas3）',
+                 'title_en': 'CONAN-SWIFT assay design (Cas3)',
+                 'need_db': False, 'job': _tool_job_conan},
     'rtt':      {'title': '时间信号检验', 'title_en': 'Root-to-tip',
                  'need_db': False, 'job': _tool_job_rtt},
     # ---- 进化动力学（保留 5 张数据准备类卡）----
@@ -478,10 +486,34 @@ def api_tool_run():
     def _job_with_run(log, prog, cancel):
         """包一层：结果 dict 注入 run 名与输出目录，供结果面板列出产物、
         明示「结果输出在哪」。"""
+        # 运行前依赖自愈：该模块要用的外部工具缺失时，先自动从插件源装。
+        # 放在任务线程里做（下载可能几十秒），不阻塞 HTTP 提交；装不上就
+        # 中止并给出可操作指引，而不是让引擎跑到一半 FileNotFoundError。
+        try:
+            from Virus_Platform_Core.module_deps import ensure_tools, format_error
+            _pf = ensure_tools(cfg, tool, log=log)
+            if _pf['still_missing']:
+                raise RuntimeError(format_error(tool, _pf))
+            if _pf['installed']:
+                log(f"已自动安装插件: {', '.join(_pf['installed'])}")
+        except RuntimeError:
+            raise
+        except Exception as e:
+            log(f"依赖自检异常（继续运行）: {e}")
         res = job(log, prog, cancel)
         if isinstance(res, dict):
             res.setdefault('run', run_name)
             res['out_dir'] = str(run_dir)
+        # 结果可视化补全：run 目录里出现已知表格产物（primers/crrna/events/
+        # identity_matrix/virus_classification/mirna/迁移矩阵/元数据…）时，
+        # 就地补出配图（PNG+PDF）——面板按目录列产物，图自动出现。
+        # 任何失败只跳过，不影响工具任务本身。
+        try:
+            from Virus_Platform_Core.toolbox_plots import add_plots
+            for _fp in add_plots(str(run_dir)):
+                log(f"图 -> {_fp}")
+        except Exception:
+            pass
         # 外移运行结束时 touch 指针目录：历史列表签名基于 tool_runs/<run>
         # 的 mtime，产物写在外部目录时没有这一下，列表里的文件清单
         # 会停在创建时刻（只剩 out_link.json）。

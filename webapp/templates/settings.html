@@ -580,6 +580,43 @@ function renderSelfcheck(d) {
                 + esc(it.detail) : ''}</span></div>`;
     }
     const nf = (s.items || []).filter(i => i.ok === false).length;
+    // 外部工具段：把「插件源能补的」和「本次会话自动装过的」显式列出来。
+    // 用户看到「缺 X」时最需要知道「点一下能不能好」；而自动装过的必须
+    // 让他看见，否则会以为平台偷偷改了自己的环境。
+    if (s.id === 'tools') {
+      const fix = s.fixable || {};
+      const names = Object.keys(fix);
+      if (names.length) {
+        html += `<div class="trow" style="padding-left:18px;display:block">` +
+          `<span class="hint">🔧 ${t('se.toolsFixable',
+            '插件源可一键补齐')}：${names.map(n => {
+              const f = fix[n];
+              const sz = f.size ? ` (${(f.size / 1048576).toFixed(0)}MB)` : '';
+              return `${esc(n)}${sz} → ${esc((f.provides || []).join(', '))}`;
+            }).join('；')}</span>` +
+          `<div style="margin-top:6px"><button class="btn small" ` +
+          `onclick="pluginInstallMissing()">⏬ ${t('se.pluginsFixAll',
+            '一键补齐缺失')}</button></div></div>`;
+      }
+      const unf = s.unfixable || [];
+      if (unf.length) {
+        html += `<div class="trow" style="padding-left:18px">` +
+          `<span class="hint">⚠ ${t('se.toolsUnfixable',
+            '需手动安装（插件源未提供）')}：${esc(unf.join(', '))}</span></div>`;
+      }
+      const af = s.autofixed || {};
+      const afNames = Object.keys(af);
+      if (afNames.length) {
+        html += `<div class="trow" style="padding-left:18px;display:block">` +
+          `<span class="hint">📦 ${t('se.toolsAutofixed',
+            '本次会话已自动安装')}：` +
+          afNames.map(m => {
+            const a = af[m];
+            const ins = (a.installed || []).join(', ');
+            return `${esc(m)} → ${esc(ins || '—')} @ ${esc(a.at || '')}`;
+          }).join('；') + `</span></div>`;
+      }
+    }
     if (s.id === 'modules' && nf > SELFCHECK_MAX_ROWS)
       html += `<div class="trow no" style="padding-left:18px">` +
               `<span>… ${t('se.selfcheckMore', '还有')}${nf - SELFCHECK_MAX_ROWS}${t('se.selfcheckMoreTail', '条失败未列出')}</span></div>`;

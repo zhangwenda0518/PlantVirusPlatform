@@ -197,10 +197,47 @@ def _check_tools():
     cfg = get_config()
     st = cfg.tool_status()
     missing = sorted(k for k, v in st.items() if not v)
+
+    # 插件源能不能补：把缺失键和插件索引对一遍，能补的标出来。
+    # 用户看到「缺 X」时最想知道的是「点一下能不能好」，而不是自己去
+    # 翻插件列表找对应关系。索引不可达时降级为不标注（不报错）。
+    fixable, unfixable = {}, []
+    try:
+        from Virus_Platform_Core import plugin_manager as pm
+        items, _err = pm.available_from_index(cfg)
+        if items:
+            for it in items:
+                prov = it.get('provides') or {}
+                hit = [k for k in missing if k in prov]
+                if hit:
+                    fixable[it['name']] = {
+                        'provides': hit,
+                        'size': it.get('size', 0),
+                        'installed': it.get('installed', False)}
+            covered = {k for v in fixable.values() for k in v['provides']}
+            unfixable = [k for k in missing if k not in covered]
+        else:
+            unfixable = list(missing)
+    except Exception:
+        unfixable = list(missing)
+
+    # 本次会话自动装过什么（module_deps 落盘）——插件被悄悄装上时用户
+    # 必须看得见，否则会以为"平台自己改了我的环境"。
+    autofixed = {}
+    try:
+        from Virus_Platform_Core.module_deps import read_autofix_log
+        autofixed = read_autofix_log()
+    except Exception:
+        pass
+
     return {'id': 'tools', 'title': '外部工具',
             'ok': not missing, 'warn': bool(missing),
             'summary': f'{len(st) - len(missing)}/{len(st)}',
-            'missing': missing}
+            'missing': missing,
+            # 插件源可一键补齐的（前端据此显示「可自动安装」按钮）
+            'fixable': fixable,
+            'unfixable': unfixable,
+            'autofixed': autofixed}
     # 工具逐项明细不重复给：设置页上方「工具探测」卡片已有同源列表
 
 

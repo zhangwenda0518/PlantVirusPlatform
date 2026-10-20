@@ -1198,6 +1198,24 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
                     _bc.note_stage_start(sample, key)       # 层1 讲解
                 except Exception:
                     pass
+            # 阶段前依赖自愈：本阶段要用的外部工具缺失时先自动装插件
+            # （与工具页同一套逻辑，见 module_deps.ensure_tools）。
+            # 装不上就中止并报清楚，避免阶段跑到一半才 FileNotFoundError。
+            try:
+                from Virus_Platform_Core.module_deps import (
+                    ensure_tools, format_error)
+                from Virus_Platform_Core.config import get_config as _gc
+                _pf = ensure_tools(_gc(), key, log=logger)
+                if _pf['still_missing']:
+                    raise RuntimeError(format_error(key, _pf))
+                if _pf['installed'] and logger:
+                    logger(f"阶段 {key} 前已自动安装插件: "
+                           + ', '.join(_pf['installed']))
+            except RuntimeError:
+                raise
+            except Exception as _e:
+                if logger:
+                    logger(f"阶段 {key} 依赖自检异常（继续）: {_e}")
             STAGE_REGISTRY[key]['fn'](C)
             _finished.append(key)
             _manifest_sync(_finished, 'running')
