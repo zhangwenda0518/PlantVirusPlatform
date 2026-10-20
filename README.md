@@ -166,18 +166,19 @@ mindmap
 ### 1. 安装
 
 ```bat
-git clone https://github.com/zhangwenda0518/VirusPlatform.git
-cd VirusPlatform
+git clone https://github.com/zhangwenda0518/plant-virus-analysis-platform.git
+cd plant-virus-analysis-platform
 python -m pip install -r requirements.txt   :: 装依赖（2026-10-11 起不再随仓库分发，省 ~700MB 克隆体积）
 :: 没装 Python 的机器：跳过第 3 行，直接双击「环境自检.bat」——
 :: 它会用内置解释器（3rd/python/）检测缺包并自动安装（清华镜像）
 ```
 
 - 需要 **Windows 10+ 与 Python 3.12+**；**平台以源码形态发布（2026-10-11 定案），欢迎按需修改定制**。外部工具已预置在 `3rd/`（约 1.2GB：单文件工具 + 工具套件 + 内置 Python 解释器），克隆即用，**无需也不支持自行编译**（2026-10-11 起不再提供源码构建路线，历史实测记录见 `docs/归档记录_源码构建路线_20261011.md`）。
+- **没带 `3rd/` 的精简克隆**（如 [Gitee 镜像](https://gitee.com/zhang-wenda/plant-virus-analysis-platform)，861 个文件、28MB）：启动后到 **设置 → 插件管理 → 插件源**，点「检测」自动列出缺失工具，点「一键补齐缺失」从国内镜像下载解压（32 个工具包，逐包 sha256 校验）。下载源按序回退：自建镜像 `39.106.101.94` → Gitee Release → GitHub Release。
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
-- 仅一个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/VirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
+- 仅一个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
   `3rd/tools/rdp5/3seqTable`（105MB）。Python 依赖一律 pip 安装（2026-10-11 起，含曾经的 `_polars_runtime.pyd` 168MB，均不再需要手动下载）。
-- 数据库（约 3.4GB）不进 git：从已有部署机器整体拷贝 `databases/`（跨盘用 `python main.py db-migrate --to D:\库目录`），预置库明细与自建方式见 [Wiki · Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases)。
+- 数据库（约 3.4GB）不进 git：从已有部署机器整体拷贝 `databases/`（跨盘用 `python main.py db-migrate --to D:\库目录`），预置库明细与自建方式见 [Wiki · Databases](https://github.com/zhangwenda0518/plant-virus-analysis-platform/wiki/Databases)。
 
 ### 2. 启动（两种模式）
 
@@ -271,6 +272,7 @@ VirusPlatform/
 
 - **[Wiki 首页](https://github.com/zhangwenda0518/VirusPlatform/wiki)** — 25 个页面逐模块详解（快速开始 / 各阶段 / 进化动力学 / BEAST / 系统地理 / 公共数据 / 工具箱 / 提交 / LOGAN / 数据库 / CLI / FAQ）。
 - Wiki 源文件同步维护在本仓库 [`wiki/`](wiki/) 目录。
+- **[MCP 服务器](docs/mcp_server.md)** — 把工具箱 / 流水线 / 任务管理暴露为 22 个 `vp_*` 工具（工具箱+流水线+任务管理+全量 CLI+病毒预筛+OpenVirome 云端检索）（工具箱+流水线+任务管理+全量 CLI 能力），Claude Desktop、ZCode 等 MCP 客户端可直接驱动（stdio 与 streamable-HTTP 双模式，含逐参数 schema 与调用模型）。
 - 开发踩坑记录见 [`docs/DEVELOPMENT_NOTES.md`](docs/DEVELOPMENT_NOTES.md)。
 
 ## ❓ FAQ（速览）
@@ -312,6 +314,6 @@ FASTQ / FASTQ.gz（双端选 R1/R2，单端只选 R1）；FASTA / FASTA.gz；Gen
 - **MAFFT / trimAl / Gblocks / FastTree / RAxML-NG / IQ-TREE 3**（进化）、**TreeTime**（分子钟）
 - **BEAST 1.x**（Markov jump 计数口径，本地不做 MCMC）、**Logan-Search**（Chikhi et al. 2025, bioRxiv 10.1101/2024.07.30.605881）
 - **ICTV VMR / MSL**（分类元数据）、NCBI **Taxonomy / SRA / GenBank / BioSample**、NGDC **GSA**
-- **primer3**（引物）、**gbdraw / dna_features_viewer**（基因组图）、**plotly / pycirclize / matplotlib**（可视化）
+- **primer3**（引物）、**gbdraw / dna_features_viewer**（基因组图）、**plotly / pycirclize / matplotlib**（可视化）、**snipit**（跨样本 SNP 分型图，O'Toole et al., 2024, Bioinformatics btae510；GPL-3.0，独立进程调用）
 - **Logan-Search**、**RDP5**（重组分析）、**sracha**（GSA .sra 转换，纯 Rust）
 - 方法学对齐：VirPhyKit（Yin et al., 2025, Ecol Evol；代码自研，仅对齐输入/输出契约）、MMPV-RNA 管线（宿主预测 C9 级联 / SDT 口径 / 提交准备）
