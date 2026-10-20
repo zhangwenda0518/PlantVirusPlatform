@@ -329,3 +329,38 @@ def test_install_zip_sha256_check(plugin_root, tmp_path):
     assert os.listdir(plugin_root) == []                # 校验失败不落盘
     mf = pm.install_zip(zp, root=plugin_root, expected_sha256=good.upper())
     assert mf['name'] == 'demo-tool'
+
+
+# ------------------------------------------------------------------
+# 多地址回退（国内镜像优先 → GitHub 兜底）
+# ------------------------------------------------------------------
+def test_install_urls_falls_back(plugin_root, tmp_path, monkeypatch):
+    """第一个地址失败（连接错误）→ 自动切第二个并成功。"""
+    zp = _make_plugin_zip(str(tmp_path / 'p.zip'))
+    good = 'file:///' + zp.replace(os.sep, '/')
+
+    def fake_one(url, root=None, progress=None, expected_sha256=None):
+        if url == 'http://127.0.0.1:1/dead.zip':
+            raise OSError('connection refused')
+        return pm.install_zip(zp, root=root, expected_sha256=expected_sha256)
+
+    monkeypatch.setattr(pm, '_install_one_url', fake_one)
+    mf = pm.install_urls(['http://127.0.0.1:1/dead.zip', good], root=plugin_root)
+    assert mf['name'] == 'demo-tool'
+
+
+def test_install_urls_all_fail(plugin_root):
+    def always_fail(*a, **kw):
+        raise OSError('boom')
+    orig = pm._install_one_url
+    pm._install_one_url = always_fail
+    try:
+        with pytest.raises(pm.PluginError, match='所有下载地址均失败'):
+            pm.install_urls(['http://a/x.zip', 'http://b/x.zip'], root=plugin_root)
+    finally:
+        pm._install_one_url = orig
+
+
+def test_install_urls_empty():
+    with pytest.raises(pm.PluginError, match='未提供下载地址'):
+        pm.install_urls([], root='x')

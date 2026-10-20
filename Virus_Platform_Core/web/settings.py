@@ -483,10 +483,11 @@ def api_plugin_install_url():
     JSON 可带 sha256（索引条目自带）→ 下载后先验哈希再解压。"""
     from Virus_Platform_Core import plugin_manager as pm
     body = request.json or {}
-    url = body.get('url') or ''
+    # urls = 按顺序回退的地址列表（国内镜像在前）；url = 单个地址（兼容旧调用）
+    urls = body.get('urls') or ([body['url']] if body.get('url') else [])
     sha = body.get('sha256') or None
     try:
-        mf = pm.install_url(url, expected_sha256=sha)
+        mf = pm.install_urls(urls, expected_sha256=sha)
         cfg.refresh_plugins()
         resp = _plugin_describe_payload()
         resp['ok'] = True

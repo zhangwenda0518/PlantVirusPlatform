@@ -50,9 +50,15 @@ _OLD_PREFIX = '.old-'
 KINDS = ('tool', 'database')
 
 # 插件源索引（dev_tools/build_plugin_repo.py 生成，随仓库提交，raw URL 稳定；
-# 可被 platform.json 的 plugin_index_url 覆盖——国内网络可换镜像站）。
-DEFAULT_INDEX_URL = ('https://raw.githubusercontent.com/zhangwenda0518/'
-                     'plant-virus-analysis-platform/main/plugins-repo/index.json')
+# 可被 platform.json 的 plugin_index_url 覆盖）。
+# 默认按顺序尝试：国内镜像站（自建，快且稳）→ GitHub raw（海外兜底）。
+# 索引本身很小（~12KB），两处内容一致；镜像站不可达时自动切 GitHub。
+DEFAULT_INDEX_URLS = [
+    'http://39.106.101.94/plugins/index.json',
+    'https://raw.githubusercontent.com/zhangwenda0518/'
+    'plant-virus-analysis-platform/main/plugins-repo/index.json',
+]
+DEFAULT_INDEX_URL = DEFAULT_INDEX_URLS[0]
 
 
 class PluginError(Exception):
@@ -298,6 +304,37 @@ def uninstall(name, root=None):
 # ------------------------------------------------------------------
 def install_url(url, root=None, progress=None, expected_sha256=None):
     """下载 zip 到临时文件后走 install_zip。progress(done, total) 可选回调。"""
+    return install_urls(url if isinstance(url, (list, tuple)) else [url],
+                        root=root, progress=progress,
+                        expected_sha256=expected_sha256)
+
+
+def install_urls(urls, root=None, progress=None, expected_sha256=None):
+    """按顺序尝试多个下载地址（国内镜像优先、GitHub 兜底），首个成功即返回。
+
+    每个地址失败后重试一次（实测镜像站偶发瞬时 502，重试即可恢复），
+    仍失败才切下一个地址。全部失败时抛 PluginError，消息里带上每个地址的
+    失败原因——用户能看出是网络问题还是地址失效。"""
+    if isinstance(urls, str):
+        urls = [urls]
+    urls = [u for u in (urls or []) if u]
+    if not urls:
+        raise PluginError('未提供下载地址')
+    errors = []
+    for u in urls:
+        for attempt in (1, 2):
+            try:
+                return _install_one_url(u, root=root, progress=progress,
+                                        expected_sha256=expected_sha256)
+            except Exception as e:             # 先原地重试，再换下一个镜像
+                if attempt == 2:
+                    errors.append(f'{u} → {type(e).__name__}: {e}')
+                else:
+                    time.sleep(1.5)
+    raise PluginError('所有下载地址均失败：\n' + '\n'.join(errors))
+
+
+def _install_one_url(url, root=None, progress=None, expected_sha256=None):
     if not (isinstance(url, str) and url.lower().startswith(('http://', 'https://'))):
         raise PluginError(f'URL 非法（仅支持 http/https）: {url!r}')
     import urllib.request
@@ -346,27 +383,33 @@ def _sha256_file(path):
 
 
 def fetch_index(url=None, force=False, timeout=30):
-    """拉取插件源索引（进程内缓存 10 分钟）。返回 (plugins 列表, 错误或 None)。"""
-    url = url or DEFAULT_INDEX_URL
+    """拉取插件源索引（进程内缓存 10 分钟）。返回 (plugins 列表, 错误或 None)。
+
+    url 为空时按 DEFAULT_INDEX_URLS 顺序回退（国内镜像 → GitHub raw）。
+    url 显式给出时只用该地址（platform.json 覆盖/调试用）。"""
+    urls = [url] if url else list(DEFAULT_INDEX_URLS)
     now = time.time()
     if (not force and _index_cache['data'] is not None
-            and _index_cache['url'] == url
+            and _index_cache['url'] == urls[0]
             and now - _index_cache['ts'] < _INDEX_TTL):
         return _index_cache['data'], None
     import urllib.request
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'PVAP-Plugin/1.0'})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-        plugins = data.get('plugins')
-        if not isinstance(plugins, list):
-            raise ValueError("索引缺少 'plugins' 数组")
-        clean = [p for p in plugins
-                 if isinstance(p, dict) and p.get('name') and p.get('url')]
-        _index_cache.update(ts=now, data=clean, url=url)
-        return clean, None
-    except Exception as e:
-        return None, f'{type(e).__name__}: {e}'
+    errors = []
+    for u in urls:
+        try:
+            req = urllib.request.Request(u, headers={'User-Agent': 'PVAP-Plugin/1.0'})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            plugins = data.get('plugins')
+            if not isinstance(plugins, list):
+                raise ValueError("索引缺少 'plugins' 数组")
+            clean = [p for p in plugins
+                     if isinstance(p, dict) and p.get('name') and p.get('url')]
+            _index_cache.update(ts=now, data=clean, url=u)
+            return clean, None
+        except Exception as e:
+            errors.append(f'{u} → {type(e).__name__}: {e}')
+    return None, '；'.join(errors)
 
 
 def available_from_index(cfg, index_url=None, force=False):

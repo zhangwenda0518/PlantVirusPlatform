@@ -26,6 +26,10 @@ INDEX_DIR = os.path.join(ROOT, 'plugins-repo')
 # Release 资产下载 URL 前缀（gh release create plugin-packs 上传后即生效）
 RELEASE_BASE = ('https://github.com/zhangwenda0518/plant-virus-analysis-platform'
                 '/releases/download/plugin-packs')
+# 国内镜像站：插件 zip 放在该站 docs/plugins/ 下，由 nginx 静态服务。
+# 环境变量 PVAP_PLUGIN_BASE 可覆盖（自建镜像/换域名时用）。
+MIRROR_BASE = os.environ.get('PVAP_PLUGIN_BASE',
+                             'http://39.106.101.94/plugins')
 
 # 工具打包表：插件名 → (源路径(相对平台根), 版本, 描述,
 #                     provides{Cfg.tools键: 包内相对路径})
@@ -130,6 +134,9 @@ def build(name, src_rel, version, desc, provides):
             'description': desc, 'provides': provides,
             'file': f'{name}-plugin.zip',
             'url': f'{RELEASE_BASE}/{name}-plugin.zip',
+            # 国内镜像优先（平台按 urls[0] 下载，失败再依次回退）
+            'urls': [f'{MIRROR_BASE}/{name}-plugin.zip',
+                     f'{RELEASE_BASE}/{name}-plugin.zip'],
             'size': size, 'sha256': sha256_file(out_zip)}
 
 
