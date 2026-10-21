@@ -134,14 +134,21 @@ tests/._run_all.lock
 # 检测缺包自动 pip install -r requirements.lock（清华镜像），或手动执行同命令。
 # 本机 site-packages 保留在磁盘上（gitignore，不影响运行）。
 #
-# 2026-10-20 精简（890MB → 670MB，-220MB）：
+# 2026-10-20/21 两轮精简（890MB → 525MB，-365MB，-41%）：
 #   ① 删 playwright（106MB）—— 纯开发链浏览器自动化，平台运行不 import；
 #      tests/ 的浏览器探针需要时 pip install playwright 即可
-#   ② 删 pythonwin（5.1MB）—— PythonWin IDE，运行不需要
-#   ③ 清 *.pyc（曾 110MB/7000+ 文件）—— 首次 import 自动重建
-#   ⚠ 不可删：_polars_runtime_32（168MB）—— polars/_plr.py 按
-#      compat→64→32 顺序找运行时，本机只有 32 变体，删了 polars 直接失效，
-#      「已知病毒识别与定量」整段跑不起来。
+#   ② 删 polars + _polars_runtime_32（178MB）—— kv_identify / kv_filter
+#      改写为 pandas（tests/test_kv_pandas.py 锁住数值口径，与 polars 版
+#      对拍逐值一致）；polars 的 Rust 运行时是 site-packages 最大单项，
+#      且 compat/64/32 三个变体体积相同、无更小替代
+#   ③ 删 pythonwin（5.1MB）—— PythonWin IDE，运行不需要
+#   ④ 删 lovis4u + reportlab（30MB）—— ⑥ 同属比较的可选外接引擎，
+#      平台代码零引用；缺失时自动回退内置渲染
+#   ⑤ 删 pyrodigal_gv（23MB）—— 平台只用 pyrodigal（meta）与
+#      pyrodigal_rv（RNA 病毒），gv 变体零引用
+#   ⑥ 清 *.pyc（约 110MB）—— 首次 import 自动重建
+# ⚠ 不可删：mcp（mcp_server.py 入口用）、pip + setuptools（环境自检.bat
+#   靠它自举装依赖）、PyInstaller + _pytest（dev_tools/package.py 与测试用）
 3rd/python/Lib/site-packages/
 3rd/python/Scripts/
 # 插件 zip 产物（走 GitHub Release plugin-packs 分发，不进仓库）
