@@ -33,7 +33,12 @@ def _tree(src, dest, exclude=('.mimosa', '__pycache__', '.git', '.github')):
     return out
 
 
-datas = _tree(os.path.join(ROOT, 'webapp'), 'webapp')
+datas = _tree(os.path.join(ROOT, 'webapp'), 'webapp',
+              exclude=('.mimosa', '__pycache__', '.git', '.github', 'virome'))
+# virome（OpenVirome SPA）不入 webapp 包：virome.py 的优先级是
+# 3rd/open-virome/frontend/build（package.py 随包拷，25MB、生产构建）>
+# webapp/static/virome（71MB 的开发副本）。冻结版两份都带的话 71MB 永远
+# 读不到——源码模式同样直用 frontend/build，static/virome 两边都是死重。
 datas += [(os.path.join(ROOT, 'README.md'), '.')]
 datas += collect_data_files('plotly')
 datas += collect_data_files('pycirclize')
@@ -216,16 +221,13 @@ a = Analysis(
     # 其中 _internal 834MB（llvmlite 115MB / pyarrow 79MB / bokeh 21MB /
     # botocore 18MB …）。注意不要排除 selenium（LOGAN 批量提交必需）。
     #
-    # ⚠️ 不要把 polars / _polars_runtime_32 加回来（2026-09-11 实测踩坑）：
-    #   known_virus_suite/kv_filter.py 与 kv_identify.py 在**模块级**
-    #   `import polars as pl`，缺失时 `raise SystemExit("需要 polars")`；
-    #   而 known_virus_suite.py 又在模块级 import 这两个模块 —— 一旦排除，
-    #   「已知病毒识别与定量」整段引擎在打包版里**完全失效且完全静默**。
-    #   （当时还被 engine_entry.run_engine 吞成 return 0，双重静默；
-    #    engine_entry 已修，但依赖本身仍必须打进包。）
-    #   polars 本体仅 8.1MB，但 polars/_plr.py 硬依赖 _polars_runtime_32
-    #   （174MB 的 .pyd，就是它的核心运行时，无回退），两者必须同进同出，
-    #   合计约 +183MB —— 这是该功能的必要成本。
+    # ⚠️ polars / _polars_runtime_32 已于 2026-10-24 移入 excludes（见下）：
+    #   2026-09-11 时 known_virus_suite/kv_filter.py 与 kv_identify.py 在模块级
+    #   `import polars as pl`，缺依赖整段引擎静默失效，所以当年必须随包。
+    #   2026-10-20 起 kv 全套迁移 pandas（f02736e，对拍验证 tests/test_kv_pandas.py），
+    #   全库源码已 0 处 import polars —— 183MB 的 _polars_runtime.pyd 在冻结包里
+    #   成了死重，剔除（改动后须重跑 test_kv_pandas + 已知病毒定量冒烟）。
+    #   若日后重新引入 polars 依赖，记得把这两项从 excludes 摘掉。
     #
     # ⚠️ kaleido 已在 2026-09-16 移出 excludes：迁移 GIF 导出
     #   （Virus_Platform_Core/phylogeo_gif.py）会**惰性 import** 它做逐帧出图，
@@ -241,6 +243,11 @@ a = Analysis(
               'sympy', 'duckdb', 'reportlab', 'docutils', 'sphinx',
               'matplotlib.tests', 'numpy.testing',
               'pandas.tests', 'scipy.io.tests',
+              # polars + 其核心运行时（2026-10-24 剔除，183MB）：kv 全套已迁
+              # pandas（f02736e，对拍 tests/test_kv_pandas.py），全库源码 0 处
+              # import；构建机解释器里残留的 polars 1.41 会连带把
+              # _polars_runtime.pyd 拖进冻结包。理由演变见上方 ⚠️ 注释。
+              'polars', '_polars_runtime_32',
               # Qt 绑定（2026-10-24）：构建环境同时装了 PyQt5 与 PySide6
               #（传递安装），PyInstaller 拒绝多 Qt 绑定共存直接中止构建；
               # 平台是 Flask 网页 UI + pywebview(edgechromium/winforms)，

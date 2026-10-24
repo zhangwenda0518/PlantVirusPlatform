@@ -30,18 +30,27 @@
   platform.json.examples_root → <程序>/examples →
   <程序>/../VirusPlatform-Examples/databases/examples → <程序>/examples
 
-用法:
-  python dev_tools/package.py                      # 程序 + 示例（无数据库，~1GB）
-  python dev_tools/package.py --with-db            # 再加数据库包（数据集口径）
-  python dev_tools/package.py --with-built-virusdb # 数据库包额外带预建 kunpeng 分类库
+用法（三档分层轴 = 3rd 内容本身，2026-10-24 定案「插件当分层轴」）:
+  python dev_tools/package.py --slim-tools --verify
+                                   # ① 独立版：程序（20 工具，6 大件走插件按需装）
+                                   #    + 示例
+  python dev_tools/package.py --slim-tools --with-db --with-built-virusdb --verify
+                                   # ② 平台+数据库版：① + 数据库包（预建 plant/ref）
+  python dev_tools/package.py --with-db --with-built-virusdb --verify
+                                   # ③ 完整版：全量 26 工具 + 示例 + 数据库包
+  python dev_tools/package.py --with-db            # 数据库包（数据集口径，不带预建）
   python dev_tools/package.py --db-only            # 跳过 exe，只补数据库包
   python dev_tools/package.py --no-split           # 旧布局：示例/数据库放进程序目录
   python dev_tools/package.py --verify             # 打包后跑产物自检
   python dev_tools/package.py --dedupe-only        # 只对已有 dist 做硬链接去重（不重打包）
   python dev_tools/package.py --no-exe             # exe 已建好，只补外部工具/示例/说明
+                                                   # （完整版↔独立版切换用：exe/_internal
+                                                   #   两档完全相同，只有 3rd/tools 内容不同）
   python dev_tools/package.py --with-source        # 再加源码包（源码+绿色运行时，~900MB）
   python dev_tools/package.py --source-only        # 跳过 exe/示例/数据库，只出源码包
-  python dev_tools/package.py --with-plugins       # 32 个工具插件包预装进产物 plugins/（完整版）
+  python dev_tools/package.py --with-plugins       # 【非三档口径】把插件包预装进产物
+                                                   #   plugins/（仅离线修复场景；程序包
+                                                   #   自带全量 3rd 时插件永不被读，纯冗余）
 
 源码包（2026-09-29）：让使用者也能以**源码模式**运行分析——平台源码全树
 + 3rd/python 绿色运行时 + 启动 bat。定位是程序包的「叠加层」：把
@@ -80,10 +89,30 @@ _parser.add_argument('--with-source', action='store_true',
 _parser.add_argument('--source-only', action='store_true',
                      help='跳过 exe/示例/数据库，仅生成/更新源码包')
 _parser.add_argument('--with-plugins', action='store_true',
-                     help='把 32 个工具插件包预装进产物 plugins/（完整版口径：'
-                          '离线可卸载/重装/修复；zip 优先取本地 plugins-dist/，'
-                          '缺的从插件源下载并按索引 sha256 校验）')
+                     help='把 32 个工具插件包预装进产物 plugins/（离线修复口径；'
+                          '三档分层轴已改为 3rd 内容本身——独立版用 --slim-tools，'
+                          '完整版全量，见下。程序包自带全量 3rd 时预装插件是'
+                          '纯冗余：插件只填缺、永不被读）')
+_parser.add_argument('--slim-tools', action='store_true',
+                     help='独立版口径：3rd/tools 剔除 6 个「大件进阶工具」'
+                          '（srna-target / strawberry-perl / snpeff / jre-snpeff /'
+                          ' snpgenie / datasets，约 275MB）——它们有现成插件包，'
+                          '用户用到时经「插件管理」在线一键补齐或离线安装')
 _args, _ = _parser.parse_known_args()
+
+# --slim-tools 剔除清单 = 插件索引里带 install_to 的六件（它们的权威分发
+# 形态就是插件包，还原路径 3rd/tools/<名>/）。从索引动态取，索引缺失时
+# 回退硬编码（2026-10-24 快照）——改 build_plugin_repo.TOOLS 时同步。
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           '..', 'plugins-repo', 'index.json'),
+              encoding='utf-8') as _f:
+        _SLIM_SKIP = {p['name'] for p in json.load(_f)['plugins']
+                      if p.get('install_to')}
+    assert _SLIM_SKIP, 'install_to 插件清单为空'
+except Exception:                                     # noqa: BLE001
+    _SLIM_SKIP = {'srna-target', 'strawberry-perl', 'snpeff',
+                  'jre-snpeff', 'snpgenie', 'datasets'}
 
 # 控制台编码兜底：Windows 默认代码页是 GBK，脚本里若出现 GBK 编不出的字符
 # （实测 2026-09-10：'↳' U+21B3 让 print 抛 UnicodeEncodeError，打包跑到一半中断），
@@ -274,9 +303,19 @@ if not (_args.db_only or _args.source_only):
         if os.path.isdir(d):
             dst = os.path.join(APP, *d.split('/'))
             _rmtree(dst)
-            shutil.copytree(d, dst,
-                            ignore=shutil.ignore_patterns('.git', '.github'))
-            print('  +', d + '/（全部，已排除 .git）')
+            _ig = shutil.ignore_patterns('.git', '.github')
+            _slim = _args.slim_tools and d.endswith('tools')
+            if _slim:
+                _ig_base = _ig
+                _ig = lambda p, names: _ig_base(p, names) | {
+                    n for n in names if n in _SLIM_SKIP}    # noqa: E731
+            shutil.copytree(d, dst, ignore=_ig)
+            if _slim:
+                print(f'  + {d}/（独立版口径：已剔除 '
+                      f'{"、".join(sorted(_SLIM_SKIP))}——走插件按需装，'
+                      '程序减 ~275MB）')
+            else:
+                print('  +', d + '/（全部，已排除 .git）')
             if d.endswith('tools'):
                 _saved = _dedupe_hardlinks(dst)
                 if _saved:
@@ -778,6 +817,19 @@ if SPLIT and os.path.isdir(APP):
         '   - 内含 exe + webapp 前端 + bin/ tools/ 外部工具 + mcp_server.py',
         '     （MCP 控制台在 exe 内经 --mcp-stdio 进程内拉起，开箱可用）',
     ]
+    if _args.slim_tools:
+        _notes += [
+            '   - 独立版口径：tools/ 已剔除 6 个大件进阶工具'
+            '（srna-target / strawberry-perl /',
+            '     snpeff / jre-snpeff / snpgenie / datasets）。用到时到'
+            '「设置 → 插件管理」',
+            '     一键在线补齐（国内镜像，逐包 sha256 校验），或离线导入'
+            '插件 zip 包。',
+        ]
+    else:
+        _notes += [
+            '   - 完整版口径：26 个外部工具全量内置，开箱即用。',
+        ]
     if _args.with_plugins and os.path.isdir(os.path.join(APP, 'plugins')):
         _notes += [
             '   - plugins/ 已预装全部工具插件包（完整版）：可在'

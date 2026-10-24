@@ -261,16 +261,18 @@ VirusPlatform/
 
 旧路径兼容：`tool_runs/`、`results/` 等平台相对路径自动重定向到 `run/` 下；`tools/`、`bin/` → `3rd/`，历史调用无需修改。
 
-## 📤 分发形态（2026-10-24 更新：三档打包 + 源码双轨）
+## 📤 分发形态（2026-10-24 定案：三档分层轴 = 3rd 内容本身）
 
 **官方分发三档**（`dev_tools/package.py` 一键产出，程序/数据库/示例三分离，产物在仓库上一级 `PVAP/`）：
 
-| 档位 | 产物 | 命令 |
+| 档位 | 工具链 | 命令 |
 |---|---|---|
-| ① 平台独立版 | `VirusPlatform/`（exe + 全部工具 + 示例分离包）+ `VirusPlatform-Examples/` | `python dev_tools/package.py --verify` |
-| ② 平台+数据库版 | ① + `VirusPlatform-Database/`（数据集口径；`--with-built-virusdb` 额外带预建 kunpeng plant/ref 分类库，开箱即用） | `python dev_tools/package.py --with-db --with-built-virusdb --verify` |
-| ③ 完整版 | ② + 32 个工具插件包预装进 `plugins/`（离线可卸载/重装/修复） | `python dev_tools/package.py --with-db --with-built-virusdb --with-plugins --verify` |
+| ① 平台独立版 | 20 个常用工具内置；6 个大件进阶工具（srna-target / strawberry-perl / snpeff / jre-snpeff / snpgenie / datasets）**走插件按需装**（设置 → 插件管理一键补齐，或离线导入 zip） | `python dev_tools/package.py --slim-tools --verify` |
+| ② 平台+数据库版 | 同 ① + 数据库包（`--with-built-virusdb` 额外带预建 kunpeng plant/ref 分类库，开箱即用） | `python dev_tools/package.py --slim-tools --with-db --with-built-virusdb --verify` |
+| ③ 完整版 | **26 个工具全量内置**（开箱即用）+ 数据库包 | `python dev_tools/package.py --with-db --with-built-virusdb --verify` |
 
+- 三档共用同一套 exe/_internal，只有 `3rd/tools` 内容不同——两档程序切换用 `--no-exe` 补拷即可，不必重跑 PyInstaller；
+- 插件包（32 个，逐包 sha256 校验，国内镜像优先）同时服务于：精简克隆补工具、独立版补大件、损坏修复；`--with-plugins` 仅剩"预装进产物 plugins/ 做离线修复"这一种非默认用途；
 - 源码包仍随 `--with-source` 提供（叠加进程序目录即可源码运行）；**仓库源码克隆照旧可用**，克隆、阅读、修改、定制都在源码上完成，也更契合智能体（AI agent）驱动的工作方式；
 - 数据库迁移照旧支持：`python main.py db-migrate --to D:\库目录`（robocopy + 字节校验后才切配置），或「设置 → 数据库目录」直接填路径；
 - 第三方组件许可索引见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)（`dev_tools/third_party_notices.py` 扫描生成）；第三方工具的运行态文件（如 RDP5 会话快照）不入库、不入包。

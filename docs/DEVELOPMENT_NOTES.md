@@ -3395,3 +3395,30 @@ run 名与日志；回退修复复跑 → 第二项 TimeoutException（=用户�
    为三档口径。
 
 回归：见当日测试记录（目标测试 + 全量 quick + 产物自检）。
+
+### 2026-10-24 补②：三档分层轴改定「插件当轴」+ 体积二轮瘦身
+
+发布形态讨论定案（方案 B）：**"插件"从"完整版的标志"改为真正的分层轴**——
+
+- **① 独立版** `--slim-tools`：3rd/tools 剔除 6 个大件进阶工具
+  （srna-target / strawberry-perl / snpeff / jre-snpeff / snpgenie / datasets，
+  ≈275MB）。它们的权威分发形态本就是 install_to 插件包，用户用到时
+  「插件管理」一键补齐（模块运行前依赖自愈也会自动装）；
+- **② +数据库版** = ① + 数据库包；
+- **③ 完整版** = 全量 26 工具 + 数据库包，**不再预装 plugins/**——程序包
+  自带全量 3rd 时插件层永远休眠（解析优先级 platform.json > 3rd 探测 > 插件），
+  旧口径"完整版预装 32 包"实测是 1GB 纯冗余。`--with-plugins` 保留但降级为
+  非默认的离线修复口径。
+- 三档共用同一 exe/_internal，只有 3rd/tools 不同 → 档位切换用 `--no-exe`
+  补拷，不必重跑 PyInstaller。
+
+体积二轮瘦身（全档受益）：
+1. **polars/_polars_runtime_32 剔除（-183MB）**：2026-09-11 它是 kv 引擎的
+   必要成本（spec 旧注释）；f02736e 起 kv 全套迁 pandas（对拍
+   tests/test_kv_pandas.py），全库 0 处 import——构建机残留的 polars 1.41
+   连带把 pyd 拖进冻结包。spec excludes 落闸，注释同步改写；改动后须重跑
+   test_kv_pandas + 已知病毒定量冒烟。
+2. **OpenVirome SPA 双份收敛（-71MB）**：virome.py 优先级
+   frontend/build(25MB 生产构建) > webapp/static/virome(71MB 开发副本)，
+   冻结版此前两份都带、71MB 那份永远读不到。spec._tree 排除 static/virome，
+   package.py 继续拷 frontend/build（两种运行模式的实际服务源都不变）。
