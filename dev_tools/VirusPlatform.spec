@@ -97,6 +97,15 @@ try:
 except Exception:
     pass
 
+# MCP 控制台（2026-10-24）：mcp_server.py 不被 app.py 静态 import（冻结模式
+# 经 `exe --mcp-stdio` 进程内 import），静态分析永远扫不到，必须显式登记；
+# mcp_server 的 import 链会把 mcp.server.fastmcp / mcp.types / anyio /
+# pydantic 全部静态可达地带入。**不能用 collect_all('mcp')**：它会枚举导入
+# 全部子模块，mcp/cli/cli.py 在缺 typer 的构建环境 import 即 sys.exit(1)
+# （2026-10-24 实测打包直接失败）；CLI 子包我们用不到，数据文件单独收。
+_mcp_datas = collect_data_files('mcp')
+datas += _mcp_datas
+
 # ViennaRNA 的 _RNA.pyd 用 MSVC C++ 运行库（导入表依赖 MSVCP140.dll），
 # 但平台其余扩展都只用 VCRUNTIME140 —— PyInstaller 的依赖分析因此没有把
 # MSVCP140.dll 收进 _internal（2026-09-18 实测：冻结版 import RNA 报
@@ -112,6 +121,9 @@ if _sys.platform == 'win32':
         _p = _os.path.join(_windir, 'System32', _dll)
         if _os.path.isfile(_p):
             _binaries.append((_p, '.'))
+
+# mcp SDK 的二进制附件改由静态分析随 mcp_server 的 import 链带入
+# （collect_all('mcp') 会触发 mcp.cli 的 import-time sys.exit(1)，已弃用）
 
 # primer3-py（T7 引物设计）**故意不进分发版**（2026-09-19 实测）：
 # 本机构建时装在 C:\ProgramData\VirusPlatformPrimer3（sys.path 注入），
@@ -187,6 +199,8 @@ a = Analysis(
                    'Virus_Platform_Core.dsrna_offtarget',
                    'RNA',
                    'main',            # exe --cli <子命令> 用（打包后自检）
+                   'mcp_server',      # exe --mcp-stdio 用（MCP 控制台进程内拉起）
+                   'mcp', 'mcp.types', 'mcp.server.fastmcp',   # mcp SDK 主链显式兜底
                    'gbdraw', 'Virus_Platform_Core.public_meta.landscape_plot', 'seaborn']
                    + collect_submodules('gbdraw')
                    + _pyro_impl
@@ -227,6 +241,11 @@ a = Analysis(
               'sympy', 'duckdb', 'reportlab', 'docutils', 'sphinx',
               'matplotlib.tests', 'numpy.testing',
               'pandas.tests', 'scipy.io.tests',
+              # Qt 绑定（2026-10-24）：构建环境同时装了 PyQt5 与 PySide6
+              #（传递安装），PyInstaller 拒绝多 Qt 绑定共存直接中止构建；
+              # 平台是 Flask 网页 UI + pywebview(edgechromium/winforms)，
+              # 零处 import Qt，显式排除两个绑定。
+              'PyQt5', 'PyQt5_sip', 'PySide6', 'shiboken6', 'qtpy',
               # 开发/测试依赖（requirements-dev.txt）：真浏览器探针用，
               # 平台本体从不 import。显式排除，防止本机装了之后被动入包。
               'playwright',

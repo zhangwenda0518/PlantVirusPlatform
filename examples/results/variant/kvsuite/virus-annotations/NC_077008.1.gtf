@@ -1,0 +1,3 @@
+NC_077008.1	gb2gtf	CDS	106	1998	.	+	0	gene_id "69K_protein"; transcript_id "69K_protein"; gene_name "69K_protein";
+NC_077008.1	gb2gtf	CDS	113	5560	.	+	0	gene_id "200K_protein"; transcript_id "200K_protein"; gene_name "200K_protein";
+NC_077008.1	gb2gtf	CDS	5563	6129	.	+	0	gene_id "CP"; transcript_id "CP"; gene_name "CP";

@@ -1,0 +1,62 @@
+{
+  "n_accessions": 2,
+  "n_plots": 18,
+  "plots": [
+    "variant_plots/NC_076132_variant_effect.pdf",
+    "variant_plots/NC_076132_variant_effect.png",
+    "variant_plots/NC_076132_variant_effect.svg",
+    "variant_plots/NC_076132_variant_map.pdf",
+    "variant_plots/NC_076132_variant_map.png",
+    "variant_plots/NC_076132_variant_map.svg",
+    "variant_plots/NC_076132_variant_overview.pdf",
+    "variant_plots/NC_076132_variant_overview.png",
+    "variant_plots/NC_076132_variant_overview.svg",
+    "variant_plots/NC_077008_variant_effect.pdf",
+    "variant_plots/NC_077008_variant_effect.png",
+    "variant_plots/NC_077008_variant_effect.svg",
+    "variant_plots/NC_077008_variant_map.pdf",
+    "variant_plots/NC_077008_variant_map.png",
+    "variant_plots/NC_077008_variant_map.svg",
+    "variant_plots/NC_077008_variant_overview.pdf",
+    "variant_plots/NC_077008_variant_overview.png",
+    "variant_plots/NC_077008_variant_overview.svg"
+  ],
+  "skipped": [],
+  "n_snipit_plots": 12,
+  "snipit": {
+    "available": true,
+    "n_accessions": 3,
+    "plots": [
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_076132_snipit.png",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_076132_snipit.snps.csv",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_076132_snipit.svg",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_076132_snipit.pdf",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077008_snipit.png",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077008_snipit.snps.csv",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077008_snipit.svg",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077008_snipit.pdf",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077216_snipit.png",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077216_snipit.snps.csv",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077216_snipit.svg",
+      "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\variant_plots\\NC_077216_snipit.pdf"
+    ],
+    "accessions": {
+      "NC_076132": {
+        "n_samples": 3,
+        "n_snps": 41,
+        "n_rows_skipped_insertion": 2
+      },
+      "NC_077008": {
+        "n_samples": 3,
+        "n_snps": 43,
+        "n_rows_skipped_insertion": 0
+      },
+      "NC_077216": {
+        "n_samples": 3,
+        "n_snps": 41,
+        "n_rows_skipped_insertion": 2
+      }
+    },
+    "skipped": []
+  }
+}

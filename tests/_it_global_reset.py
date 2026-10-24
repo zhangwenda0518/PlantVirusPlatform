@@ -160,7 +160,10 @@ def main():
         check('reset_all 返回被清条数 3', q.reset_all() == 3)
         check('队列内存已空', q.items == [])
         with open(qfile, encoding='utf-8') as f:
-            check('队列落盘为空列表', json.load(f) == [])
+            _qd = json.load(f)
+        # _persist 现写 {'items': […], 'paused': …}（暂停标记后加）；兼容旧裸列表
+        _qitems = _qd.get('items') if isinstance(_qd, dict) else _qd
+        check('队列落盘为空列表', _qitems == [], str(_qd))
         check('reset_all 后 queue.json 仍在', os.path.isfile(qfile))
 
         # ---- 4. purge_all ----
@@ -210,9 +213,9 @@ def main():
               str(r.status_code))
         check('400 后未清任何任务记录（磁盘记录仍在）',
               len(_task_files(tdir)) >= 2, str(_task_files(tdir)))
-        check('400 后队列未被清空',
-              len(json.load(open(qfile, encoding='utf-8'))) == 1,
-              str(json.load(open(qfile, encoding='utf-8'))))
+        _qd = json.load(open(qfile, encoding='utf-8'))
+        _qitems = _qd.get('items') if isinstance(_qd, dict) else _qd
+        check('400 后队列未被清空', len(_qitems) == 1, str(_qitems))
 
         r = cli.post('/api/global/reset',
                      json={'confirm': 'reset', 'include_archive': True})

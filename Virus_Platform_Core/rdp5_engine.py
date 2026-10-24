@@ -18,6 +18,13 @@ CLI 口径（对齐服务器 /opt/rdp5_run_39.sh）：
 mask（吸收 virome_phylo_pipeline/mask_recombination.py）：
 检出事件的重叠区间合并后，比对中对应列掩蔽为 N（可进 BEAST）——
 产出「干净比对」直接送建树，即参考管线「重组必须在建树前」的语义。
+
+⚠️ 已知怪癖（2026-10-12 实测定案）：-rbdp 的断点分布分析只统计
+**双亲本都已鉴定** 的事件——主表事件只要带 Unknown 亲本（真实病毒
+数据极常见），`<prefix> breakpoint distribution.csv` 会静默输出全 0、
+`…BreakpointPositions.csv` 为空或缺失，前端照画就是一条 0 平线。
+`breakpoint_distribution_degenerate()` + `synthesize_breakpoint_distribution()`
+即为该情况兜底：用事件断点重建 200nt 滑窗分布，格式与 RDP5 原产 CSV 兼容。
 """
 
 import os
@@ -345,5 +352,164 @@ def mask_from_events(fasta_path, events, mask_char='N'):
     merged = merge_intervals(intervals, aln_len)
     records, n_masked = mask_alignment(fasta_path, merged, mask_char)
     return records, n_masked, merged
+
+
+# ── 断点分布兜底（2026-10-12）────────────────────────────────────
+# 背景：RDP5CL 的 -rbdp 只统计双亲本都已鉴定的事件（见模块 docstring）。
+# 实测复现：10 条 CMV RNA3 真实序列 → 2 个事件（各带一个 Unknown 亲本）
+# → 分布 CSV 1146 行全 0；示例比对删到只剩 3 条序列（迫使次亲本 Unknown）
+# 同样复现；而双亲本齐全的运行分布正常——因果闭环。
+BDP_CSV = 'rdp5 breakpoint distribution.csv'
+BDP_HEADER = ('Position in alignment, '
+              'Recombination breakpoint number (200nt win)')
+
+
+def breakpoint_distribution_degenerate(csv_path):
+    """判定 RDP5 断点分布 CSV 是否为"静默全 0"退化产物。
+
+    True = 文件缺失、无数据行、或 RBN 列（第 2 列）全 0。
+    RDP5 正常产物在没有断点的位置 RBN 也接近 0，但 CI 列 >0；此处只看
+    RBN 列，且只有"事件存在"时上层才会调它，误判面足够小。
+    """
+    if not os.path.isfile(csv_path):
+        return True
+    saw_row = False
+    with open(csv_path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            line = line.strip()
+            if not line or not line[0].isdigit():
+                continue        # 表头 / 空行
+            parts = line.split(',')
+            if len(parts) < 2:
+                continue
+            try:
+                v = float(parts[1])
+            except ValueError:
+                continue
+            saw_row = True
+            if v != 0:
+                return False
+    return True
+
+
+def synthesize_breakpoint_distribution(csv_path, events, aln_len=None,
+                                       window=200):
+    """用检出事件的断点重建 200nt 滑窗断点分布 CSV（RDP5 退化兜底）。
+
+    每个 200nt 窗（起点 p，覆盖 [p, p+200)）计落入的事件断点数；环状
+    事件（start > end）的两个断点直接按位置计，不跨末端绕回。位置网格
+    步长 2 对齐 RDP5 原产 CSV。aln_len 缺省时按最靠后的断点补足。
+    返回写入的数据行数。
+    """
+    bps = []
+    for e in events:
+        for k in ('bp_start', 'start', 'bp_end', 'end'):
+            v = e.get(k)
+            if v is not None:
+                bps.append(int(v))
+    if not bps:
+        return 0
+    if not aln_len:
+        aln_len = max(bps) + window
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        f.write(BDP_HEADER + '\n')
+        n_rows = 0
+        for p in range(1, aln_len + 1, 2):
+            cnt = sum(1 for b in bps if p <= b < p + window)
+            f.write(f'{p},{cnt}\n')
+            n_rows += 1
+    return n_rows
+
+
+def orf_csv_to_aln_map(orf_csv, aln_fasta, ref_id=None):
+    """基因坐标 CSV（Rgrapher ORFCoords 风格）→ 比对坐标基因图谱。
+
+    CSV 表头按 Rgrapher 惯例（Gene.symbol / Start / Stop，大小写不敏感）；
+    坐标是**参考序列**的核苷酸坐标（1-based，GenBank 口径）。参考行取
+    ref_id 前缀匹配的序列，缺省用比对第一条。参考行里的 gap 列自动跨过
+    （与 RDP5 断点坐标同一坐标系）。越界/畸形行跳过并计数。
+    返回 {'genes': [{'name','start','end'}, …], 'skipped': int, 'ref': str}。
+    """
+    import csv as _csv
+    name_col, start_col, stop_col = None, None, None
+    genes, skipped = [], 0
+    with open(orf_csv, encoding='utf-8-sig', errors='replace') as f:
+        rows = list(_csv.reader(f))
+    if not rows:
+        raise ValueError('基因坐标 CSV 为空')
+    hdr = [h.strip().lower() for h in rows[0]]
+    for i, h in enumerate(hdr):
+        if h in ('gene.symbol', 'gene_symbol', 'gene', 'symbol', 'name'):
+            name_col = i
+        elif h in ('start', 'begin', 'from'):
+            start_col = i
+        elif h in ('stop', 'end', 'to'):
+            stop_col = i
+    for row in (rows[1:] if name_col is not None else rows):
+        try:
+            if name_col is not None:
+                gname = str(row[name_col]).strip()
+                start, stop = int(row[start_col]), int(row[stop_col])
+            else:
+                nums = [c for c in row if c.strip() and
+                        c.strip().lstrip('.').isdigit()]
+                texts = [c for c in row if c.strip() and
+                         not c.strip().lstrip('.').isdigit()]
+                if len(nums) < 2 or not texts:
+                    raise ValueError
+                gname = texts[0].strip()
+                start, stop = int(nums[0]), int(nums[1])
+        except (ValueError, IndexError):
+            skipped += 1
+            continue
+        if not gname or start < 1 or stop < start:
+            skipped += 1
+            continue
+        genes.append({'name': gname, 'ref_start': start, 'ref_stop': stop})
+    if not genes:
+        if skipped:
+            raise ValueError(f'基因坐标 CSV 无有效行（{skipped} 行畸形已跳过）')
+        raise ValueError('基因坐标 CSV 无有效行')
+
+    # 参考行 → nt→col 映射
+    cur_name, buf = None, []
+    rows_fa = []
+    with open(aln_fasta, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('>'):
+                if cur_name is not None:
+                    rows_fa.append((cur_name, ''.join(buf)))
+                cur_name = line[1:].split()[0] if line[1:].split() else line[1:]
+                buf = []
+            elif line:
+                buf.append(line)
+    if cur_name is not None:
+        rows_fa.append((cur_name, ''.join(buf)))
+    if not rows_fa:
+        raise ValueError('比对 FASTA 为空，无法映射基因坐标')
+    ref_name, ref_seq = rows_fa[0]
+    for nm, sq in rows_fa:
+        if ref_id and nm.startswith(ref_id):
+            ref_name, ref_seq = nm, sq
+            break
+    nt2col, n = {}, 0
+    for i, ch in enumerate(ref_seq, 1):
+        if ch != '-':
+            n += 1
+            nt2col[n] = i
+    mapped, out = 0, []
+    for g in genes:
+        s, e = nt2col.get(g['ref_start']), nt2col.get(g['ref_stop'])
+        if s is None or e is None:
+            skipped += 1
+            continue
+        out.append({'name': g['name'], 'start': min(s, e), 'end': max(s, e)})
+        mapped += 1
+    if not out:
+        raise ValueError(f'基因坐标全部越界（参考序列 {ref_name} 共 {n} nt，'
+                         f'{skipped} 行无法映射）——坐标应按参考序列 nt 给')
+    return {'genes': out, 'skipped': skipped, 'ref': ref_name,
+            'ref_nt_count': n}
 
 

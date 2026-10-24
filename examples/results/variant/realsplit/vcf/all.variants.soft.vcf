@@ -1,0 +1,38 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##bcftoolsVersion=1.24+htslib-1.24
+##bcftoolsCommand=mpileup -f D:\桌面\植物病毒分析平台\examples\results\variant\kvsuite\reference.fasta -d 100000 -q 0 -Q 13 -B -a FORMAT/AD,FORMAT/DP,INFO/AD -Ob -o D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\vcf\all.variants.pileup.bcf D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\bam\S1.bam D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\bam\S2.bam
+##reference=file://D:\桌面\植物病毒分析平台\examples\results\variant\kvsuite\reference.fasta
+##contig=<ID=NC_077216.1,length=6096>
+##contig=<ID=NC_076132.1,length=5419>
+##contig=<ID=NC_077008.1,length=6245>
+##ALT=<ID=*,Description="Represents allele(s) other than observed.">
+##INFO=<ID=INDEL,Number=0,Type=Flag,Description="Indicates that the variant is an INDEL.">
+##INFO=<ID=IDV,Number=1,Type=Integer,Description="Maximum number of raw reads supporting an indel">
+##INFO=<ID=IMF,Number=1,Type=Float,Description="Maximum fraction of raw reads supporting an indel">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+##INFO=<ID=VDB,Number=1,Type=Float,Description="Variant Distance Bias for filtering splice-site artefacts in RNA-seq data (bigger is better)",Version="3">
+##INFO=<ID=RPBZ,Number=1,Type=Float,Description="Mann-Whitney U-z test of Read Position Bias (closer to 0 is better)">
+##INFO=<ID=MQBZ,Number=1,Type=Float,Description="Mann-Whitney U-z test of Mapping Quality Bias (closer to 0 is better)">
+##INFO=<ID=BQBZ,Number=1,Type=Float,Description="Mann-Whitney U-z test of Base Quality Bias (closer to 0 is better)">
+##INFO=<ID=MQSBZ,Number=1,Type=Float,Description="Mann-Whitney U-z test of Mapping Quality vs Strand Bias (closer to 0 is better)">
+##INFO=<ID=SCBZ,Number=1,Type=Float,Description="Mann-Whitney U-z test of Soft-Clip Length Bias (closer to 0 is better)">
+##INFO=<ID=SGB,Number=1,Type=Float,Description="Segregation based metric, http://samtools.github.io/bcftools/rd-SegBias.pdf">
+##INFO=<ID=MQ0F,Number=1,Type=Float,Description="Fraction of MQ0 reads (smaller is better)">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="List of Phred-scaled genotype likelihoods">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Number of high-quality bases">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths (high-quality bases)">
+##INFO=<ID=AD,Number=R,Type=Integer,Description="Total allelic depths (high-quality bases)">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count in genotypes for each ALT allele, in the same order as listed">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles in called genotypes">
+##INFO=<ID=DP4,Number=4,Type=Integer,Description="Number of high-quality ref-forward , ref-reverse, alt-forward and alt-reverse bases">
+##INFO=<ID=MQ,Number=1,Type=Integer,Description="Average mapping quality">
+##bcftools_callVersion=1.24+htslib-1.24
+##bcftools_callCommand=call -mv -Ob -o D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\vcf\all.variants.call.bcf D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\vcf\all.variants.pileup.bcf; Date=Tue Oct 13 21:20:30 2026
+##bcftools_viewVersion=1.24+htslib-1.24
+##bcftools_viewCommand=view -Ov -o D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\vcf\all.variants.raw.vcf D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\vcf\all.variants.call.bcf; Date=Tue Oct 13 21:20:30 2026
+##FILTER=<ID=FAIL,Description="Set if not true: QUAL>=3.5 && INFO/DP>=10 && INFO/AD[1]/INFO/DP>=0.05 && INFO/DP4[2]>=2 && INFO/DP4[3]>=2">
+##bcftools_filterVersion=1.24+htslib-1.24
+##bcftools_filterCommand=filter -s FAIL -i 'QUAL>=3.5 && INFO/DP>=10 && INFO/AD[1]/INFO/DP>=0.05 && INFO/DP4[2]>=2 && INFO/DP4[3]>=2' -Ov -o D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\vcf\all.variants.soft.vcf D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\vcf\all.variants.raw.vcf; Date=Tue Oct 13 21:20:30 2026
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\bam\S1.bam	D:\桌面\植物病毒分析平台\examples\results\variant\realsplit\bam\S2.bam

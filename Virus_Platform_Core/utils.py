@@ -319,6 +319,23 @@ class TaskLogger:
             except Exception:
                 pass
 
+    # logging.Logger 风格便捷级（2026-10-13）：kvsuite 等子模块按
+    # logging.Logger 习惯调 logger.warning(...)（如 kv_stage 抽病毒 reads
+    # 的无 QUAL 告警——salmon 引擎每次必踩），而流水线传入的是 TaskLogger，
+    # 缺这些方法直接 AttributeError 把整个阶段崩掉。补齐常用四级，与
+    # logging.Logger 鸭子类型兼容；debug 不落盘（与原行为一致，无 debug 通道）。
+    def info(self, msg):
+        self.log(msg, "INFO")
+
+    def warning(self, msg):
+        self.log(msg, "WARN")
+
+    def error(self, msg):
+        self.log(msg, "ERROR")
+
+    def debug(self, msg):
+        pass
+
     def close(self):
         with self._lock:
             if self._fh:

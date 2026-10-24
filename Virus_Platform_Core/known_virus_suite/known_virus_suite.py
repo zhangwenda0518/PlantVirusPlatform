@@ -204,6 +204,24 @@ def build_parser():
         g.add_argument('--genes-cov', dest='genes_cov', help='基因覆盖表 TSV，启用 B 轨')
         g.add_argument('--min-gene-total-cov', dest='min_gene_total_cov', type=float, default=80.0)
         g.add_argument('--min-gene-avr-cov', dest='min_gene_avr_cov', type=float, default=5.0)
+        # 疑似档（review tier）：严格档未过、放宽档通过的信号单列
+        # all_viruses.review.tsv，附 Signal_Grade（EM/kb 长度归一分级）。
+        # 阈值由 2026-10-18 基准扫描标定（Bari S9：泊松 0.1 放行 4 个真值）。
+        g.add_argument('--review-cov', dest='review_cov', type=float, default=2.0,
+                       help='疑似档覆盖率下限 %% (默认 2)')
+        g.add_argument('--review-depth', dest='review_depth', type=float, default=0.0,
+                       help='疑似档平均深度下限 (默认 0=不设 depth 底线：疑似档'
+                            '的防伪由泊松比承担、信号量级由 Signal_Grade 承担，'
+                            'depth 底线功能重复；检疫场景痕迹级信号应可见)')
+        g.add_argument('--review-reads', dest='review_reads', type=int, default=1,
+                       help='疑似档最少 reads (默认 1)')
+        g.add_argument('--review-ratio', dest='review_ratio', type=float, default=0.05,
+                       help='疑似档泊松比 (默认 0.05；0.05/0.1 两档由 D3/PPV '
+                            '与 Bari 扫描标定，Signal_Grade 兜底噪声)')
+        g.add_argument('--review-drop-low', dest='review_drop_low',
+                       action='store_true',
+                       help='疑似档丢弃 Signal_Grade=low 的行（降噪；注意会'
+                            '连带丢掉低掺入小基因组真信号，默认关闭）')
 
     # 共识参数
     for name in ('all', 'consensus'):

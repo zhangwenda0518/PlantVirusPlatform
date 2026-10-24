@@ -1,0 +1,10 @@
+stage_key	stage	value	note	source
+input_reads	输入 reads	332872	对×2 估算	01_host_removal\stats.json
+qc_reads	质控后 reads			
+host_free_reads	去宿主后 reads	330632	宿主占比 0.67%	01_host_removal\stats.json
+viral_reads	病毒 reads	128526	检出物种 67 个	02b_kvsuite\summary.json
+contigs	组装 contigs	234		03_assembly\summary.json
+viral_contigs	病毒 contigs	231		03_assembly\summary.json
+verified	验证判定序列	231	known 37；novel 53；unclassified 34	03b_verify\summary.json
+consensus_refs	共识序列	231	变异位点 25811	03c_consensus\summary.json
+orf_genes	ORF 基因	297		04_orf\summary.json

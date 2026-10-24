@@ -28,6 +28,7 @@
 - [Toolbox](https://github.com/zhangwenda0518/VirusPlatform/wiki/Toolbox)
 - [NCBI-Submission](https://github.com/zhangwenda0518/VirusPlatform/wiki/NCBI-Submission)
 - [Logan](https://github.com/zhangwenda0518/VirusPlatform/wiki/Logan)
+- [Result-Interpretation](https://github.com/zhangwenda0518/VirusPlatform/wiki/Result-Interpretation)（结果解读规则）
 
 **平台设施**
 - [Databases](https://github.com/zhangwenda0518/VirusPlatform/wiki/Databases)

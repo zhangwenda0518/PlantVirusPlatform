@@ -3167,3 +3167,231 @@ run 名与日志；回退修复复跑 → 第二项 TimeoutException（=用户�
   回归通过。宿主库未建时 hostremoval 创建即 400（既有 db_ready 拦截，
   与本功能无关）。test client 教训：send_file 的 response 不 close 会
   占住文件句柄，让后续删目录在 Windows 上静默残留。
+
+## 2026-10-21：主导航改版（顶部横条 → 左侧常驻栏）+ 首页分层架构总览
+
+用户提供了一张智能辅助育种平台的架构图与工作台截图，要求借鉴其布局。
+可迁移的三点里，落地了两点；第三点（右侧常驻文件面板）暂不做，理由见下。
+
+**① 一级导航：顶部 14 项横条 → 左侧固定栏 + 顶部工具条**
+- 旧方案的固有缺陷：14 个一级链接在 ≤1500px 就把横条撑成两行，
+  `tests/_it_nav_responsive.py` 从 2026-09-11 起一直在守这个换行/溢出；
+  用 CDP 实测 1920px 下内容宽 1674px 对盒宽 1675px，只差个位数像素，
+  浏览器字体度量一抖动就掉行。竖排后该约束从根上消失。
+- `_nav.html` 重写：`.sidenav`（品牌 / 一级链接 / 组内二级内联展开 /
+  底部任务·结果·设置·手册）+ `.topbar`（☰ / 当前组标题 / 上下文胶囊 /
+  语言 / 📂）。数据源仍是 `pages.py` 的 NAV_GROUPS，与 /tools 组落地、
+  `_group_nav.html` 共用同一份定义。
+- **结果中心组不在侧栏渲染**：底部已有直达入口（旧导航同口径），且该组
+  没有 `nav.g.result` 的 i18n 键，渲染出来会显示成裸 key。
+- 组内二级入口改为**内联展开**（`.sn-caret` 点击 + 桌面悬停），不再依赖
+  悬停浮层菜单——触屏与窄窗口同样可用。展开态存 localStorage
+  （`vp_nav_open`），跨页面保持。
+- 窄屏 ≤1024px 收成抽屉：☰ 展开、遮罩/Esc/侧栏内 ✕ 收起、点链接自动关。
+- 新增 `webapp/static/app-nav.js`（手风琴 / 抽屉 / 顶栏标题）；不依赖
+  `$`/`t`/`esc`，纯原生 API，先于 app.js 执行也安全。
+- `app.js injectGlobalCtx` 挂载点从 `.navlinks` 改为 `.navctx-host`；
+  `i18n.js injectLangSwitch` 从 `.navlinks` 改为 `.navtail`。两处都保留
+  旧选择器兜底，避免第三方模板漏改时胶囊/language 按钮凭空消失。
+- **DOM 契约未变**：`.navlinks` / `.nav-drop > a[data-group]` /
+  `#navTasksBadge` / `#navCtx*` / `#langBtn` / `.navtail` / `.iconbtn`
+  全部保留，故 `_check_phylogeo_ui.py`、`_it_global_ctx_ui.py`、
+  `_check_ai_dock_ui.py` 零改动通过。
+- `tests/_it_nav_responsive.py` 按新语义重写：桌面档断言侧栏常驻/不遮挡
+  主区/无横向溢出/链接数（NAV_GROUPS - result + 总览）/顶栏入口可见；
+  窄屏档断言默认收起/主区全宽/☰ 与遮罩交互。旧口径的"横条单行"已无意义。
+
+**② 首页新增「平台架构总览」（借鉴其分层架构图）**
+- 位置：四张叙事卡之后、数据库模块之前。
+- 结构：数据底座 → 分析引擎（五条业务线，底色加重作为视觉重心）→
+  结果解读，右侧一列竖排「贯穿能力」（AI 助手 / 任务中心）。
+- **每一块都是真实链接**，不是静态配图——点卡片直接进对应模块。
+- 网格显式定位（`.arch-lane/.arch-arrow` 锁第 1 列，`.arch-side` 占第 2 列
+  全部行）：不写死的话 auto-placement 会把第二条泳道塞进右侧列，整图错位
+  （实测高度从 587px 涨到 1676px）。
+- ≤1180px 时右侧贯穿列改为横排落到图下方，避免窄窗口"架构图看不全"。
+- i18n 键 `hm.arch*` 中英成对（`_check_i18n.py` 1405 锚点全通过）。
+
+**③ 未落地：右侧常驻文件/数据面板**
+- 参考平台的右栏是"个人文件 / 公共文件"目录树，与其数据底座强绑定。
+- 本平台现有 `/api/sample_files/<sample>` 已能列样品产物，但各模块的
+  产物寻址是"运行目录 + tool_runs"而非统一文件树；做成全局右栏会与
+  「结果中心」「任务中心」功能重叠，且挤压主区宽度。留待确有需求时再议。
+
+**回归**：`_route_inventory` 246 条零差异 / `_check_js_syntax` 59 块通过 /
+`_check_i18n` 1405 锚点全通过 / `_check_pages_console --isolated` 22 页
+零 JS 错误 / `_it_nav_responsive` 全通过 / `_it_global_ctx_ui` 全通过 /
+`_check_ai_dock_ui`、`_check_ai_global_ui` 全通过 / `_check_home_cover` 通过 /
+`_check_phylogeo_ui` 通过。
+
+### 2026-10-21 修复：分组点击后收不起来（悬停规则压过折叠态）
+
+现象：点分组箭头折叠后，二级菜单仍然显示。
+
+原因：CSS 里同时有 `.sn-group.open > .sn-sub{display:block}` 和
+`.sn-group:hover > .sn-sub{display:block}`。鼠标必然停在分组上才点得到箭头，
+此时 `:hover` 恒成立，把刚被 `.open` 移除的菜单又强制显示出来 —— 点击等于
+没生效。:hover 那条是"桌面悬停也能看"的顺手便利，与点击开合语义直接冲突，
+已删除；展开态现在只由 `.open` 类决定。
+
+回归：`tests/_it_nav_responsive.py` 新增 `check_accordion()`，在 4 个页面 ×
+1600px 下用**真实鼠标**先 `move_to_element`（让 :hover 激活）再点击，断言
+1) 收起后 `.open` 为假且 `.sn-sub` 无渲染盒；2) 再点一次能重新展开。
+必须用真实鼠标：只调 `element.click()` 不会让 :hover 成立，测不出这个缺陷。
+
+### 2026-10-23 首页精简：移除静态封面叙事与重复架构图
+
+按需求删除两块「只占版面、不产生操作」的内容：
+
+- **四张叙事卡（Ⅰ 背景 / Ⅱ 方法 / Ⅲ 流程 / Ⅳ 意义）**：纯静态文案，
+  与 hero 的科研定位句、下方模块入口信息重复。
+- **平台架构总览（2026-10-21 新增）**：其节点与下方模块入口卡、
+  左侧一级导航三处同源，属于第三份重复；删掉后模块入口仍由
+  `hm.entry.*` 卡片承担。
+
+同步清理：`hm.arch*` / `hm.cover.*` 中英各 22 / 8 条 i18n 键、
+`.arch*` 与 `.cover-card/.cover-grid` CSS。
+
+顺手修的四处首页缺陷：
+
+- **深色主题白卡片**：`home.html` 内联样式用了 `var(--bg2)` / `var(--line)`，
+  两个变量在 `app.css` 字典里根本不存在，深色主题下回落到 `#f8fafc` /
+  `#cbd5e1` 浅色兜底值，快速开始与 MCP 控制台整块发白。现改用
+  `--surface-2 / --line-200 / --input-bg / --blue-100` 等真实令牌。
+- **回车不扫描**：输入框 placeholder 承诺「回车扫描」，但此前只有按钮绑定
+  `QS.scan()`；补 `onkeydown` 后与文案一致。
+- **首页漏掉进化动力学**：架构图删除后，模块入口卡是主区唯一入口，
+  但卡片清单里没有 `phylodyn`（只有左栏有）。已按 `NAV_GROUPS` 顺序
+  补卡与 `hm.entry.phylodyn.d` 中英键；现为 10 卡。
+- **MCP 控制台移位**：原位置卡在「快速开始」与模块入口之间，把
+  「粘贴路径 → 选模块」的主线截断；移到模块入口之后、最近样品之前。
+  它是开发者调试面板，不该占据首屏主线位置。
+
+`tests/_check_home_cover.py` 判据同步反转：断言 `.hero.cover` 存在、
+`.cover-card` / `.arch` 不存在、封面文案非空、无横向溢出。
+回归：`_check_i18n` 1376 锚点全通过 / `_check_js_syntax` 59 块通过 /
+`_check_home_cover` 浅色+深色通过 / 1440·1280·1024·900·768 五档无横向滚动 /
+回车触发 `scan_folder` 实测 1 次请求 / 首页控制台零 JS 错误。
+
+
+### 2026-10-21 修复②：分组改为「整行标题」开关（箭头热区太小）
+
+用户反馈：只有右侧小箭头能点，热区太小；应当点标题一次展开、再点收起。
+
+改动：
+- `_nav.html`：箭头从 `<button>` 降级为 `<span aria-hidden>`（纯装饰）；
+  `aria-expanded` 移到 `a.sn-link` 上（整行才是真正的开关）。
+- `app-nav.js`：点击整行标题 → `preventDefault()` + 切换 `.open`。
+  href 仍保留组概览地址（JS 失效时退化为正常跳转）；有 JS 时不跳转，
+  组概览走展开后的「🏠 组概览」项 —— 保持"点标题=开合"的单一语义。
+- `app.css`：`.sn-caret{pointer-events:none}` 让点击穿透到整行。
+
+**两个连带踩到的坑（都记在 CSS 注释里）**：
+1. 箭头 `top:50%` 是相对 `.sn-group` 算的，而分组盒子 = 标题行 + 展开的
+   二级菜单，高度随开合变化 —— 实测箭头偏出 104px、压到下一个分组上。
+   改为相对分组顶部固定 `top:14px`（标题行 ≈38px 高，取半）。
+2. 箭头**不能**挪进 `<a data-i18n>` 里：`applyI18n` 用 `el.innerHTML = v`
+   覆盖，切语言时会把箭头整段抹掉。
+
+回归：`tests/_it_nav_responsive.py` 的 `check_accordion()` 改为点 `a.sn-link`
+（整行，不是 .sn-caret），并新增一条「点标题不跳转」断言 —— 若日后改回
+只有箭头能点，或点标题误触发跳转，这里都会红。
+
+### 2026-10-21 修复③：设置页侧栏点击跳转错位
+
+用户报障：点左侧功能，跳转位置很乱、没有对齐。实测是**三个独立缺陷叠加**，
+每一个单独看都像"跳转不准"：
+
+1. **多列网格**：`.settings-grid` 是 `repeat(auto-fit, minmax(320px,1fr))`
+   三列，而侧栏按文档顺序逐个列 —— 「输出/输入/数据库目录」三张卡在同一行，
+   `top` 完全相同（实测都是 167），点哪个都滚到同一处，分不出目标。
+2. **锚点被顶栏压住**：`.se-main section{scroll-margin-top:14px}`，而吸顶
+   顶栏高 54px —— 滚动后卡片顶边贴在视口 0 处，标题被吃掉 40px
+   （实测 `top=14` vs `topbarBottom=54`）。
+3. **侧栏顺序 ≠ 文档顺序**：`sec-storage` / `sec-paths` 在 DOM 里排在
+   「通用设置 / 数据库 / 分析默认参数」之后，侧栏却按 GROUPS 的书写顺序
+   把它们归在「目录与存储」组前面 —— 点「平台目录」时按位置算出的当前
+   区块是夹在中间的 `sec-defaults`，高亮跳到别人身上。
+
+修复：
+- 设置卡片改**单列流式**（`.se-main > .settings-grid{display:block}`），
+  卡片内部的小网格 `#defaultsGrid` 不受影响。
+- 新增 `--topbar-h: 54px`（app.css 根变量），`scroll-margin-top` 与
+  sticky 侧栏 `top` 都引用它 —— 以后改顶栏高度只改一处。
+- 侧栏条目改为**按 DOM 实际位置排序**（`docTop()` 累加 offsetParent），
+  并把模板里 `sec-storage` / `sec-paths` 的物理位置前移到「通用设置」之前，
+  让「目录与存储」组连续。侧栏顺序 = 视觉顺序 = 高亮判定顺序，三者同源。
+- 高亮判定从 IntersectionObserver 改为**按滚动位置算**：观察器在多个区块
+  同时进入观察带时后触发者覆盖前者（实测点「输入目录」高亮跳到
+  「数据库目录」）。另加 700ms 点击锁 —— 平滑滚动途中 scroll 事件会连续
+  触发，按位置算出的仍是上一屏的区块，会把刚点亮的目标覆盖掉。
+- 点击时 `history.replaceState` 同步 `#hash`（不新增历史），带 hash 直接
+  进入也按同一套偏移滚一次。
+
+**过程中发现的两个坑（都写进了代码注释）**：
+- `pickActive` 里"后面的都在下方就 break"是错的：从下往上跳时（sec-plugins
+  → sec-paths）目标上方仍有多个区块越过顶栏，提前退出会停在上一个错项上。
+  必须扫完全部再取最后一个。
+- 首页 `home.html` 的 `VC` 对象被一行多余的 `};` 提前闭合（第 481 行），
+  导致 `models: []` 变成非法语句、整个首页脚本 `Unexpected identifier`。
+  该行是另一会话编辑首页时留下的残缺，已删。
+
+回归：新增 `tests/_check_settings_nav.py`（已加入 `_run_all`）——13 个条目
+逐个点击，断言落点偏移在 12~30px、高亮正确、各条目滚动位置互不相同、
+侧栏顺序 == 文档顺序、`#hash` 深链也对齐、全程无 JS 报错。
+`_check_pages_console` 23 页零报错、`_check_js_syntax`、`_check_i18n` 全通过。
+
+### 2026-10-24 发布前 P0 批量修复（三档分发就绪）
+
+按发布前体检结论逐项修复，全部有实测对照：
+
+1. **分发说明文件损坏（打包脚本 bug）**：`package.py` 顶层说明的
+   `'=' * 60 + '\n'` 写在隐式字符串拼接块里，Python 把它解析成「对前面
+   整个字面量重复 60 遍」——产物 `程序与数据说明.txt` 首行重复 60 次。
+   改为行列表 `'\n'.join()` 拼接，并顺手补 MCP / 插件两条说明。
+2. **MCP 控制台在分发版静默失效**：`mcp_console._ensure` 固定
+   `[python, mcp_server.py]`，冻结分发没有独立 python（exe 会把参数当网页
+   参数）；`mcp_server.py` 不被 app.py 静态 import，PyInstaller 也扫不到，
+   `_internal` 里连 mcp SDK 都没有——exe 版 MCP 控制台「连接」永远失败。
+   修复三件套：app.py 顶部新增 `--mcp-stdio` 入口（在 Flask 启动前接管
+   进程）；`mcp_console` 冻结模式改拉 `[exe, --mcp-stdio]`；spec 对 mcp
+   `collect_all` + `hiddenimports += ['mcp_server']`。源码模式行为不变。
+   `mcp_server.py` 同时随程序包/源码包各放一份。
+3. **t-mirna 分发版必 500**：`databases/mirna_lib`（~13MB）从未入包，
+   `tools_api._mirna_lib_rows` 缺库直接 abort。现随程序包拷贝，
+   `dist_completeness.DEFAULT_PAIRS` 同步登记（+`__pycache__` 过滤）。
+4. **数据库包混入 357MB 备份**：`_skip_engine_index` 的 `backup_*` 匹配
+   不到带前导下划线的 `_backup_d17_20261019_*`（7 个目录），补
+   `_backup_*` / `_bak_*` 两个模式。
+5. **插件完整版打包入口**：`package.py --with-plugins` —— 32 个插件包
+   （本地 `plugins-dist/` 优先，缺的按索引多地址下载并 sha256 校验）经
+   `plugin_manager.install_zip(root=产物)` 预装进产物 `plugins/`。
+   连带修 `install_zip` 的 `install_to` 基准 bug：原写死
+   `PLATFORM_ROOT`，以 root=产物 调用时 6 个硬编码路径工具会写进**开发机
+   仓库**而不是产物——改为 `dirname(root)`（默认调用两者等价）。
+6. **测试两红 + 一挂死**：
+   - `_it_platform`：detect 组期望集合补 `t-conan`（10-20 新增卡未同步断言）；
+   - `_it_async_ui`：headless Edge 同会话连跑 4 个重页面在流程 4 原生崩溃
+     （与 `_check_pages_console` 的 chromium 段错误同因）。改为**每流程一个
+     全新会话**，首个会话失败仍 SKIP；实测批量满载下会话切换还会踩两个坑，
+     一并修掉：流程 2 换会话后必须重新导航 /submit 并恢复页面级 CUR 状态
+     （否则 no such element）；切换用 `_recycle()`——旧会话 quit 容错
+     （批量下第 4 次切换 quit 会抛空消息 WebDriverException）、新会话 5 次
+     递增退避重试，main() 的重试信息带异常类型（原来是空 Message，没法排）。
+     VP_TEST_WAIT=90 批量口径连跑 3 次全绿；
+   - `_check_pages_console`：父进程 `capture_output` 管道被 playwright 的
+     chrome 孙进程继承，子进程超时被 kill 后管道写端仍被握着，
+     `subprocess.run` 等 EOF **永久挂死**（实测卡 6 分钟无输出）。子进程
+     输出改落文件 + `taskkill /F /T` 收树；18766 被占自动换临时端口；
+     goto 错误截断 120→400 字符（原截断点恰好在 URL 端口前，误导排查）。
+7. **依赖声明补齐**：requirements.txt 显式声明 mcp<2 / anyio / httpx /
+   pydantic / uvicorn / cycler（此前仅靠传递依赖，干净克隆后 MCP 全断）；
+   requirements.lock 以 3rd/python 绿色运行时 `pip freeze` 重新生成。
+8. **RDP5 运行态文件出库**：`LastSave.rdp5` / `tempfile` 是用户会话快照，
+   加入 .gitignore 并 `git rm --cached`（工具本体照常纳管）。
+9. **第三方许可索引**：新增 `dev_tools/third_party_notices.py` 扫描
+   3rd/bin+3rd/tools 随附许可文件与 3rd/python 全部 dist-info，生成
+   `THIRD_PARTY_NOTICES.md`（33 工具 / 129 包）；README 分发形态章节改写
+   为三档口径。
+
+回归：见当日测试记录（目标测试 + 全量 quick + 产物自检）。

@@ -1,0 +1,88 @@
+{
+ "rows": [
+  {
+   "parent": "(node)",
+   "child": "(node)",
+   "from": "Asia",
+   "to": "Americas",
+   "geo_km": 15122.5,
+   "step_km": null,
+   "edge_snp": 37,
+   "dt_years": 9.0,
+   "n_p": 1,
+   "n_c": 10,
+   "group_size": 4,
+   "intro": true,
+   "label": "Distant",
+   "note": "sparse-sampling"
+  },
+  {
+   "parent": "(node)",
+   "child": "SIM_Americas_5|Asia|2018",
+   "from": "Americas",
+   "to": "Asia",
+   "geo_km": 15122.5,
+   "step_km": null,
+   "edge_snp": 5,
+   "dt_years": 6,
+   "n_p": 3,
+   "n_c": 1,
+   "group_size": 1,
+   "intro": true,
+   "label": "Distant",
+   "note": "low-divergence;sparse-sampling"
+  },
+  {
+   "parent": "(node)",
+   "child": "(node)",
+   "from": "Americas",
+   "to": "Europe",
+   "geo_km": 9157.6,
+   "step_km": null,
+   "edge_snp": 78,
+   "dt_years": -4,
+   "n_p": 5,
+   "n_c": 5,
+   "group_size": 5,
+   "intro": true,
+   "label": "Distant",
+   "note": ""
+  },
+  {
+   "parent": "(node)",
+   "child": "SIM_Asia_5|Europe|2009",
+   "from": "Asia",
+   "to": "Europe",
+   "geo_km": 7187.2,
+   "step_km": null,
+   "edge_snp": 4,
+   "dt_years": 8,
+   "n_p": 1,
+   "n_c": 1,
+   "group_size": 1,
+   "intro": true,
+   "label": "Distant",
+   "note": "low-divergence;sparse-sampling"
+  }
+ ],
+ "counts": {
+  "Distant": 4
+ },
+ "thresholds": {
+  "q33": 500.0,
+  "q67": 3000.0,
+  "src": "default(n<6)"
+ },
+ "flags": {
+  "sparse-sampling": 3,
+  "low-divergence": 2
+ },
+ "n_edges": 4,
+ "n_intro": 4,
+ "n_no_tips": 0,
+ "n_unknown_state": 0,
+ "n_state_changes": 4,
+ "snp_median": 21.0,
+ "n_with_step": 0,
+ "method": "分类口径（自研）：主标签 = 两端区划锚点的 haversine 距离**运行内分位带**（≤q33 Direct / ≥q67 Distant / 中间 Indirect）。阈值随数据自适应，不沿用 phymapr 的固定公里阈值；跨区边 <6 条或分位退化时退回 500/3000 km（thresholds.src 标注）。低分化远程（edge_snp ≤ 中位数）与同期远程（|dt| ≤1 年）只作证据标记，不改分类。另给 intro/group_size（是否为引入边及其连续同区叶组大小；与 import/export 同一判定，因几乎每条带叶跨区边都满足，故不作主标签）。"
+}

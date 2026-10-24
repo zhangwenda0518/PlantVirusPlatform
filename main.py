@@ -95,6 +95,8 @@ def cmd_analyze(args):
         threads=args.threads, confidence=args.confidence,
         assembly_mode=args.assembly_mode, memory_gb=args.memory,
         subsample=args.subsample, min_contig_len=args.min_contig_len,
+        subsample_mode=args.subsample_mode, subsample_seed=args.subsample_seed,
+        subsample_prop=args.subsample_p,
         top_n_refs=args.top_n_refs, tree_tool=args.tree_tool,
         tree_sampling=args.tree_sampling,
         ncbi_refs=args.ncbi_refs,
@@ -802,14 +804,25 @@ def cmd_selfcheck(args):
     from Virus_Platform_Core.kunpeng import db_ready
     from Virus_Platform_Core.taxonomy import taxonomy_ready
     from Virus_Platform_Core.config import host_db_info
+    # 分发口径（2026-10-24）：宿主库按物种而异、任何安装包都不随包——
+    # legacy 固定槽位 host/classify 上"没有库"是全新部署的**预期状态**，
+    # 判 ✘ 会让分发版永远过不了自检。降级为 △ 提示；非 legacy 槽位的
+    # 真实库不完整仍判失败。与 selfcheck._check_databases 同口径。
+    _h0 = host_db_info(cfg.databases['host']) or {}
+    _host_warn = (not db_ready(cfg.databases['host']) and _h0.get('legacy')
+                  and not _h0.get('ready') and not _h0.get('has_manifest'))
     checks = [
-        ('NCBI Taxonomy', taxonomy_ready()),
-        ('宿主库 host_db', db_ready(cfg.databases['host'])),
-        ('病毒库 virus_db', db_ready(cfg.databases['virus'])),
+        ('NCBI Taxonomy', taxonomy_ready(), False),
+        ('宿主库 host_db', bool(db_ready(cfg.databases['host'])
+                                or _host_warn), _host_warn),
+        ('病毒库 virus_db', db_ready(cfg.databases['virus']), False),
     ]
-    for name, ok in checks:
-        print(f'  {"✔" if ok else "✘"} {name}')
-        ok_all &= ok
+    for name, ok, warn in checks:
+        print(f'  {"✔" if ok else "✘"} {name}'
+              + ('（未配置——分发版默认不带，属预期；到「数据库构建」页自建，'
+                 '或「📂 加载已构建宿主库」）' if warn else ''))
+        if not warn:
+            ok_all &= ok
         if name.startswith('宿主库'):
             # 宿主库"是谁"必须可见：库本体不记录物种，历史上出过
             # "目录名是枸杞、库却按 4081 番茄建"的事故，用错宿主是静默的。
@@ -942,7 +955,21 @@ def main():
     sp.add_argument('--assembly-mode', default='rnaviral',
                     choices=['rnaviral', 'metaviral', 'meta', 'rna', 'isolate'])
     sp.add_argument('--subsample', type=int, default=0,
-                    help='仅取前 N 对 reads（快速测试用），0=全部')
+                    help='子采样 reads 对数，0=全部。mode=prefix 时取前 N 对'
+                         '（快速冒烟，可能偏向 lane 开头）；mode=random 时'
+                         '蓄水池等概率随机抽 N 对（代表性抽检）')
+    sp.add_argument('--subsample-mode', default='prefix',
+                    choices=['prefix', 'random', 'proportion'],
+                    help='子采样模式: prefix=取前 N 对(默认); random=随机抽'
+                         ' N 对(等概率,seed 可复现); proportion=按 --subsample-p'
+                         ' 比例随机抽(两遍法,条数精确,对齐 seqkit sample2 -p)')
+    sp.add_argument('--subsample-p', type=float, default=0.0,
+                    dest='subsample_p',
+                    help='比例子采样比例，仅 --subsample-mode proportion 时'
+                         '生效（0~1，如 0.5=随机抽 50%%）')
+    sp.add_argument('--subsample-seed', type=int, default=42,
+                    dest='subsample_seed',
+                    help='random/proportion 子采样的随机种子（同 seed 完全可复现）')
     sp.add_argument('--min-contig-len', type=int, default=200)
     sp.add_argument('--top-n-refs', type=int, default=10, help='进化分析取近缘参考数')
     sp.add_argument('--tree-tool', default='fasttree', choices=['fasttree', 'raxml-ng', 'nj'])

@@ -254,7 +254,10 @@ def install_zip(zip_path, root=None, expected_sha256=None):
         if mf.get('install_to'):
             # 还原到平台内原路径（给硬编码路径的工具用）。内容 = 包内除
             # plugin.json 外的全部文件，直接摊到目标目录。
-            dest = os.path.join(PLATFORM_ROOT,
+            # 基准是 root 的**上一级**（root = <平台根>/plugins）——打包脚本
+            # 以 root=产物 目录预装插件时，install_to 必须落进产物而不是
+            # 开发机的 PLATFORM_ROOT（2026-10-24 修正；默认调用两者等价）。
+            dest = os.path.join(os.path.dirname(root),
                                 mf['install_to'].replace('/', os.sep))
             staged = os.path.join(tmp, '.stage')
             os.makedirs(staged, exist_ok=True)

@@ -478,6 +478,26 @@ def api_host_genome_download():
         except (TypeError, ValueError):
             abort(400, 'TaxID 必须是数字')
 
+    if source == 'ncbi' and not accession:
+        # 先查后下保险（前端已有一道）：物种可能命中多个参考组装版本，
+        # 盲下会把多个版本全部合并进同一个宿主库，互相污染。0 个/多个
+        # 都不放行，让用户先查询并选定一个版本。
+        from Virus_Platform_Core.public_meta.host_genome import \
+            list_reference_assemblies
+        try:
+            hits = list_reference_assemblies(species)
+        except Exception as e:                  # noqa: BLE001
+            abort(502, f'NCBI 组装查询失败: {e}')
+        if not hits:
+            abort(400, f'NCBI 未找到 {species} 的参考组装：可改选 '
+                       'gget·Ensembl 源，或填写 Assembly Accession '
+                       '（GCF_/GCA_）精确下载')
+        if len(hits) > 1:
+            lst = '、'.join(h['accession'] or h['uid'] for h in hits[:8])
+            abort(409, f'{species} 命中 {len(hits)} 个参考组装版本'
+                       f'（{lst}）；请先点「🔍 查询 NCBI 组装」选用一个 '
+                       'accession 再下载，不要把多个版本混建一个宿主库')
+
     def job(log, prog, cancel):
         from Virus_Platform_Core.public_meta import host_genome as hg
         from Virus_Platform_Core.config import DIRS
@@ -536,21 +556,77 @@ def api_host_genome_download():
     return jsonify({'task': tid})
 
 
+@bp.route('/api/datasets_summary', methods=['POST'])
+def api_datasets_summary():
+    """先查后下：datasets summary 同步预览（查询基因组查询下载页「🔍 查询」）。
+
+    按 kind 归一化成前端表格行，直接返回 JSON（不进任务中心——查询是
+    秒级只读操作，CLI 侧 300s 超时兜底）。下载仍走各自下载接口，查询条件
+    与下载参数一一对应，避免"查的和下的不是一批"。
+
+    body: {kind: 'genome' | 'virus' | 'gene' | 'taxonomy',
+           taxon / accession / host                    (genome, virus)
+           gene-id / symbol / taxon / protein-accession (gene)
+           taxons                                      (taxonomy)
+           limit: 可选预览条数（默认 genome 200 / virus 500 / gene 200 /
+                  taxonomy 50，超出的记 truncated=true）}
+    """
+    body = request.get_json(force=True) or {}
+    kind = (body.get('kind') or '').strip()
+    if kind not in ('genome', 'virus', 'gene', 'taxonomy'):
+        abort(400, f'未知查询类型: {kind}（可选 genome / virus / gene / '
+                   'taxonomy）')
+    from Virus_Platform_Core.public_meta.datasets_cli import \
+        datasets_available
+    if not datasets_available():
+        abort(400, 'NCBI datasets CLI 未安装：执行 python main.py '
+                   'datasets-setup 自动安装（官方 exe，NCBI 域名白名单内）')
+
+    try:
+        limit = int(body.get('limit'))
+    except (TypeError, ValueError):
+        limit = None
+    kwargs = {
+        'taxon': (body.get('taxon') or '').strip() or None,
+        'accession': (body.get('accession') or '').strip() or None,
+        'host': (body.get('host') or '').strip() or None,
+        'gene_id': (body.get('gene-id') or '').strip() or None,
+        'symbol': (body.get('symbol') or '').strip() or None,
+        'protein_acc': (body.get('protein-accession') or '').strip() or None,
+        'taxons': (body.get('taxons') or '').strip() or None,
+        'limit': limit,
+    }
+    from Virus_Platform_Core.public_meta.datasets_cli import query_records
+    try:
+        res = query_records(kind, **kwargs)
+    except ValueError as e:
+        abort(400, str(e))
+    except RuntimeError as e:
+        # CLI 缺失 / NCBI 查询失败 / 超时：502，前端把消息展示在结果区
+        abort(502, str(e))
+    return jsonify(res)
+
+
 @bp.route('/api/datasets_virus', methods=['POST'])
 def api_datasets_virus():
-    """NCBI datasets 下载病毒数据集（taxon + 可选宿主过滤）→
+    """NCBI datasets 下载病毒数据集（taxon + 可选宿主过滤，或单条 accession）→
     直接落平台鉴定库数据集布局（reference.fasta + reference.ref_info.tsv，
     databases/virusref_db/<名>/），建库页「原始数据集」卡即时识别，可一键建库。
 
     body: {taxon: 病毒 taxon（如 "tomato brown rugose fruit virus"）,
            host: 可选宿主过滤（如 "Solanum lycopersicum"）,
-           name: 可选数据集名（默认按 taxon 命名）}"""
+           accession: 可选病毒核酸 accession（如 NC_045512.2，查询表里
+                      挑单条下载时用；给定时忽略 taxon）,
+           name: 可选数据集名（默认按 taxon/accession 命名）}"""
     body = request.get_json(force=True) or {}
     taxon = (body.get('taxon') or '').strip()
     host = (body.get('host') or '').strip()
     name = (body.get('name') or '').strip()
-    if not taxon:
-        abort(400, '缺少病毒 taxon')
+    accession = (body.get('accession') or '').strip()
+    if not taxon and not accession:
+        abort(400, '缺少病毒 taxon 或 accession')
+    if accession and not re.fullmatch(r'[A-Za-z0-9_.\-]{4,32}', accession):
+        abort(400, f'accession 格式可疑: {accession}')
     from Virus_Platform_Core.public_meta.datasets_cli import \
         datasets_available
     if not datasets_available():
@@ -568,10 +644,12 @@ def api_datasets_virus():
         from Virus_Platform_Core.public_meta import datasets_cli as dsc
         logger = TaskLogger(callback=log)
         prog('download', 0.1,
-             f'datasets virus taxon={taxon}' + (f' host={host}' if host
-                                                else ''))
-        res = dsc.download_virus(taxon=taxon, host=host or None,
+             ('datasets virus taxon=' + taxon if taxon else
+              'datasets virus accession=' + accession)
+             + (f' host={host}' if host else ''))
+        res = dsc.download_virus(taxon=taxon or None, host=host or None,
                                  name=name or None, include=('genome',),
+                                 accession=accession or None,
                                  log=logger.log)
         prog('done', 1.0,
              f"数据集就绪: {res['reference']}（{res['n_seqs']} 条序列）")
@@ -580,8 +658,8 @@ def api_datasets_virus():
                 'ref_info': res['ref_info'], 'n_seqs': res['n_seqs'],
                 'name': res['name']}
 
-    _task_name = cfg.tr(f'病毒数据集下载 {taxon}',
-                       f'Virus dataset download {taxon}')
+    _task_name = cfg.tr(f'病毒数据集下载 {taxon or accession}',
+                        f'Virus dataset download {taxon or accession}')
     # 给了 name（目标目录已知）按目录去重，否则按任务名（同 taxon+host）。
     _reject_busy_build(tgt if name else None, _task_name)
     tid = tm.start(_task_name, job)

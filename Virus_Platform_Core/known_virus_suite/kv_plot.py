@@ -36,15 +36,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-plt.rcParams.update({
-    'pdf.fonttype': 42,
-    'ps.fonttype': 42,
-    'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-    'font.family': 'sans-serif',
-    'axes.unicode_minus': False,
-    'figure.facecolor': 'white',
-    'savefig.facecolor': 'white',
-})
+from .. import sci_palette as sp
+sp.apply_sci_style()   # 出版级全局样式：唯一真源
 
 
 # ── 原管线同名工具函数（逐字保留）──────────────────────────────
@@ -222,12 +215,11 @@ def parse_gb_features(gb_path, logger=None):
 
 
 # ── 单图绘制 ────────────────────────────────────────────────
-# 配色改用 Okabe-Ito（色盲安全）：深度=蓝、均值线=朱红；
+# 配色统一走 sci_palette（Okabe-Ito 色盲安全）：深度=蓝、均值线=朱红；
 # 基因轨道取 Okabe-Ito 全家桶（旧 Set3 粉彩+黑边观感过时，2026-09-22 目检改版）
-DEPTH_COLOR = '#0072B2'
-MEAN_COLOR = '#D55E00'
-GENE_COLORS = ['#56B4E9', '#E69F00', '#009E73', '#CC79A7',
-               '#F0E442', '#0072B2', '#D55E00', '#999999']
+DEPTH_COLOR = sp.DEPTH_COLOR
+MEAN_COLOR = sp.MEAN_COLOR
+GENE_COLORS = list(sp.OKABE_ITO)
 
 _FIG_W_IN = 10.2          # 画布宽（英寸）；双栏 170mm ≈ 6.7in，此图按宽版报告嵌排
 
@@ -275,6 +267,7 @@ def plot_one_virus(sample, virus, chrom_df, v_stat, virus_genes, out_dir,
     stem = safe_vname if safe_tax == safe_vname else f"{safe_tax}_{safe_vname}"
     pdf_path = os.path.join(out_dir, f"{sample}_{stem}_depth.pdf")
     png_path = os.path.join(out_dir, f"{sample}_{stem}_depth.png")
+    svg_path = os.path.join(out_dir, f"{sample}_{stem}_depth.svg")
 
     y_smooth = smooth(y, window)
     max_x = (max(x) if len(x) > 0 else
@@ -372,6 +365,10 @@ def plot_one_virus(sample, virus, chrom_df, v_stat, virus_genes, out_dir,
     try:
         plt.savefig(pdf_path, bbox_inches='tight', dpi=300)
         plt.savefig(png_path, bbox_inches='tight', dpi=300)
+        try:
+            plt.savefig(svg_path, bbox_inches='tight', dpi=300)
+        except Exception:
+            pass          # SVG 失败不影响 PNG/PDF（返回契约不变）
     finally:
         # 成百上千张图跑 bulk 时，savefig 抛异常不做 close 会累积泄漏 figure
         plt.close(fig)

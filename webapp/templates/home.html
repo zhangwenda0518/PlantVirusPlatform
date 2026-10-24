@@ -20,9 +20,48 @@
     <a href="/settings" data-i18n="hm.env.settings">设置与自检 ›</a>
   </div>
 
-  <!-- 封面：把平台的「背景 / 方法 / 流程 / 意义」压成一张可一眼读完的文字封面。
-       上半是平台名 + 科研定位句 + 工程口径行；下方四张卡片分别答
-       「为什么做 / 怎么做 / 做什么 / 值在哪」。 -->
+  <!-- 封面：平台名 + 科研定位句 + 工程口径行。
+       2026-10-23 按需求移除「背景 / 方法 / 流程 / 意义」四张叙事卡与
+       平台架构总览：前者是静态文案，后者与下方模块入口重复，
+       首页只保留可操作入口。 -->
+  <!-- AI 对话（MCP 驱动）：正式对话窗——用户打字，LLM 经工具循环直接
+       执行 MCP 工具（vp_*），流式输出。复用 /api/ai/chat（SSE）。 -->
+  <h2 class="sec" data-i18n="hm.chat.section">💬 AI 对话 · 直接驱动分析（MCP）</h2>
+  <div class="qs-card" id="chatCard">
+    <div id="chatLog" class="chat-log">
+      <div class="qs-bar" style="margin-bottom:6px;align-items:center">
+        <span class="hint" data-i18n="hm.chat.model">模型:</span>
+        <select id="chatModel" onchange="VC.setModel(this.value)"
+                style="max-width:360px;padding:4px 8px;border:1px solid var(--line,#cbd5e1);
+                       border-radius:8px;font-size:12.5px"></select>
+      </div>
+      <div class="chat-msg ai">你好！我是平台 AI 助手，可以直接驱动 22 个 MCP 工具。试试：
+• 「查一下 Tobacco mosaic virus 的 palmprint 阳性 Run」
+• 「给 mcp_night_demo2 跑一遍 quicktree」
+• 「平台现在就绪吗？」</div>
+    </div>
+    <div class="qs-row" style="margin-top:8px;align-items:flex-end">
+      <textarea id="chatInput" rows="2" spellcheck="false"
+                data-i18n-ph="hm.chat.ph"
+                placeholder="问点什么，或直接吩咐任务…（Enter 发送，Shift+Enter 换行）"
+                style="flex:1;padding:8px 10px;border:1px solid var(--line,#cbd5e1);
+                       border-radius:8px;font-size:13px;resize:vertical"></textarea>
+      <button id="chatSend" class="btn" onclick="VC.send()">发送</button>
+    </div>
+  </div>
+  <style>
+    .chat-log { height: 320px; overflow-y: auto; padding: 4px 2px; }
+    .chat-msg { margin: 6px 0; padding: 8px 12px; border-radius: 10px;
+                font-size: 13px; line-height: 1.55; white-space: pre-wrap;
+                word-break: break-word; }
+    .chat-msg.user { background: var(--green-50, #f2f8f4);
+                     margin-left: 48px; }
+    .chat-msg.ai  { background: rgba(127, 140, 120, .10); margin-right: 24px; }
+    .chat-msg.tool { background: none; color: var(--ink-400, #7b8a99);
+                     font-size: 12px; padding: 2px 12px; }
+    .chat-msg.err { color: #b91c1c; background: #fef2f2; }
+  </style>
+
   <div class="hero cover">
     <div class="cover-txt">
       <h1 data-i18n="hm.heroTitle">植物病毒分析平台</h1>
@@ -31,25 +70,6 @@
       <p data-i18n="hm.heroSub">发现、鉴定、定量、溯源植物 RNA 病毒——再低的丰度也看得见；从原始测序数据到可发表的基因组证据，一台 Windows 电脑完成。</p>
       <!-- 工程口径一行：本地化 / 内置库 / 13 步级联 / 默认离线 -->
       <p class="cover-eng" data-i18n="hm.heroEng">Windows 单机本地分析 · 内置病毒数据库 3.4 GB · 十余个功能模块全程离线</p>
-    </div>
-  </div>
-
-  <div class="cover-grid">
-    <div class="cover-card">
-      <div class="cc-head"><b>Ⅰ</b><span data-i18n="hm.cover.bg.t">背景</span></div>
-      <p data-i18n="hm.cover.bg.d">高通量测序已成为植物病毒发现的主流手段。但"读到一条序列"与"确认一种病毒"之间，隔着基因组重建、功能注释、宿主判定、进化定位、公共数据佐证等十几个环节——从拿到数据到产出结论，仍是一道横在多数实验室面前的专业鸿沟。</p>
-    </div>
-    <div class="cover-card">
-      <div class="cc-head"><b>Ⅱ</b><span data-i18n="hm.cover.mt.t">方法</span></div>
-      <p data-i18n="hm.cover.mt.d">发现与验证双轨并行：比对引擎对已知病毒灵敏检出并定量，组装引擎为未知病毒重建基因组；三层注释为 ORF 定功能，ICTV 级联预测宿主，再以 2340 万公共样本溯源交叉印证——序列、功能、宿主、来源，环环有据。</p>
-    </div>
-    <div class="cover-card">
-      <div class="cc-head"><b>Ⅲ</b><span data-i18n="hm.cover.wf.t">流程</span></div>
-      <p data-i18n="hm.cover.wf.d">原始 reads 进，基因组图谱出：质控、去宿主、识别、组装、验证、注释、建树、引物、基因组图、报告，15 个阶段自动衔接——一条候选病毒的"全套尽调"，一次运行完成。</p>
-    </div>
-    <div class="cover-card">
-      <div class="cc-head"><b>Ⅳ</b><span data-i18n="hm.cover.sg.t">意义</span></div>
-      <p data-i18n="hm.cover.sg.d">分析链条的完备程度，决定一个团队能做出多少病毒发现。平台把从检出到发表的全部环节装进一台 Windows 电脑——数据不出本机，序列可直接提交 GenBank/BioSample；发现的上限，从此取决于样品与科学问题，而不是服务器与生信团队。</p>
     </div>
   </div>
 
@@ -65,7 +85,45 @@
 
   <!-- 快捷入口：与顶部一级导航一一对应
        （2026-10-11：「自动化分析流程」卡随 /pipeline 整页归档摘除） -->
-  <h2 class="sec" data-i18n="hm.quickSection">🚀 开始分析</h2>
+  <h2 class="sec" data-i18n="hm.quickSection">🚀 分析工作流</h2>
+
+  <!-- 快速开始：粘贴 FASTQ 目录/文件 → 自动识别单/双端 → 勾选 → 接入并起分析。
+       复用既有 API：/api/samples/scan_folder + /api/pipeline/create
+       + /api/pipeline/<sample>/run（未指阶段 = 依次跑完剩余步骤）。 -->
+  <style>
+    /* 颜色统一走 app.css 的设计令牌：旧写法 var(--bg2)/var(--line) 在字典里
+       不存在，深色主题会回落到浅色兜底值，整块显示成白卡片。 */
+    .qs-card { border: 1px solid var(--line-200); border-radius: 10px;
+               padding: 12px 14px; margin: 0 0 14px; background: var(--surface-2); }
+    .qs-row { display: flex; gap: 8px; }
+    .qs-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--line-200);
+                    border-radius: 8px; font-size: 13px;
+                    background: var(--input-bg); color: var(--ink-900); }
+    .qs-result { margin-top: 10px; }
+    .qs-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+              flex-wrap: wrap; }
+    .qs-item { display: grid; grid-template-columns: auto auto auto 1fr;
+               gap: 4px 10px; align-items: baseline; padding: 6px 8px;
+               border-top: 1px dashed var(--line-100); }
+    .qs-tag { font-size: 11px; padding: 1px 6px; border-radius: 999px;
+              background: var(--blue-100); color: var(--blue-700); }
+    .qs-paths { font-size: 12px; color: var(--ink-400); word-break: break-all; }
+    .qs-done { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-100); }
+    .qs-done ul { margin: 0 0 8px; padding-left: 18px; font-size: 13px; }
+    .qs-done li { margin: 2px 0; }
+  </style>
+  <div class="qs-card" id="qsCard">
+    <div class="qs-row">
+      <input id="qsPath" type="text" spellcheck="false" autocomplete="off"
+             data-i18n-ph="hm.qs.ph"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();QS.scan()}"
+             placeholder="粘贴 FASTQ 文件夹（或单个 R1 文件）路径，回车扫描…">
+      <button id="qsScan" class="btn" onclick="QS.scan()">扫描识别</button>
+    </div>
+    <div id="qsResult" hidden></div>
+    <p class="hint" data-i18n="hm.qs.hint">双端按 R1/R2 命名自动配对（_R1 / .R1 / -R1）；目录下无 FASTQ 时自动下探一层子目录。识别后勾选样品一键「接入并开始分析」（默认 13 步流水线，已有样品自动续跑剩余阶段）。</p>
+  </div>
+
   <div class="module-grid">
     <a class="module-card entry" href="/tools?g=resource">
       <div class="mc-icon">🌐</div>
@@ -109,6 +167,13 @@
       <div class="mc-name" data-i18n="nav.g.compare">比较基因组分析</div>
       <div class="mc-desc" data-i18n="hm.entry.compare.d">参考序列下载 · GenBank 集合 · MSA/进化树/SDT · 同属共线性</div>
     </a>
+    <!-- 架构总览移除后，本卡是首页主区唯一的进化动力学入口（左栏之外），
+         与 NAV_GROUPS 保持同序同口径。 -->
+    <a class="module-card entry" href="/tools?g=phylodyn">
+      <div class="mc-icon">🌍</div>
+      <div class="mc-name" data-i18n="nav.g.phylodyn">进化动力学分析</div>
+      <div class="mc-desc" data-i18n="hm.entry.phylodyn.d">RDP5 重组检测 · 时间信号定年 · 系统地理迁移</div>
+    </a>
     <a class="module-card entry" href="/results">
       <div class="mc-icon">📊</div>
       <div class="mc-name" data-i18n="nav.results">结果中心</div>
@@ -119,6 +184,44 @@
       <div class="mc-name" data-i18n="nav.g.trace">溯源与提交</div>
       <div class="mc-desc" data-i18n="hm.entry.trace.d">LOGAN 溯源（2340 万公共样本交叉验证）· NCBI 提交准备</div>
     </a>
+  </div>
+
+  <!-- MCP 控制台：网页端直接驱动 virusplatform_mcp 的 vp_* 工具。
+       后端（/api/mcp/*）以最小 stdio 客户端拉起平台根 mcp_server.py，
+       走标准 MCP 协议；工具执行归 MCP 服务器进程（闸门独立计数）。
+       2026-10-23：从「快速开始」与模块入口之间移到模块入口之后 ——
+       它是面向开发者的调试面板，插在分析工作流中间会截断
+       「粘贴路径 → 选模块」的主线。 -->
+  <h2 class="sec" data-i18n="mcp.con.section" style="margin-top:18px">🛰 MCP 控制台</h2>
+  <div class="qs-card" id="mcpCard">
+    <div id="mcpIdle">
+      <button id="mcpConnect" class="btn" onclick="MCPC.connect()">连接 MCP 控制台</button>
+      <span class="hint" style="margin-left:8px" data-i18n="mcp.con.idleHint">按需拉起内置 mcp_server（stdio，标准 MCP 协议）；连接后本页可直接调用全部 22 个 vp_* 工具。</span>
+    </div>
+    <div id="mcpUI" hidden>
+      <div class="qs-row">
+        <select id="mcpTool" onchange="MCPC.pick()"
+                style="flex:0 0 260px;padding:7px 8px;border:1px solid var(--line-200);border-radius:8px;font-size:13px;background:var(--input-bg);color:var(--ink-900)"></select>
+        <button class="btn" onclick="MCPC.run()">▶ 运行</button>
+        <button class="btn" onclick="MCPC.connect()" title="刷新工具清单">⟳</button>
+      </div>
+      <p class="hint" id="mcpDesc" style="margin:8px 0"></p>
+      <textarea id="mcpArgs" rows="6" spellcheck="false"
+                style="width:100%;font-family:Consolas,monospace;font-size:12.5px;
+                       border:1px solid var(--line-200);border-radius:8px;padding:8px;
+                       background:var(--input-bg);color:var(--ink-900)"></textarea>
+      <div class="qs-bar">
+        <button class="btn" onclick="MCPC.chips('vp_platform_info')">环境</button>
+        <button class="btn" onclick="MCPC.chips('vp_list_tools')">工具卡</button>
+        <button class="btn" onclick="MCPC.chips('vp_list_tasks')">任务</button>
+        <button class="btn" onclick="MCPC.chips('vp_list_tool_runs')">运行</button>
+        <span class="hint" data-i18n="mcp.con.hint">run_tool / pipeline_start / cli_submit 返回 task_id 后，再调 get_task 轮询；task/call 类参数记得读 vp_list_tools / vp_cli_help 的 schema。</span>
+      </div>
+      <pre id="mcpOut" style="max-height:340px;overflow:auto;white-space:pre-wrap;
+                             font-family:Consolas,monospace;font-size:12px;
+                             background:var(--green-50,#f2f8f4);border-radius:8px;
+                             padding:10px;margin-top:8px"></pre>
+    </div>
   </div>
 
   <!-- 最近样品 -->
@@ -138,6 +241,285 @@
   <script src="/static/app-batch.js?v={{ asset_v }}"></script>
   <script src="/static/app-storage.js?v={{ asset_v }}"></script>
 <script src="/static/examples.js?v={{ asset_v }}"></script>
+<script>
+/* 快速开始：粘贴 FASTQ 目录/文件 → scan_folder 识别 → 勾选 → 逐样品
+   pipeline/create + pipeline/<sample>/run。任何一步的失败都停在行内，
+   不中断其余样品。 */
+const QS = {
+  folder: '', project: '', samples: [],
+  _hdr: {'Content-Type': 'application/json'},
+  async scan() {
+    let p = ($('qsPath').value || '').trim().replace(/^["']+|["']+$/g, '');
+    if (!p) { alert(t('hm.qs.needPath', '请先粘贴 FASTQ 目录或文件路径')); return; }
+    let preselect = '';
+    if (/\.(fq|fastq)(\.gz)?$/i.test(p)) {         // 单文件 → 扫其目录并预选
+      preselect = p.replace(/[\\/]+$/, '');
+      const sep = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+      p = sep > 0 ? p.slice(0, sep) : '.';
+    }
+    const btn = $('qsScan');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/samples/scan_folder', {method: 'POST',
+        headers: this._hdr, body: JSON.stringify({folder: p})});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(d.detail || d.error || ('HTTP ' + r.status)); return; }
+      this.folder = d.folder || p;
+      this.project = d.project || '';
+      this.samples = (d.samples || []).map(s => ({
+        ...s, on: !preselect || s.r1 === preselect }));
+      this.render();
+    } finally { btn.disabled = false; }
+  },
+  render() {
+    const box = $('qsResult');
+    const n = this.samples.filter(s => s.on).length;
+    box.hidden = false;
+    box.innerHTML =
+      `<div class="qs-bar">
+         <span>${t('hm.qs.found', '识别到')} ${this.samples.length} ${t('hm.qs.samples', '个样品')} · ${t('hm.qs.picked', '已选')} ${n}</span>
+         <button class="btn" onclick="QS.all(true)">${t('hm.qs.all', '全选')}</button>
+         <button class="btn" onclick="QS.all(false)">${t('hm.qs.none', '全不选')}</button>
+         <button id="qsGo" class="btn" onclick="QS.start()">${t('hm.qs.go', '接入并开始分析')}</button>
+       </div>` +
+      this.samples.map((s, i) => `
+        <label class="qs-item">
+          <input type="checkbox" ${s.on ? 'checked' : ''} onchange="QS.pick(${i})">
+          <b>${esc(s.name)}</b>
+          <span class="qs-tag">${s.r2 ? 'PE' : 'SE'}</span>
+          <span class="qs-paths">${esc(s.r1)}${s.r2 ? '<br>' + esc(s.r2) : ''}</span>
+        </label>`).join('');
+  },
+  pick(i) { this.samples[i].on = !this.samples[i].on;
+            this.render(); },
+  all(v) { this.samples.forEach(s => { s.on = v; }); this.render(); },
+  async start() {
+    const sel = this.samples.filter(s => s.on);
+    if (!sel.length) { alert(t('hm.qs.none', '全不选')); return; }
+    const btn = $('qsGo');
+    if (btn) btn.disabled = true;
+    const out = [];
+    for (const s of sel) {
+      let name = s.name, note = '';
+      try {
+        const cr = await fetch('/api/pipeline/create', {method: 'POST',
+          headers: this._hdr,
+          body: JSON.stringify({r1: s.r1, r2: s.r2 || undefined,
+                                sample: s.name, project: this.project})});
+        const cd = await cr.json().catch(() => ({}));
+        if (!cr.ok) {
+          if ((cd.detail || '').includes('已存在'))
+            note = t('hm.qs.exists', '样品已存在，直接续跑剩余阶段');
+          else
+            throw new Error(cd.detail || ('create HTTP ' + cr.status));
+        } else {
+          name = cd.sample || name;
+          if (cd.note) note = cd.note;
+        }
+        const rr = await fetch('/api/pipeline/' + encodeURIComponent(name) + '/run',
+                               {method: 'POST', headers: this._hdr, body: '{}'});
+        const rd = await rr.json().catch(() => ({}));
+        if (!rr.ok) throw new Error(rd.detail || rd.error || ('run HTTP ' + rr.status));
+        out.push(`<li>✔ <b>${esc(name)}</b> — ${t('hm.qs.started', '已开始分析')}`
+                 + (note ? `（${esc(note)}）` : '') + '</li>');
+      } catch (e) {
+        out.push(`<li>✘ <b>${esc(name)}</b> — ${esc(String(e.message || e))}</li>`);
+      }
+    }
+    if (btn) btn.disabled = false;
+    $('qsResult').insertAdjacentHTML('beforeend',
+      `<div class="qs-done"><ul>${out.join('')}</ul>
+       <a class="btn" href="/tasks">${t('hm.qs.gotasks', '去任务中心看进度')}</a>
+       <a class="btn" href="/results">${t('hm.qs.gores', '去结果中心')}</a></div>`);
+  }
+};
+window.QS = QS;
+</script>
+<script>
+/* MCP 控制台：工具清单从 /api/mcp/tools 拉取（首次连接才拉起服务器进程，
+   不拖慢页面加载）；参数按 inputSchema 生成必填骨架，可选键在下方提示。 */
+const MCPC = {
+  tools: [],
+  _hdr: {'Content-Type': 'application/json'},
+  async connect() {
+    const btn = $('mcpConnect');
+    if (btn) { btn.disabled = true; btn.textContent = t('mcp.con.connecting', '连接中…'); }
+    try {
+      const r = await fetch('/api/mcp/tools');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(d.detail || d.error || ('HTTP ' + r.status)); return; }
+      this.tools = d.tools || [];
+      $('mcpIdle').hidden = true;
+      $('mcpUI').hidden = false;
+      $('mcpTool').innerHTML = this.tools.map(x =>
+        `<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
+      this.pick();
+    } catch (e) {
+      alert(String(e.message || e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = t('mcp.con.idleBtn', '连接 MCP 控制台'); }
+    }
+  },
+  cur() { return this.tools.find(x => x.name === $('mcpTool').value) || {}; },
+  pick() {
+    const tl = this.cur();
+    $('mcpDesc').textContent = tl.description || '';
+    const sch = tl.inputSchema || {};
+    const props = sch.properties || {};
+    const req = sch.required || [];
+    const obj = {};
+    req.forEach(k => { obj[k] = ''; });
+    $('mcpArgs').value = JSON.stringify(obj, null, 2);
+    const opt = Object.keys(props).filter(k => !req.includes(k));
+    $('mcpOut').textContent = t('mcp.con.optional', '可选键') + ': '
+      + (opt.join(', ') || '—');
+    $('mcpOut').style.color = '';
+  },
+  async run() {
+    const name = $('mcpTool').value;
+    let args;
+    try { args = JSON.parse($('mcpArgs').value || '{}'); }
+    catch (e) { return alert(t('mcp.con.badjson', '参数不是合法 JSON：') + e.message); }
+    const out = $('mcpOut');
+    out.style.color = '';
+    out.textContent = t('mcp.con.running', '运行中…');
+    try {
+      const r = await fetch('/api/mcp/call', {method: 'POST',
+        headers: this._hdr, body: JSON.stringify({name, arguments: args})});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || d.error || ('HTTP ' + r.status));
+      const body = (d.data !== null && d.data !== undefined)
+        ? JSON.stringify(d.data, null, 2) : (d.text || '(空)');
+      out.textContent = (d.isError ? '✘ isError\n' : '✔\n') + body;
+      out.style.color = d.isError ? '#b91c1c' : '';
+    } catch (e) {
+      out.textContent = '✘ ' + String(e.message || e);
+      out.style.color = '#b91c1c';
+    }
+  },
+  chips(name) {
+    if (!this.tools.length) return this.connect().then(() => {
+      if (this.tools.length) { $('mcpTool').value = name; this.pick(); this.run(); }
+    });
+    $('mcpTool').value = name;
+    this.pick();
+    this.run();
+  }
+};
+window.MCPC = MCPC;
+
+/* AI 对话（MCP 驱动）：走 /api/ai/chat SSE（delta/tool/error/done），
+   历史在页面会话内维护，服务端工具循环可直接执行 vp_* 工具。 */
+const VC = {
+  hist: [], busy: false,
+  _hdr: {'Content-Type': 'application/json'},
+  async send() {
+    if (this.busy) return;
+    const ta = $('chatInput');
+    const text = (ta.value || '').trim();
+    if (!text) return;
+    ta.value = '';
+    this.hist.push({role: 'user', content: text});
+    this._bubble('user', text);
+    this.busy = true;
+    $('chatSend').disabled = true;
+    const bubble = this._bubble('ai', '…');
+    let acc = '';
+    try {
+      const r = await fetch('/api/ai/chat', {method: 'POST',
+        headers: this._hdr, body: JSON.stringify({messages: this.hist})});
+      if (!r.ok || !r.body) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.detail || d.error || ('HTTP ' + r.status));
+      }
+      const rd = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const {done, value} = await rd.read();
+        if (done) break;
+        buf += dec.decode(value, {stream: true});
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          const raw = buf.slice(0, idx).trim();
+          buf = buf.slice(idx + 2);
+          if (!raw.startsWith('data:')) continue;
+          let ev;
+          try { ev = JSON.parse(raw.slice(5).trim()); } catch (e) { continue; }
+          if (ev.type === 'delta') {
+            acc += ev.content || '';
+            bubble.textContent = acc;
+            this._scroll();
+          } else if (ev.type === 'tool') {
+            this._bubble('tool', '🔧 ' + (ev.name || '工具') + ' 调用中…');
+          } else if (ev.type === 'error') {
+            acc += '\n[错误] ' + (ev.message || '');
+            bubble.textContent = acc;
+            bubble.classList.add('err');
+          }
+        }
+      }
+      if (acc) this.hist.push({role: 'assistant', content: acc});
+    } catch (e) {
+      bubble.textContent = '✘ ' + String(e.message || e);
+      bubble.classList.add('err');
+    } finally {
+      this.busy = false;
+      $('chatSend').disabled = false;
+      this._scroll();
+    }
+  },
+  _bubble(cls, text) {
+    const d = document.createElement('div');
+    d.className = 'chat-msg ' + cls;
+    d.textContent = text;
+    $('chatLog').appendChild(d);
+    this._scroll();
+    return d;
+  },
+  _scroll() { const lg = $('chatLog'); lg.scrollTop = lg.scrollHeight; },
+  models: [],
+  async loadModels() {
+    try {
+      const [pr, cf] = await Promise.all([
+        fetch('/api/ai/profiles').then(x => x.json().catch(() => ({}))),
+        fetch('/api/ai/config').then(x => x.json().catch(() => ({})))]);
+      const profiles = (pr && pr.profiles) || [];
+      const cfg = (cf && cf.config) || {};
+      this.active = cfg.active_profile || '';
+      const sel = $('chatModel');
+      let html = '';
+      if (!this.active) {
+        html += `<option value="" selected>当前配置 · ${esc(cfg.model || '未设置模型')}</option>`;
+      }
+      for (const p of profiles) {
+        html += `<option value="pf:${esc(p.name)}" ${p.active ? 'selected' : ''}>`
+              + `${p.active ? '● ' : ''}${esc(p.name)} · ${esc(p.model || '')}`
+              + `${p.key_set ? '' : '（未存Key）'}</option>`;
+      }
+      if (!profiles.length) {
+        html = `<option value="" selected>当前配置 · ${esc(cfg.model || '未设置（到「设置 → AI 助手」配置）')}</option>`;
+      }
+      sel.innerHTML = html;
+    } catch (e) { /* 静默：选择条属增强功能 */ }
+  },
+  async setModel(v) {
+    if (!v || !v.startsWith('pf:')) return;
+    const name = v.slice(3);
+    const r = await fetch('/api/ai/profiles/activate', {method: 'POST',
+      headers: this._hdr, body: JSON.stringify({name})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return alert(d.detail || d.error || ('HTTP ' + r.status));
+    this._bubble('tool', '✔ 已切换模型 → ' + name
+      + (d.ready ? '' : '（注意：该配置不完整或未启用 AI 总开关）'));
+    this._scroll();
+  }
+};
+window.VC = VC;
+VC.loadModels();
+document.getElementById('chatInput').addEventListener('keydown',
+  e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); VC.send(); } });
+</script>
 <script>
 /* 环境状态条：异步拉 /api/selfcheck（服务端缓存 5 分钟），渲染一行摘要。
    任何异常都静默——总览页不该因为自检挂掉而受影响。 */

@@ -216,3 +216,41 @@ def test_gunzip_full_passthrough_plain(tmp_path):
         assert not msgs
     finally:
         cleanup()
+
+
+def test_collect_fasta_files_plain_supersedes_gz(tmp_path):
+    """明文与同名 .gz 并存时只收明文：merge 对重名是"改名保留"而非跳过，
+    两个都收会把整个基因组复制进合并结果（2026-10-13 三七 438=219x2 实测）。"""
+    (tmp_path / 'a.fna').write_text('>x\nACGT\n', encoding='utf-8')
+    (tmp_path / 'a.fna.gz').write_bytes(b'\x1f\x8b\x08\x00\x00')
+    (tmp_path / 'b.fasta.gz').write_bytes(b'\x1f\x8b\x08\x00\x00')
+    got = [os.path.basename(p) for p in hg.collect_fasta_files(str(tmp_path))]
+    assert got == ['a.fna', 'b.fasta.gz']      # 明文在，.gz 双胞胎让位
+
+
+def test_gunzip_full_multilayer():
+    """双层 .gz（download 二次压缩的存量文件）逐层解到明文。
+
+    写入须在平台内（safe_open 限定），故用 run/_test_gunzip 而非 pytest tmp。"""
+    import gzip as _gzip
+    import io as _io
+    import shutil as _shutil
+
+    from Virus_Platform_Core.config import PLATFORM_ROOT
+    work = os.path.join(PLATFORM_ROOT, 'run', '_test_gunzip')
+    os.makedirs(work, exist_ok=True)
+    try:
+        payload = b'>seq1\nACGTACGT\n'
+        data = payload
+        for _ in range(2):                      # 压两层
+            buf = _io.BytesIO()
+            with _gzip.GzipFile(fileobj=buf, mode='wb') as g:
+                g.write(data)
+            data = buf.getvalue()
+        p = os.path.join(work, 'x.fna.gz')
+        with open(p, 'wb') as f:
+            f.write(data)
+        out = hg.gunzip_full(p)
+        assert open(out, 'rb').read() == payload
+    finally:
+        _shutil.rmtree(work, ignore_errors=True)

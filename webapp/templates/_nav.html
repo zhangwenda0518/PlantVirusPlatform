@@ -1,81 +1,124 @@
-{# 共享顶部导航：唯一来源，各页 {% include '_nav.html' %} 即可。
-   一级导航 = 业务阶段（msg79 页面布局规范）。
-   数据资源/样本处理/病毒识别/病毒注释/检测与防治/比较基因组/溯源与提交
-   → /tools?g=<组id>，由 tools 页 JS 高亮；其余按 request.path 服务端高亮。
+{# 共享主导航：唯一来源，各页 {% include '_nav.html' %} 即可。
 
-   2026-09-15：病毒浏览器（/explorer）迁出本站一级导航；
-   2026-09-27 彻底归档（archive/_retire_20260927/explorer/），路由已下线。
+   ================================================================
+   2026-10-21 布局重构：顶部横向导航 → 左侧固定导航栏 + 顶部工具条
+   ================================================================
+   借鉴智能育种平台的「左侧分组常驻 + 主区工作台」信息架构：
+     · 一级业务阶段常驻左栏，组内二级入口**内联展开**（不再依赖悬停菜单，
+       触屏与窄窗口同样可用）；
+     · 主区宽度不再被 14 个一级链接挤占 —— 旧方案在 ≤1500px 时整条导航
+       换行、被 `_it_nav_responsive.py` 专门守护，本质是「横向空间不够」；
+       竖排后这个约束从根上消失；
+     · 窄屏（≤1024px）收成抽屉，☰ 展开，主区恢复全宽。
 
-   2026-09-16：本站移植了裁剪版系统地理能力（距离三分类 / MOTP / 权重分带 /
-   迁移 GIF，见 docs/主平台同步_裁剪移植_20260916.md），并恢复最小分组
-   「进化动力学分析」（3 张卡：RDP5 / 时间信号与定年 / 系统地理）。有组无入口
-   等于没有 —— 补回本处的一级导航项，否则卡片只能靠手敲 ?g=phylodyn。
+   数据源仍是 `pages.py` 的 NAV_GROUPS（context processor 注入 nav_groups /
+   current_group），与 /tools 组落地、_group_nav.html 共用同一份定义，
+   改一处三处同步。
 
-   2026-09-17：补回「比较基因组分析」一级导航项。09-15 把它和「进化动力学
-   分析」当成同一件事一起撤了，但两者是不同的业务对象：比较基因组 =
-   **不同病毒之间**的比较（跨科/属取参考序列 → 比对 → 建树 / SDT 同一性）；
-   进化动力学 = **同一个基因/序列集内部**的时间与地理信号。09-16 恢复
-   phylodyn 时占了原来 compare 的位置，这里改成两者并列。
+   ⚠ DOM 契约（测试与 app.js / i18n.js 依赖，勿改名）：
+     `.navlinks` 容器 / `.nav-drop > a[data-group]` / `#navTasksBadge`
+     `#navCtx` `#navCtxSample` `#navCtxProject` `#navCtxReset`
+     `#langBtn` / `.navtail` / `.iconbtn`
 
-   2026-09-18：新增「检测与防治」一级导航项。引物设计 / dsRNA 设计原先挂在
-   「病毒注释分析」组下，但它们不是注释（注释 = 描述序列是什么），而是
-   面向下游实验的两条独立业务线：引物设计 → 检测（PCR/qPCR），
-   dsRNA 设计 → 防治（RNAi）。故并列成组，位置紧随注释之后。
+   历史沿革（保留以便回溯）：
+   · 2026-09-15 病毒浏览器（/explorer）迁出本站一级导航；09-27 彻底归档。
+   · 2026-09-16 恢复「进化动力学分析」组（裁剪版系统地理能力移植）。
+   · 2026-09-17 补回「比较基因组分析」——与进化动力学是不同业务对象
+     （不同病毒之间 vs 同一个基因内部），必须并列而非覆盖。
+   · 2026-09-18 新增「检测与防治」：引物/dsRNA 产物面向湿实验，
+     不是「描述序列是什么」的注释。
+   · 2026-10-11 「自动化分析流程」（/pipeline）归档摘除导航项。
+   · 注意：2026-09-06 那次「侧栏 → 顶部横条」改的是**组内二级导航**
+     （_group_nav.html），与本次一级导航无关，两者互不影响。
+#}
+{%- set _groups = nav_groups or [] -%}
+{%- set _cur_gid = current_group.id if current_group else '' -%}
 
-   2026-10-11：「自动化分析流程」（/pipeline）归档摘除导航项（用户定案：
-   15 阶段全流程不适合本地电脑运行）。详见 docs/归档记录_自动化分析流程_20261011.md。 #}
-<nav class="topnav">
-  <span class="brand"><span class="leaf">🌿</span> 植物病毒分析平台</span>
-  <span class="navlinks">
-    {%- set _nav_items = [
-      ('/', 'nav.home', '总览', ''),
-      ('/tools?g=resource', 'nav.g.resource', '数据资源', 'resource'),
-      ('/tools?g=sample', 'nav.g.sample', '样本处理', 'sample'),
-      ('/tools?g=kvsuite', 'nav.g.kvsuite', '病毒定量与共识', 'kvsuite'),
-      ('/tools?g=virus', 'nav.g.virus', '病毒识别和分类分析', 'virus'),
-      ('/tools?g=annotate', 'nav.g.annotate', '病毒注释分析', 'annotate'),
-      ('/tools?g=detect', 'nav.g.detect', '检测与防治', 'detect'),
-      ('/tools?g=compare', 'nav.g.compare', '比较基因组分析', 'compare'),
-      ('/tools?g=phylodyn', 'nav.g.phylodyn', '进化动力学分析', 'phylodyn'),
-      ('/tools?g=trace', 'nav.g.trace', '溯源与提交', 'trace'),
-      ('/tasks', 'nav.tasks', '任务中心', ''),
-      ('/results', 'nav.results', '结果中心', 'result'),
-      ('/settings', 'nav.settings', '设置', ''),
-      ('/help', 'nav.help', '手册', ''),
-    ] -%}
-    {%- for _href, _key, _label, _grp in _nav_items %}
-    {%- if _grp and nav_groups %}
-    {%- set _grp_def = (nav_groups | selectattr('id', 'equalto', _grp) | list | first) or {'items': []} %}
-    <span class="nav-drop">
-      <a href="{{ _href }}" data-i18n="{{ _key }}" data-group="{{ _grp }}"{% if request.path == _href %} class="active"{% endif %}>{{ _label }}</a>
-      <span class="nav-menu">
-        {%- for _it in _grp_def['items'] %}
-        <a href="{{ _it.href or ('/tools?g=' ~ _grp ~ '#' ~ _it.id) }}">
-          <b>{{ _it.title }}</b>
-          {%- if _it.desc %}<small>{{ _it.desc }}</small>{% endif %}
-        </a>
+<aside class="sidenav" id="sideNav" aria-label="主导航">
+  <div class="sn-head">
+    <a class="sn-brand" href="/">
+      <span class="sn-brand-leaf">🌿</span>
+      <span class="sn-brand-txt">植物病毒分析平台</span>
+    </a>
+    {# 窄屏抽屉展开时，顶栏的 ☰ 会被侧栏盖住；这里给一个自己的关闭钮 #}
+    <button class="sn-close" id="snClose" type="button"
+            aria-label="收起导航">✕</button>
+  </div>
+
+  <nav class="navlinks sn-links">
+    <a class="sn-link{{ ' active' if request.path == '/' }}" href="/"
+       data-i18n="nav.home">总览</a>
+
+    {%- for g in _groups %}
+    {#- 结果中心组不在这里渲染：底部 sn-foot 已有直达入口（旧导航同口径），
+        否则侧栏会出现「结果中心」分组下拉 + 底部「结果中心」两个重复入口，
+        且 NAV_GROUPS 里该组没有 nav.g.result 的 i18n 键（会显示成裸 key）。 #}
+    {%- if g.id != 'result' %}
+    {%- set _open = (g.id == _cur_gid) %}
+    <div class="nav-drop sn-group{{ ' open' if _open }}"
+         data-group="{{ g.id }}"{% if _open %} data-current="1"{% endif %}>
+      {#- 整行标题即开关：点一次展开、再点收起（2026-10-21 用户要求——
+          原先只有右侧小箭头能点，热区太小）。
+          href 保留「组概览」地址：JS 失效时退化为正常跳转；有 JS 时
+          app-nav.js 拦截点击改为开合，组概览入口在展开后的第一项。
+          ⚠ 箭头必须留在 <a> 外：i18n 的 applyI18n 用 innerHTML 覆盖
+          [data-i18n] 元素，放进去切语言时会被整段抹掉。定位改由 CSS 的
+          `top` 对齐标题行高度（见 app.css .sn-caret），不用 50%。 #}
+      <a class="sn-link" href="/tools?g={{ g.id }}" data-group="{{ g.id }}"
+         role="button" aria-expanded="{{ 'true' if _open else 'false' }}"
+         data-i18n="nav.g.{{ g.id }}">{{ g.label }}</a>
+      <span class="sn-caret" aria-hidden="true">▸</span>
+      <div class="nav-menu sn-sub">
+        <a class="sn-subhome{{ ' active' if (request.path == '/tools'
+             and request.args.get('g') == g.id) else '' }}"
+           href="/tools?g={{ g.id }}">🏠 组概览</a>
+        {%- for it in g['items'] %}
+        {%- set _href = it.href or ('/tools?g=' ~ g.id ~ '#' ~ it.id) %}
+        <a href="{{ _href }}"{% if it.desc %} title="{{ it.desc }}"{% endif %}
+           class="{{ 'active' if (it.href and request.path == it.href) else '' }}">{{ it.title }}</a>
         {%- endfor %}
-      </span>
-    </span>
-    {%- else %}
-    <a href="{{ _href }}" data-i18n="{{ _key }}"{% if request.path == _href %} class="active"{% endif %}>{{ _label }}{% if _href == '/tasks' %}<span id="navTasksBadge" class="navbadge" style="display:none" title="运行中任务数"></span>{% endif %}</a>
+      </div>
+    </div>
     {%- endif %}
     {%- endfor %}
+  </nav>
 
-    <a href="#" class="iconbtn" title="打开平台目录" onclick="event.preventDefault();fetch('/api/open_platform_dir')">📂</a>
+  <div class="sn-foot">
+    <a class="sn-link{{ ' active' if request.path == '/tasks' }}" href="/tasks"
+       data-i18n="nav.tasks">任务中心<span
+       id="navTasksBadge" class="navbadge" style="display:none"
+       title="运行中任务数"></span></a>
+    <a class="sn-link{{ ' active' if request.path == '/results' }}"
+       href="/results" data-i18n="nav.results">结果中心</a>
+    <a class="sn-link{{ ' active' if request.path == '/settings' }}"
+       href="/settings" data-i18n="nav.settings">设置</a>
+    <a class="sn-link{{ ' active' if request.path == '/help' }}"
+       href="/help" data-i18n="nav.help">手册</a>
+  </div>
+</aside>
+<div class="sn-scrim" id="snScrim" hidden></div>
+
+<header class="topbar">
+  <button class="sn-toggle" id="snToggle" type="button"
+          aria-label="展开或收起导航" aria-expanded="false">☰</button>
+  <span class="tb-title" id="tbTitle"></span>
+  <span class="navctx-host" id="navCtxHost"></span>
+  <span class="navtail">
+    <a href="#" class="iconbtn" title="打开平台目录"
+       onclick="event.preventDefault();fetch('/api/open_platform_dir')">📂</a>
   </span>
-</nav>
+</header>
 
 <!-- AI 助手 · 对话驱动坞（全局：随导航注入每个页面）
      定位：顾问层——解读分析结果 / 指导下一步 / 主动播报 / 决策闸门确认，
      不代替任何分析动作。事件流：/api/ai/events（SSE 常驻）；
      提问：/api/ai/chat（POST + fetch 流）。闸门待决时自动弹出本坞。 -->
 <button id="aiFab" class="ai-fab" onclick="AI.toggle()"
-        data-i18n-title="ai.dock.open" title="AI 助手">✨<span
+        data-i18n-title="ai.dock.open" title="AI 助手"><img class="ai-logo-img" alt="" src="/static/ai-logo.png?v={{ asset_v }}"><span
         id="aiFabBadge" class="ai-fab-badge" hidden></span></button>
 <div id="aiDock" class="ai-dock" hidden>
   <div class="ai-dock-head">
-    <span class="ai-dock-title">✨ <span data-i18n="ai.dock.title">AI 助手</span>
+    <span class="ai-dock-title"><img class="ai-logo-img" alt="" src="/static/ai-logo.png?v={{ asset_v }}"> <span data-i18n="ai.dock.title">AI 助手</span>
       <i id="aiReadyDot" class="ai-dot" hidden></i></span>
     <span class="ai-dock-ops">
       <select id="aiSampleSel" onchange="AI.onSampleChange(this.value)"
@@ -105,4 +148,5 @@
     <button id="aiSendBtn" class="ai-send" onclick="AI.sendOrStop()">➤</button>
   </div>
 </div>
+<script src="/static/app-nav.js?v={{ asset_v }}"></script>
 <script src="/static/app-ai.js?v={{ asset_v }}"></script>

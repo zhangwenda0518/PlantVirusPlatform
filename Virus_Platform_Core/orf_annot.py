@@ -47,6 +47,7 @@ from .hmm_annot import (hmm_available, annotate_orfs_hmm,
 from .bfvd_search import (search_orfs as bfvd_search_orfs, bfvd_db,
                           db_trace as bfvd_db_trace)
 from .genome_diag import render_sample_diagrams
+from .sci_palette import category_color
 
 DB_DIR = db_path('annot', 'prot')
 REFSEQ_URL = ('https://ftp.ncbi.nlm.nih.gov/refseq/release/viral/'
@@ -1140,14 +1141,14 @@ def fig_category_bar(summary, top_n=12):
     items = [(k, v) for k, v in cats.items()][:top_n][::-1]
     if not items:
         return None
-    palette = {c: '#95a5a6' for c in (_UNKNOWN,)}
+    # 类别配色与 ⑥b 基因组示意图同源（sci_palette），跨图同色
     fig = go.Figure(go.Bar(
         x=[v for _, v in items],
         y=[k for k, _ in items],
         orientation='h',
         text=[f"{v}" for _, v in items],
         textposition='auto',
-        marker_color=[palette.get(k, '#2e86c1') for k, _ in items]))
+        marker_color=[category_color(k) for k, _ in items]))
     fig.update_layout(title=f'ORF 功能类别分布（共 {summary.get("n_orfs", 0)} 个）',
                       height=420, margin=dict(l=200))
     return fig

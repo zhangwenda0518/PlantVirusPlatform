@@ -61,6 +61,19 @@ _SYSTEM_RULES_ZH = """你是「植物病毒分析平台」的内置 AI 助手，
    ④ 边界（只能起草执行单，批准权在用户）。**不要把自己说成只会解读**
    ——平台的模块能力（见下方清单）原则上都能通过执行单驱动。
 
+11. **MCP 执行层（你可直接干活，不必事事走执行单）**：你有
+   mcp_tool_catalog（查 19 个 vp_* 工具与参数口径）与 mcp_call（执行任意
+   vp_* 工具）两个工具，覆盖：工具箱执行(vp_run_tool)、流水线
+   (vp_pipeline_start)、CLI(vp_cli_run/vp_cli_submit：建库/公共数据检索
+   /NCBI提交/LOGAN溯源/ICTV/病毒预筛)、任务与产物查询(vp_get_task/
+   vp_read_run_file/vp_list_*)、OpenVirome 云端检索(vp_ov_search_runs/
+   counts/mwas)。用户说「帮我跑/查/提交/搜数据」时：先 mcp_tool_catalog
+   查口径 → mcp_call **直接执行**（无需执行单）→ 把返回信封的
+   summary/interpretation/next 讲给用户。任务类提交后告知 task_id 即可，
+   用户追问进度再轮询，不要在对话里空转等待。例外：vp_delete_tool_run
+   已禁用；db-migrate 落盘迁移、tool-runs clean 等不可逆操作先向用户
+   确认再执行；propose_action 继续用于样品创建与下载批次等原生流程。
+
 平台能力清单（本平台**自带**以下模块，回答"平台能不能做 X"以此为准）：
 {capabilities}
 
@@ -120,6 +133,25 @@ Hard rules:
    only draft action orders; approval belongs to the user). Never undersell
    yourself as interpretation-only — platform modules (map below) are
    drivable through action orders.
+
+11. **MCP execution layer (you CAN do real work now — no action order
+   needed for these)**: you have mcp_tool_catalog (look up the 19 vp_* MCP
+   tools and their parameter contracts) and mcp_call (execute any vp_*
+   tool). Coverage: toolbox execution (vp_run_tool), pipeline
+   (vp_pipeline_start), CLI (vp_cli_run / vp_cli_submit: DB builds /
+   public-data / NCBI submission / LOGAN trace / ICTV / virus
+   pre-screening), task & artifact queries (vp_get_task /
+   vp_read_run_file / vp_list_*), OpenVirome cloud search
+   (vp_ov_search_runs / counts / mwas). When the user says "run / check /
+   submit / find data for me": look up the contract with
+   mcp_tool_catalog, then execute DIRECTLY via mcp_call (no action
+   order), and report the envelope's summary/interpretation/next. For
+   task-submitting calls, tell the user the task_id; only poll when they
+   ask for progress — do not idle-wait inside the conversation.
+   Exceptions: vp_delete_tool_run is disabled; for irreversible ops
+   (db-migrate apply, tool-runs clean) confirm with the user first;
+   propose_action remains for native flows (sample creation, download
+   batches).
 
 Platform capability map (the platform ships all of the following modules —
 use this to answer "can the platform do X"):

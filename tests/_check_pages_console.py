@@ -36,13 +36,19 @@ if '--page' in sys.argv:
 
 if not BASE and ('--page' in sys.argv or '--fast' in sys.argv):
     # 父进程（默认逐页独立进程模式）只负责派发子进程，服务由各子进程自己起
-    # （串行，端口不冲突）
+    # （串行，端口不冲突）。18766 被残留进程占用时自动换临时端口——
+    # 否则子进程在这里崩掉，父进程只会看到「无结论输出」。
     from werkzeug.serving import make_server
     import threading
     import app as app_module
-    _srv = make_server('127.0.0.1', 18766, app_module.app, threaded=True)
+    try:
+        _srv = make_server('127.0.0.1', 18766, app_module.app, threaded=True)
+        _port = 18766
+    except OSError:
+        _srv = make_server('127.0.0.1', 0, app_module.app, threaded=True)
+        _port = _srv.server_port
     threading.Thread(target=_srv.serve_forever, daemon=True).start()
-    BASE = 'http://127.0.0.1:18766'
+    BASE = f'http://127.0.0.1:{_port}'
     import time
     time.sleep(1.0)
 
@@ -95,7 +101,9 @@ def main():
                     page.goto(BASE + p, wait_until='load', timeout=20000)
                     page.wait_for_timeout(800)
                 except Exception as e2:
-                    bad.append((p, 'goto失败: ' + str(e2)[:120]))
+                    # 截 400 字符：截 120 时 URL 恰好被切在 "http://127.0.0.1:"
+                    # 处，看起来像「invalid URL 是端口丢了」，实际是别的错
+                    bad.append((p, 'goto失败: ' + str(e2)[:400]))
                     continue
             page.wait_for_timeout(400)
             if issues:
@@ -158,31 +166,44 @@ def run_isolated():
     print(f'逐页独立进程巡检，共 {len(pages)} 页（每页一个新进程）')
     me = os.path.abspath(__file__)
     bad = []
+    import tempfile
     for i, p in enumerate(pages, 1):
-        try:
-            # 解码必须按 UTF-8：平台自己的模块会把**子进程** stdout 重配成 UTF-8
-            # （/settings 加载全量数据时的自检报告就是 UTF-8），父进程若按本地
-            # 代码页（GBK）解码，读线程抛 UnicodeDecodeError、stdout 变空 ——
-            # 巡检就会「静默全绿」（2026-09-16 实测：/settings 那 3771 字节全被吞掉）。
-            r = subprocess.run([sys.executable, me, '--page', p],
-                               capture_output=True, encoding='utf-8',
-                               errors='replace', timeout=180)
-            lines = [ln for ln in (r.stdout or '').splitlines() if ln.strip()]
-            last = lines[-1] if lines else ''
-            # 判据是子进程自报的末行结论（`OK ` / `BAD `），不是 returncode：
-            # `--page` 模式曾经把 main() 的返回值丢掉（见文件末尾修注），
-            # 于是无论页面坏成什么样 returncode 都是 0。现在两者都查。
-            if last.startswith('OK ') and r.returncode == 0:
-                print(f'[{i:2d}/{len(pages)}] {p:28s} ✔', flush=True)
-            else:
+        # 子进程输出必须落**文件**而不是管道（2026-10-24 修）：playwright
+        # 拉起的 chrome 是孙进程，会继承管道句柄——子进程超时被 kill 后
+        # 管道写端仍被 chrome 握着，subprocess.run 要等 EOF 就**永久挂死**
+        # （实测批量回归卡在这里 6 分钟无输出）。文件句柄没有这个问题。
+        log = os.path.join(tempfile.gettempdir(), f'_vp_page_{i:02d}.log')
+        msg = ''
+        rc = None
+        with open(log, 'w', encoding='utf-8', errors='replace') as fh:
+            proc = subprocess.Popen(
+                [sys.executable, me, '--page', p],
+                stdout=fh, stderr=fh, stdin=subprocess.DEVNULL)
+            try:
+                rc = proc.wait(timeout=180)
+            except subprocess.TimeoutExpired:
+                # taskkill /T 连 chrome 孙进程一起收掉，不留僵尸
+                subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)],
+                               capture_output=True)
+                try:
+                    proc.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                rc, msg = proc.returncode, 'TIMEOUT（180s）'
+        with open(log, encoding='utf-8', errors='replace') as fh:
+            lines = [ln for ln in fh.read().splitlines() if ln.strip()]
+        last = lines[-1] if lines else ''
+        # 判据是子进程自报的末行结论（`OK ` / `BAD `），不是 returncode：
+        # `--page` 模式曾经把 main() 的返回值丢掉（见文件末尾修注），
+        # 于是无论页面坏成什么样 returncode 都是 0。现在两者都查。
+        if msg == '' and last.startswith('OK ') and rc == 0:
+            print(f'[{i:2d}/{len(pages)}] {p:28s} ✔', flush=True)
+        else:
+            if msg == '':
                 msg = last[4:] if last.startswith('BAD ') else (
-                    last or f'子进程无结论输出（rc={r.returncode}）'
-                    + (r.stderr or '')[-120:])
-                print(f'[{i:2d}/{len(pages)}] {p:28s} ✘ {msg[:110]}', flush=True)
-                bad.append((p, msg))
-        except subprocess.TimeoutExpired:
-            print(f'[{i:2d}/{len(pages)}] {p:28s} ✘ TIMEOUT', flush=True)
-            bad.append((p, 'TIMEOUT'))
+                    last or f'子进程无结论输出（rc={rc}）')
+            print(f'[{i:2d}/{len(pages)}] {p:28s} ✘ {msg[:240]}', flush=True)
+            bad.append((p, msg))
     print('=' * 64)
     if bad:
         print(f'✘ {len(bad)}/{len(pages)} 个页面有问题:')

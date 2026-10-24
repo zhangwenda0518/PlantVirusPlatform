@@ -366,6 +366,7 @@ def consensus_and_conservation(records, work_dir, threads=None, logger=None,
 
     n = len(aln)
     cons, cols = [], []
+    n_ambig = 0
     for col in zip(*(s for _, s in aln)):
         bases = [c for c in col if c in 'ACGT']
         if not bases:
@@ -385,7 +386,12 @@ def consensus_and_conservation(records, work_dir, threads=None, logger=None,
             tied = sorted(b for b, c in counts.items() if c == cnt)
             cons.append(_IUPAC_PAIRS.get(''.join(tied), 'N')
                         if len(tied) == 2 else 'N')
+            n_ambig += 1
         cols.append(cnt / float(len(bases)))
+    if logger and n_ambig:
+        # 评审 C3：让「候选窗骤缩」可归因——区分真不保守与平票技术性 N
+        logger.log('共识含 %d 个非多数列（平票记 IUPAC / ≥3 分歧记 N）：'
+                   '落在这些列上的 PAM/引物扫描会被跳过' % n_ambig, 'WARN')
     return ''.join(cons), cols, n, True
 
 
@@ -956,7 +962,10 @@ def blast_screen_large(seqs_by_id, db_prefix, work_dir, logger=None):
     """BLAST 兜底路（超大宿主基因组）：blastn-short，命中≈mm≤1 判近缘。
 
     返回 {query_id: {'min_tier': 0|1|None, 'hits': [(sseqid, mismatch)]}}。
-    精度口径：比对长度 ≥ len(query)-1 且 mismatch ≤1 → tier0/1。
+    精度口径：查询覆盖 ≥ len(query)-1 且错配 ≤1 → tier0/1。同一
+    (query, subject) 的多条 HSP 先按查询坐标合并再判（评审 C2：单个
+    错配可能把短 query 拆成两条 HSP，各自覆盖不足会被整行过滤 → 近缘
+    命中漏报，方向危险）。重叠 HSP 的错配有重复计入的可能，偏保守。
     """
     cfg = get_config()
     blastn = cfg.tool('blastn')
@@ -977,26 +986,46 @@ def blast_screen_large(seqs_by_id, db_prefix, work_dir, logger=None):
     run_cmd([blastn, '-task', 'blastn-short', '-query', q_fa,
              '-db', db_prefix, '-word_size', '7', '-dust', 'no',
              '-evalue', '100', '-max_target_seqs', '5',
-             '-outfmt', '6 qseqid sseqid length mismatch',
+             '-outfmt', '6 qseqid sseqid length mismatch qstart qend',
              '-out', out_tsv], logger=logger)
     res = {qid: {'min_tier': None, 'hits': []}
            for qid in seqs_by_id}
     qlen = {qid: len(s) for qid, s in seqs_by_id.items()}
+    # 按 (query, subject) 聚合 HSP → 查询坐标合并后统一判层
+    agg = {}
     with open(out_tsv, encoding='utf-8', errors='replace') as f:
         for line in f:
             p = line.rstrip('\n').split('\t')
-            if len(p) < 4:
+            if len(p) < 6:
                 continue
-            qid, sseqid, aln_len, mism = p[0], p[1], float(p[2]), int(p[3])
-            if aln_len < min(qlen.get(qid, 20), SCREEN_K) - 1:
+            try:
+                qid, sseqid = p[0], p[1]
+                mism = int(p[3])
+                qstart, qend = int(p[4]), int(p[5])
+            except ValueError:
                 continue
-            tier = 0 if mism == 0 else (1 if mism <= 1 else None)
+            if qstart > qend:               # 负链命中：坐标翻转
+                qstart, qend = qend, qstart
+            agg.setdefault((qid, sseqid), []).append((qstart, qend, mism))
+    for (qid, sseqid), hsps in agg.items():
+        merged = []
+        for qs, qe, m in sorted(hsps):
+            if merged and qs <= merged[-1][1] + 1:
+                s0, e0, m0 = merged[-1]
+                merged[-1] = (s0, max(e0, qe), m0 + m)
+            else:
+                merged.append((qs, qe, m))
+        cur = res[qid]
+        need = min(qlen.get(qid, 20), SCREEN_K) - 1
+        for s0, e0, m0 in merged:
+            if (e0 - s0 + 1) < need:
+                continue
+            tier = 0 if m0 == 0 else (1 if m0 <= 1 else None)
             if tier is None:
                 continue
-            cur = res[qid]
             if cur['min_tier'] is None or tier < cur['min_tier']:
                 cur['min_tier'] = tier
-            cur['hits'].append((sseqid, mism))
+            cur['hits'].append((sseqid, m0))
     return res
 
 
@@ -1023,12 +1052,11 @@ FEATURE_WEIGHTS = {
     'delta_tm_C':           0.08,
     'fp_tm_C':              0.03,
     'rp_tm_C':              0.03,
-    'overlap_protospacer':  0.02,
-    'overlap_pam':          0.02,
 }
 _W_SUM = float(sum(FEATURE_WEIGHTS.values()))
 
-# 特征 → 评估类别（CASPER CATEGORY_FEATURES 口径；报告/前端按类展示）
+# 特征 → 评估类别（CASPER CATEGORY_FEATURES 口径；报告/前端按类展示）。
+# 原「交叉干扰」类（overlap_protospacer/pam 恒 0 死特征）已移除（评审 C4）
 CATEGORY_GROUPS = {
     '脱靶': ('crrna_offtarget_imp', 'fp_offtarget_imp', 'rp_offtarget_imp'),
     '二聚体': ('fp_self_dimer_pct', 'rp_self_dimer_pct', 'fp_rp_cross_dimer_pct'),
@@ -1037,7 +1065,6 @@ CATEGORY_GROUPS = {
     'GC 含量': ('fp_gc_pct', 'rp_gc_pct', 'amplicon_gc_pct'),
     '种子与结构': ('seed_max_run', 'seed_gc_pct', 'guide_mfe_kcal',
                     'guide_seed_unpaired_frac'),
-    '交叉干扰': ('overlap_protospacer', 'overlap_pam'),
 }
 
 
@@ -1137,8 +1164,6 @@ def compute_features(crrna, pair, consensus, off_imp, amplicon_gc):
                                 - (pair.get('r_tm') or 0)), 1),
         'fp_tm_C': pair.get('f_tm'),
         'rp_tm_C': pair.get('r_tm'),
-        'overlap_protospacer': 0.0,       # 构造保证不重叠；恒 0 兜底
-        'overlap_pam': 0.0,
     }
     return feats
 
@@ -1167,9 +1192,6 @@ def score_features(feats):
         'delta_tm_C': _u_laplace(feats['delta_tm_C'], 0.0, 1.5),
         'fp_tm_C': _u_plateau(feats['fp_tm_C'], 55, 65, 7),
         'rp_tm_C': _u_plateau(feats['rp_tm_C'], 55, 65, 7),
-        'overlap_protospacer': _u_smaller_lin(
-            feats['overlap_protospacer'], 0, 1),
-        'overlap_pam': _u_smaller_lin(feats['overlap_pam'], 0, 1),
     }
     total = sum(FEATURE_WEIGHTS[k] * u[k] for k in FEATURE_WEIGHTS) / _W_SUM
     return round(total * 100.0, 1), {k: round(v, 3) for k, v in u.items()}
@@ -1185,7 +1207,11 @@ def isolate_index(seq, k=SCREEN_K):
 
 
 def check_coverage(spacer, isolate_kmer_sets, k=SCREEN_K):
-    """spacer 在各分离株中的存在性（mm0 精确 / mm1 单错配）。"""
+    """spacer 在各分离株中的存在性（mm0 精确 / mm1 单错配）。
+
+    口径注（评审 C5）：k-mer 编码跳过含非 ACGT（N/兼并码）的窗口，
+    含 N 分离株的覆盖率系统性偏保守（安全侧），报告解读时注意。
+    """
     from .dsrna_offtarget import encode_kmers
     kmers = [int(x) for x in encode_kmers(spacer, k)]
     cov0 = cov1 = 0

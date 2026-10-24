@@ -40,6 +40,7 @@ import html as _htmlmod
 import threading
 
 from .config import DIRS
+from .sci_palette import seq_colors, OKABE
 from .utils import (check_path, safe_open, iter_fasta, write_fasta_record,
                     resolve_sample_name)
 
@@ -783,14 +784,14 @@ def build_report(name):
            and _f(r.get('kmer_cov')) is not None]
     if pts:
         orgs_top = [o for o, _ in list(organisms.items())[:6]]
-        palette = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00',
-                   '#a65628']
+        # Okabe-Ito 真源循环取色（原 Set1 系，2026-10-12 统一）
+        palette = seq_colors(len(orgs_top))
         cmap = {o: palette[i % len(palette)] for i, o in enumerate(orgs_top)}
         fig = go.Figure()
         shown = set()
         for r in pts:
             org = r.get('organism') or '（未知物种）'
-            c = cmap.get(org, '#8a99a8')
+            c = cmap.get(org, OKABE['grey'])
             show = org in cmap and org not in shown
             if show:
                 shown.add(org)

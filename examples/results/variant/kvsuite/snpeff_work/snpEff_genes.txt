@@ -1,0 +1,5 @@
+# The following table is formatted as tab separated values. 
+#GeneName	GeneId	TranscriptId	BioType	variants_impact_HIGH	variants_impact_LOW	variants_impact_MODERATE	variants_impact_MODIFIER	variants_effect_downstream_gene_variant	variants_effect_frameshift_variant	variants_effect_missense_variant	variants_effect_stop_gained	variants_effect_synonymous_variant	variants_effect_upstream_gene_variant
+QKT89_gp1	QKT89_gp1	QKT89_gp1	protein_coding	0	1	11	31	29	0	11	0	1	2
+QKT89_gp2	QKT89_gp2	QKT89_gp2	protein_coding	2	10	25	6	4	0	25	2	10	2
+QKT89_gp3	QKT89_gp3	QKT89_gp3	protein_coding	3	0	1	35	0	3	1	0	0	35

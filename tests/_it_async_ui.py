@@ -205,26 +205,59 @@ ORIGIN
         opts.add_argument('--no-sandbox')
         opts.add_argument('--disable-gpu')
         opts.add_argument('--window-size=1440,1000')
-        drv = None
-        _last = None
-        # Selenium Manager 偶发拿不到驱动（网络抖动/正在自更新）。原来的写法
-        # 会直接 SKIP 并 exit 0 —— 批量测试里表现为 PASS，浏览器覆盖**静默
-        # 消失**。这里先重试 3 次，仍失败才 SKIP（无浏览器的机器不阻塞套件）。
-        for _att in range(3):
+
+        def _new_drv(retries=3, backoff=1.5):
+            # Selenium Manager 偶发拿不到驱动（网络抖动/正在自更新），重试
+            _last = None
+            for _att in range(retries):
+                try:
+                    return webdriver.Edge(options=opts)
+                except Exception as e:                   # noqa: BLE001
+                    _last = e
+                    time.sleep(backoff)
+            raise RuntimeError(f'Edge 连续 {retries} 次启动失败: '
+                               f'{type(_last).__name__}: {str(_last)[:120]}')
+
+        def _session():
+            # 每个流程一个全新浏览器会话（2026-10-24）：同一会话连续加载
+            # 4 个重页面时 headless Edge 会在流程 4 原生崩溃（WebDriver 会话
+            # 中断），与 _check_pages_console 的 chromium 段错误同因——
+            # 累积状态问题；分session后与「逐页独立进程」同口径。
+            d = _new_drv()
+            d.set_page_load_timeout(40)
+            # 批量回归满载时元素等待偶发不够（2026-10-06 实测 40s 超时翻车、
+            # 单跑 67s 全过）；批量运行器注入 VP_TEST_WAIT 放宽，单跑不变
+            return d, WebDriverWait(d, int(os.environ.get('VP_TEST_WAIT', 40)))
+
+        def _recycle(old):
+            # 会话切换（2026-10-24 稳健版）：旧会话 quit **容错**——批量满载下
+            # 第 4 次切换时 quit 会抛空消息 WebDriverException（会话/驱动已
+            # 死，放弃即可）；新会话起不来时递增退避重试 5 次，仍败才冒泡。
             try:
-                drv = webdriver.Edge(options=opts)
-                break
-            except Exception as e:                       # noqa: BLE001
-                _last = e
-                time.sleep(1.5)
-        if drv is None:
-            skip('Edge 驱动', f'{type(_last).__name__}: {str(_last)[:80]}'
+                old.quit()
+            except Exception:                            # noqa: BLE001
+                pass
+            _last = None
+            for _i in range(5):
+                try:
+                    d = webdriver.Edge(options=opts)
+                    d.set_page_load_timeout(40)
+                    return d, WebDriverWait(
+                        d, int(os.environ.get('VP_TEST_WAIT', 40)))
+                except Exception as e:                   # noqa: BLE001
+                    _last = e
+                    time.sleep(1.0 + _i)
+            raise RuntimeError(f'Edge 重建会话连续 5 次失败: '
+                               f'{type(_last).__name__}: {str(_last)[:160]}')
+
+        # 首个会话起不来 = 无浏览器环境，SKIP 不阻塞套件（与原口径一致）；
+        # 后续会话起不来则让 WebDriverException 冒泡给 main() 重试。
+        try:
+            drv, wait = _session()
+        except Exception as e:                           # noqa: BLE001
+            skip('Edge 驱动', f'{type(e).__name__}: {str(e)[:80]}'
                               f'（已重试 3 次）')
             return 0
-        drv.set_page_load_timeout(40)
-        # 批量回归满载时元素等待偶发不够（2026-10-06 实测 40s 超时翻车、
-        # 单跑 67s 全过）；批量运行器注入 VP_TEST_WAIT 放宽，单跑不变
-        wait = WebDriverWait(drv, int(os.environ.get('VP_TEST_WAIT', 40)))
         from Virus_Platform_Core.web.tasks import tm
 
         def running_tasks():
@@ -265,7 +298,14 @@ ORIGIN
               str([x['name'] for x in tm.list_all(logs=False)][:4]))
 
         # ═══════ 2) 物种名校验异步 ═══════
+        drv, wait = _recycle(drv)        # 换全新会话，规避累积状态崩溃
         print('\n== 2) /submit 「物种名校验」异步 ==', flush=True)
+        # 新会话要重新进入 /submit 并恢复页面级选中状态 CUR（流程 1 的
+        # 会话里由 execute_script 设置，换会话即失效）
+        drv.get(base + '/submit')
+        wait.until(lambda d: d.find_elements(
+            By.XPATH, "//button[contains(., '物种名校验')]"))
+        drv.execute_script("CUR = arguments[0];", PROJ)
         drv.find_element(By.XPATH, "//button[contains(., '物种名校验')]").click()
         t0 = time.time()
         val_txt = ''
@@ -287,6 +327,7 @@ ORIGIN
                                           'taxonomy_check.json')))
 
         # ═══════ 3) AI 总结异步 ═══════
+        drv, wait = _recycle(drv)        # 换全新会话，规避累积状态崩溃
         print('\n== 3) /meta 「AI 总结」异步 ==', flush=True)
         drv.get(base + '/meta')
         wait.until(lambda d: d.find_elements(By.ID, 'sumText'))
@@ -323,6 +364,7 @@ ORIGIN
               saw_busy, f'saw_busy={saw_busy}')
 
         # ═══════ 4) CDS/PEP 导出异步 ═══════
+        drv, wait = _recycle(drv)        # 换全新会话，规避累积状态崩溃
         print('\n== 4) /cds-export 「导出」异步 ==', flush=True)
         drv.get(base + '/cds-export')
         wait.until(lambda d: d.find_elements(By.ID, 'cpColl'))
@@ -398,10 +440,12 @@ def main():
             return _run_once()
         except WebDriverException as e:
             if attempt == 2:
-                print(f'  [FAIL] WebDriver 会话连续两次中断：{str(e)[:120]}',
+                print(f'  [FAIL] WebDriver 会话连续两次中断：'
+                      f'{type(e).__name__}: {str(e)[:120]}',
                       flush=True)
                 return 1
-            print(f'  [RETRY] WebDriver 会话中断（{str(e)[:80]}），重试一次…',
+            print(f'  [RETRY] WebDriver 会话中断（{type(e).__name__}: '
+                  f'{str(e)[:80]}），重试一次…',
                   flush=True)
             FAIL.clear()
     return 1

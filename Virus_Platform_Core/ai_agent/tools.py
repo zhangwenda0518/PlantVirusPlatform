@@ -156,7 +156,29 @@ TOOLS_SPEC = [
                                           '返回的 collection）'},
             'limit': {'type': 'integer',
                       'description': '最多数据行数（默认12，上限30）'}},
-            'required': ['collection']}}},
+            'required': ['collection'],
+        }}},
+    {'type': 'function', 'function': {
+        'name': 'mcp_tool_catalog',
+        'description': '列出 MCP 执行层全部 vp_* 工具（名称/必填参数/键清单）：'
+                       '工具箱执行 vp_run_tool、流水线 vp_pipeline_start、'
+                       'CLI vp_cli_run·vp_cli_submit（建库/公共数据/NCBI提交/'
+                       'LOGAN/ICTV/维护）、预筛 vp_prescreen_run、任务与运行'
+                       '查询、vp_read_run_file。填参数前先调本工具查口径',
+        'parameters': {'type': 'object', 'properties': {}, 'required': []}}},
+    {'type': 'function', 'function': {
+        'name': 'mcp_call',
+        'description': '执行一个 MCP 层 vp_* 工具。任务类(vp_run_tool/'
+                       'vp_pipeline_start/vp_cli_submit/vp_prescreen_run)提交即'
+                       '返回 task_id，随后用 mcp_call 调 vp_get_task 轮询到 '
+                       'done/failed，vp_read_run_file 读产物；信封里有 '
+                       'summary/interpretation/next。注意：vp_delete_tool_run '
+                       '被禁用',
+        'parameters': {'type': 'object', 'properties': {
+            'tool': {'type': 'string', 'description': 'vp_* 工具名'},
+            'arguments': {'type': 'object',
+                          'description': '该工具的参数字典'}},
+            'required': ['tool']}}},
 ]
 
 
@@ -209,10 +231,77 @@ def dispatch(name, args):
             return _search_public_data(args)
         if name == 'get_meta_results':
             return _get_meta_results(args)
+        if name == 'mcp_tool_catalog':
+            return _mcp_catalog()
+        if name == 'mcp_call':
+            return _mcp_call(args)
         return json.dumps({'error': f'未知工具 {name}'}, ensure_ascii=False)
     except Exception as e:                      # 工具失败应作为结果回给 LLM
         return json.dumps({'error': f'{type(e).__name__}: {e}'},
                           ensure_ascii=False)
+
+
+# ------------------------------------------------------------------
+# MCP 桥（2026-10-16）：让对话坞 LLM 直接驱动 virusplatform_mcp 的
+# 19 个 vp_* 工具（执行/查询/读结果全量）。只开两座桥而非注册 19 个
+# 重叠工具：mcp_tool_catalog 负责「发现+参数口径」，mcp_call 负责「执行」。
+# 破坏面收敛：vp_delete_tool_run 在对话坞禁用（删除走网页任务中心）；
+# 任务类工具提交即返回 task_id，LLM 用 mcp_call(vp_get_task) 轮询。
+# ------------------------------------------------------------------
+_MCP_BLOCKED = {'vp_delete_tool_run'}
+_MCP_TEXT_CAP = 4000          # 给 LLM 的结果上限（防撑爆上下文）
+
+
+def _mcp_catalog():
+    from Virus_Platform_Core.web.mcp_console import _request
+    try:
+        res = _request('tools/list', timeout=150)
+    except Exception as e:
+        return json.dumps({'error': f'MCP 服务器不可用: {e}'},
+                          ensure_ascii=False)
+    out = [{'name': t.get('name'),
+            'description': (t.get('description') or '').split(chr(10))[0][:160],
+            'required': (t.get('inputSchema') or {}).get('required') or [],
+            'properties': sorted((t.get('inputSchema') or {})
+                                 .get('properties') or {})}
+           for t in (res.get('tools') or [])]
+    return json.dumps({'count': len(out), 'tools': out}, ensure_ascii=False)
+
+
+def _mcp_call(args):
+    from Virus_Platform_Core.web.mcp_console import _request
+    name = str(args.get('tool') or '').strip()
+    if not name.startswith('vp_'):
+        return json.dumps({'error': '只允许调用 vp_* MCP 工具'},
+                          ensure_ascii=False)
+    if name in _MCP_BLOCKED:
+        return json.dumps(
+            {'error': name + ' 属破坏面工具，对话坞不开放；'
+                         '删除运行请用网页端任务中心'},
+            ensure_ascii=False)
+    a = args.get('arguments')
+    if not isinstance(a, dict):
+        a = {}
+    try:
+        res = _request('tools/call', {'name': name, 'arguments': a},
+                       timeout=330)
+    except Exception as e:
+        return json.dumps({'error': f'MCP 调用失败: {e}'}, ensure_ascii=False)
+    text = chr(10).join(
+        c.get('text', '') for c in (res.get('content') or [])
+        if isinstance(c, dict) and c.get('type') == 'text')
+    data = res.get('structuredContent')
+    if data is None:
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+    body = data if data is not None else text
+    out = json.dumps({'isError': bool(res.get('isError')), 'result': body},
+                     ensure_ascii=False)
+    if len(out) > _MCP_TEXT_CAP:
+        out = out[:_MCP_TEXT_CAP] + '…[结果过长已截断；可换更具体的查询，'               '或用 vp_read_run_file 按文件读]'
+    return out
 
 
 def _safe_read_table_under(root, relpath, max_rows):

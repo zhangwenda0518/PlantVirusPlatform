@@ -61,6 +61,9 @@ TUNABLE_PARAMS = {
     'min_contig_len': (50, 5000),
     'confidence': (0.0, 1.0),
     'subsample': (0, 5_000_000),
+    'subsample_mode': ('prefix', 'random', 'proportion'),
+    'subsample_prop': (0.0, 1.0),
+    'subsample_seed': (1, 2_147_483_647),
     'min_orf_aa': (30, 1000),
     'top_n_refs': (5, 50),
 }
@@ -68,7 +71,8 @@ TUNABLE_PARAMS = {
 # run_analysis 参数装配请求体里合法的键（白名单之外的提案直接拒）
 BODY_PARAM_KEYS = {
     'assembly_mode', 'assembly_input', 'confidence', 'threads', 'memory',
-    'subsample', 'min_contig_len', 'min_orf_aa', 'top_n_refs', 'tree_tool',
+    'subsample', 'subsample_mode', 'subsample_prop', 'subsample_seed',
+    'min_contig_len', 'min_orf_aa', 'top_n_refs', 'tree_tool',
     'tree_sampling', 'primer_mode', 'do_trim', 'specificity', 'force',
     'fastp_dedup', 'do_fq2fa', 'gbdraw_max', 'plot_engine', 'kv_lib',
     'db_host', 'db_virus', 'chunk_dir', 'verify_host', 'verify_combine',
@@ -230,7 +234,7 @@ def validate_params(action, params):
     for k, v in params.items():
         if v is None or v == '':
             continue
-        if k == 'assembly_mode':
+        if k in ('assembly_mode', 'subsample_mode'):
             if str(v) not in TUNABLE_PARAMS[k]:
                 return {}, f'{k} 只允许: {", ".join(TUNABLE_PARAMS[k])}'
             out[k] = str(v)
@@ -239,7 +243,7 @@ def validate_params(action, params):
                  'do_fq2fa'):
             out[k] = bool(v)
             continue
-        if k in ('confidence',):
+        if k in ('confidence', 'subsample_prop'):
             try:
                 num = float(v)
             except (TypeError, ValueError):
@@ -769,8 +773,11 @@ def _ai_propose_params(sample, stage, error, base):
         '你是植物病毒分析平台的自动调参器。一个阶段失败了，请提出**重跑参数'
         '**。只允许这些键（含义与边界）：assembly_mode（rnaviral/metaviral/'
         'rna/meta/isolate/srna）、min_contig_len（50~5000）、confidence'
-        '（0~1）、subsample（0~5000000）、min_orf_aa（30~1000）、top_n_refs'
-        '（5~50）。只改确有依据的键，其余不要出现。\n'
+        '（0~1）、subsample（0~5000000）、subsample_mode（prefix/random/'
+        'proportion：前 N 对/等概率随机 N 对/按比例随机）、subsample_prop'
+        '（0~1，仅 proportion 用，如 0.5=抽 50%，条数精确）、subsample_seed'
+        '（1~2147483647，random/proportion 复现用）、min_orf_aa（30~1000）、'
+        'top_n_refs（5~50）。只改确有依据的键，其余不要出现。\n'
         '输出**纯 JSON**（无 markdown 围栏）：{"params": {...}, '
         '"reason": "≤120字"}。失败原因与当前参数、结果摘要：\n'
         + dj)

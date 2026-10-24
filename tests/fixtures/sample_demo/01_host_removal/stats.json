@@ -1,0 +1,15 @@
+{
+ "stage": "host_removal",
+ "single_end": false,
+ "input_r1": "example_R1.fastq.gz",
+ "input_r2": "example_R2.fastq.gz",
+ "kraken_out": "output_1.txt",
+ "kreport": "output_1.kreport2",
+ "kept_r1": "kept_R1.fastq.gz",
+ "kept_r2": "kept_R2.fastq.gz",
+ "total_pairs": 3600,
+ "kept_pairs": 3556,
+ "dropped_pairs": 44,
+ "kept_mate2": 3556,
+ "host_ratio": 0.012222
+}

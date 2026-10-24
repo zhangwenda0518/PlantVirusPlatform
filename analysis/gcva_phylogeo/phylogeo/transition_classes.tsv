@@ -1,0 +1,10 @@
+parent	child	from	to	label	geo_km	step_km	edge_snp	dt_years	n_p	n_c	group_size	intro	note
+(node)	SRR8191339_OR489165.1	Ningxia	Neimenggu	Indirect	949.9		42	-2.0	4	1	1	1	sparse-sampling
+(node)	SRR8191345_OR489165.1	Ningxia	Neimenggu	Indirect	949.9		13	-4	1	1	1	1	sparse-sampling
+(node)	(node)	Ningxia	Neimenggu	Indirect	949.9		33	2	1	11	2	1	sparse-sampling
+(node)	(node)	Neimenggu	Ningxia	Indirect	949.9		46	0	1	9	4	1	sparse-sampling
+(node)	SRR8191338_OR489165.1	Ningxia	Neimenggu	Indirect	949.9		32	0.0	6	1	1	1	sparse-sampling
+(node)	(node)	Ningxia	Neimenggu	Indirect	949.9		6	-4.0	1	4	3	1	sparse-sampling
+(node)	SRR21888393_OR489165.1	Neimenggu	Ningxia	Indirect	949.9		37	4	1	1	1	1	sparse-sampling
+(node)	(node)	Ningxia	Neimenggu	Indirect	949.9		4	-4.0	1	2	2	1	sparse-sampling
+(node)	CRR1440124_OR489165.1	Ningxia	Beijing	Indirect	948.2		39	2	3	1	1	1	sparse-sampling

@@ -204,6 +204,7 @@ const I18N_DICT = {
     'hm.entry.annotate.d': 'ORF 预测 · 功能注释 · 同源复核 · 基因组图谱',
     'hm.entry.detect.d': '引物设计（primer3 分窗/保守区）· dsRNA 设计（选窗 → 效价 → 脱靶 → T7 引物）· miRNA 靶标预测（PAmiRDB）',
     'hm.entry.compare.d': '参考序列下载 · GenBank 集合 · MSA/进化树/SDT',
+    'hm.entry.phylodyn.d': 'RDP5 重组检测 · 时间信号定年 · 系统地理迁移',
     'hm.entry.trace.d': 'LOGAN 溯源（2340 万公共样本交叉验证）· NCBI 提交准备',
     'nav.g.resource': '数据资源', 'nav.g.sample': '样本处理',
     'nav.g.virus': '病毒识别和分类分析', 'nav.g.kvsuite': '病毒定量与共识',
@@ -646,14 +647,6 @@ const I18N_DICT = {
     'hm.heroLead': '看见样本里的病毒世界。',
     'hm.heroSub': '发现、鉴定、定量、溯源植物 RNA 病毒——再低的丰度也看得见；从原始测序数据到可发表的基因组证据，一台 Windows 电脑完成。',
     'hm.heroEng': 'Windows 单机本地分析 · 内置病毒数据库 3.4 GB · 十余个功能模块全程离线',
-    'hm.cover.bg.t': '背景',
-    'hm.cover.bg.d': '高通量测序已成为植物病毒发现的主流手段。但"读到一条序列"与"确认一种病毒"之间，隔着基因组重建、功能注释、宿主判定、进化定位、公共数据佐证等十几个环节——从拿到数据到产出结论，仍是一道横在多数实验室面前的专业鸿沟。',
-    'hm.cover.mt.t': '方法',
-    'hm.cover.mt.d': '发现与验证双轨并行：比对引擎对已知病毒灵敏检出并定量，组装引擎为未知病毒重建基因组；三层注释为 ORF 定功能，ICTV 级联预测宿主，再以 2340 万公共样本溯源交叉印证——序列、功能、宿主、来源，环环有据。',
-    'hm.cover.wf.t': '流程',
-    'hm.cover.wf.d': '原始 reads 进，基因组图谱出：质控、去宿主、识别、组装、验证、注释、建树、引物、基因组图、报告，15 个阶段自动衔接——一条候选病毒的"全套尽调"，一次运行完成。',
-    'hm.cover.sg.t': '意义',
-    'hm.cover.sg.d': '分析链条的完备程度，决定一个团队能做出多少病毒发现。平台把从检出到发表的全部环节装进一台 Windows 电脑——数据不出本机，序列可直接提交 GenBank/BioSample；发现的上限，从此取决于样品与科学问题，而不是服务器与生信团队。',
     'hm.dbSection': '🗄 数据库模块', 'hm.quickSection': '🚀 分析工作流',
     'se.nav.storage': '目录与存储', 'se.nav.analysis': '分析与工具',
     'se.nav.ai': 'AI 助手',
@@ -667,6 +660,9 @@ const I18N_DICT = {
     'hm.qs.exists': '样品已存在，直接续跑剩余阶段',
     'hm.qs.started': '已开始分析',
     'hm.qs.gotasks': '去任务中心看进度', 'hm.qs.gores': '去结果中心',
+    'hm.chat.section': '💬 AI 对话 · 直接驱动分析（MCP）',
+    'hm.chat.ph': '问点什么，或直接吩咐任务…（Enter 发送，Shift+Enter 换行）',
+    'hm.chat.model': '模型:',
     'ai.pf.title': '供应商档案',
     'ai.pf.hint': '多套端点并存，点档案名即切换当前使用（对话坞/执行单立即生效）；Key 只存本机 run/ai_local.json',
     'ai.pf.empty': '暂无档案——填好下方端点后「存为档案」',
@@ -2460,7 +2456,7 @@ const I18N_DICT = {
     'ps.virFamTitle': 'By family', 'ps.virFamTitle2': 'Top 15 families by distinct samples',
     'ps.virFamNone': 'no virus could be assigned to a family',
     'ps.virTblTitle': 'Virus list',
-    'nav.home': 'Overview', /* ---- Global context (current sample / project) and global cleanup ---- */
+    'nav.home': 'Overview',
     'gx.ctxTip': 'Global current sample / project: shared by every module page, survives navigation; click to switch',
     'gx.sample': 'Sample', 'gx.project': 'Project', 'gx.none': 'none',
     'gx.pickSample': 'Switch current sample', 'gx.pickProject': 'Switch current project',
@@ -2531,6 +2527,7 @@ const I18N_DICT = {
     'hm.entry.annotate.d': 'ORF prediction · annotation · homology · genome plots',
     'hm.entry.detect.d': 'Primer design (primer3, full-length windows / conserved regions) · dsRNA design (window → potency → off-target → T7 primers) · miRNA target prediction (PAmiRDB)',
     'hm.entry.compare.d': 'Reference download · GenBank sets · MSA/tree/SDT',
+    'hm.entry.phylodyn.d': 'RDP5 recombination · molecular dating · phylogeography',
     'hm.entry.trace.d': 'LOGAN tracing (23.4M public samples) · NCBI submission prep',
     'nav.g.resource': 'Data resources', 'nav.g.sample': 'Sample processing',
     'nav.g.virus': 'Virus ID & classification', 'nav.g.kvsuite': 'Virus quant & consensus',
@@ -2944,14 +2941,6 @@ const I18N_DICT = {
     'hm.heroLead': 'See the viral world within every sample.',
     'hm.heroSub': 'Discover, identify, quantify and trace plant RNA viruses — even at the lowest abundance; from raw sequencing data to publishable genomic evidence, all on a single Windows computer.',
     'hm.heroEng': 'Single Windows machine · 3.4 GB virus databases built in · a dozen offline tool modules',
-    'hm.cover.bg.t': 'Background',
-    'hm.cover.bg.d': 'High-throughput sequencing has become the mainstream route to plant virus discovery, yet between "reading a sequence" and "confirming a virus" lie a dozen steps — genome reconstruction, functional annotation, host assignment, phylogenetic placement, and public-data corroboration. From raw data to a defensible conclusion remains a professional moat for most laboratories.',
-    'hm.cover.mt.t': 'Methods',
-    'hm.cover.mt.d': 'Discovery and verification run in parallel: alignment engines sensitively detect and quantify known viruses while assembly rebuilds unknown genomes; three-layer annotation assigns ORF functions, the ICTV cascade predicts hosts, and tracing across 23.4M public samples cross-validates every call — sequence, function, host, provenance: every link carries its own evidence.',
-    'hm.cover.wf.t': 'Workflow',
-    'hm.cover.wf.d': 'Raw reads in, genome maps out: QC, host removal, identification, assembly, verification, annotation, phylogeny, primers, genome plots and report — 15 stages chained automatically; the full due diligence of a candidate virus, complete in a single run.',
-    'hm.cover.sg.t': 'Impact',
-    'hm.cover.sg.d': 'How much discovery a team can make is decided by how complete its analysis chain is. The platform fits every step from detection to publication into one Windows computer — data never leaves the machine and sequences are submission-ready for GenBank/BioSample; the ceiling of discovery now depends on samples and scientific questions, not on servers and bioinformatics staff.',
     'hm.dbSection': '🗄 Database modules', 'hm.quickSection': '🚀 Analysis workflow',
     'se.nav.storage': 'Locations & storage', 'se.nav.analysis': 'Analysis & tools',
     'se.nav.ai': 'AI assistant',
@@ -2965,6 +2954,9 @@ const I18N_DICT = {
     'hm.qs.exists': 'Sample exists — resuming remaining stages',
     'hm.qs.started': 'Analysis started',
     'hm.qs.gotasks': 'Open Task Center', 'hm.qs.gores': 'Open Results',
+    'hm.chat.section': '💬 AI Chat · drive analysis via MCP',
+    'hm.chat.ph': 'Ask anything, or just order a task… (Enter to send, Shift+Enter for newline)',
+    'hm.chat.model': 'Model:',
     'ai.pf.title': 'Provider profiles',
     'ai.pf.hint': 'Keep multiple endpoints side by side — click a profile to switch instantly (chat dock & executors take effect at once); keys stay in local run/ai_local.json',
     'ai.pf.empty': 'No profiles yet — fill the endpoint below and press Save profile',
@@ -4650,8 +4642,11 @@ async function setLang(lang) {
 
 /* 在导航栏注入语言切换按钮（所有页面统一） */
 function injectLangSwitch() {
-  const nav = document.querySelector('.navlinks');
-  if (!nav || document.getElementById('langBtn')) return;
+  // 2026-10-21：导航改为左侧栏 + 顶部工具条。语言切换属于「全局工具」，
+  // 归顶栏 .navtail（与 📂 同簇）；旧写法插在 .navlinks 里，改版后会落进
+  // 竖排侧栏、和业务分组挤在一起。
+  const tail = document.querySelector('.navtail');
+  if (!tail || document.getElementById('langBtn')) return;
   const btn = document.createElement('button');
   btn.id = 'langBtn';
   btn.className = 'langbtn';
@@ -4661,8 +4656,8 @@ function injectLangSwitch() {
   btn.title = VP_LANG === 'zh' ? 'Switch to English' : '切换到中文';
   btn.onclick = () => setLang(VP_LANG === 'zh' ? 'en' : 'zh');
   // 插到 📂 图标前
-  const anchor = nav.querySelector('.iconbtn');
-  nav.insertBefore(btn, anchor || null);
+  const anchor = tail.querySelector('.iconbtn');
+  tail.insertBefore(btn, anchor || null);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

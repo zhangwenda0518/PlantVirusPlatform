@@ -1,0 +1,20 @@
+{
+ "stage": "orf",
+ "input": "viral_contigs.fasta",
+ "n_contigs": 2,
+ "min_aa": 100,
+ "pyrodigal": {
+  "faa": "pyrodigal.faa",
+  "ffn": "pyrodigal.ffn",
+  "gff": "pyrodigal.gff",
+  "genes": 7,
+  "dropped_short": 1
+ },
+ "pyrodigal_rv": {
+  "faa": "pyrodigal_rv.faa",
+  "ffn": "pyrodigal_rv.ffn",
+  "gff": "pyrodigal_rv.gff",
+  "genes": 7,
+  "dropped_short": 1
+ }
+}

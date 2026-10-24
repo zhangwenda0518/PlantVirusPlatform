@@ -195,20 +195,11 @@ def _open_text(path):
 
 def _read_tsv(path):
     """TSV → list[dict]（表头做 strip；缺列返回空串由调用方兜底）。"""
-    rows = []
-    with _open_text(path) as f:
-        header = None
-        for line in f:
-            line = line.rstrip('\n').rstrip('\r')
-            if not line.strip():
-                continue
-            cols = line.split('\t')
-            if header is None:
-                header = [c.strip() for c in cols]
-                continue
-            rows.append({k: (cols[i] if i < len(cols) else '')
-                         for i, k in enumerate(header)})
-    return rows
+    try:
+        from ..io_utils import read_dicts
+    except ImportError:  # 直跑脚本时的兜底
+        from Virus_Platform_Core.io_utils import read_dicts
+    return read_dicts(path, sep='\t', default=[])
 
 
 def _read_fasta_ids(path):

@@ -172,17 +172,32 @@ def _load_done_summary(sample_dir, stage_dir, fname='summary.json'):
 
 
 def subsample_fastq(r1, r2, out_dir, n_pairs, logger=None, progress=None,
-                    mode='prefix', seed=42):
+                    mode='prefix', seed=42, proportion=None):
     """子采样：mode='prefix' 取前 n_pairs 对（快速冒烟）；mode='random'
     固定 seed 的蓄水池抽样取 n_pairs 对（审查 P1-2——前缀子样本若与
     lane/批次/上机时间相关会集中来自单一子群，低丰度病毒与组成估计有偏；
     随机模式供代表性抽检，最终分析应用全量 reads）。返回 (sub_r1, sub_r2|None)。
+
+    mode='proportion' 按比例随机抽（对齐 seqkit sample2 -p 的两遍法口径）：
+    第一遍只数源总对数，n = round(总数 × proportion)（至少 1 对），第二遍
+    仍走蓄水池——条数精确命中、每对 reads 等概率、同 seed 可复现；代价是
+    源文件扫两遍。proportion 须在 (0, 1]。
 
     R1/R2 双端输入时逐条显式取用两侧记录：原先 zip(iter1, iter2) 在一侧
     提前结束时静默截断（拿到的可能是"半截配对"），这里改为抛 ValueError
     并报出两侧已读条数，让不配对输入在子采样这一步就失败而不是悄悄产出
     少一半 reads 的子样本（下游宿主占比/组装全部受它影响）。
     """
+    if mode == 'proportion':
+        if not (proportion and 0 < proportion <= 1):
+            raise ValueError(
+                f'比例子采样 proportion 须在 (0, 1]，实际为 {proportion!r}')
+        total = _count_fastq_records(r1)
+        n_pairs = max(1, int(total * proportion + 0.5))
+        if logger:
+            logger.log(f"比例抽样 p={proportion:g}：源 {total:,} 对 → 目标 "
+                       f"{n_pairs:,} 对（先数总数，再蓄水池精确抽）")
+        mode = 'random'
     if mode == 'random':
         return _subsample_random(r1, r2, out_dir, n_pairs, logger,
                                  progress, seed)
@@ -334,6 +349,14 @@ def _adopt_qc(C):
             C.cur_r2 = q2 if q2 and os.path.isfile(q2) else None
 
 
+def _count_fastq_records(path):
+    """数 FASTQ 记录数（proportion 模式第一遍数源总数 / 复核产物条数）。"""
+    n = 0
+    for _ in iter_fastq_records(path):
+        n += 1
+    return n
+
+
 def _subsample_random(r1, r2, out_dir, n_pairs, logger=None, progress=None,
                       seed=42):
     """固定 seed 的蓄水池配对抽样（P1-2）：单遍流式、内存只留 n_pairs 对、
@@ -393,9 +416,14 @@ def _subsample_random(r1, r2, out_dir, n_pairs, logger=None, progress=None,
 
 
 def _stage_subsample(C):
-    """0. 子采样（确定性：前 N 对 reads → 断点复用，避免使 fq2fa
-    转换产物的新鲜度失效）。"""
-    if not (C.subsample and C.subsample > 0):
+    """0. 子采样（prefix=前 N 对 / random=随机 N 对 / proportion=按比例
+    随机——口径见 subsample_fastq；断点复用，保证下游输入新鲜度）。"""
+    prop = min(max(float(getattr(C, 'subsample_prop', 0) or 0), 0.0), 1.0)
+    prop_on = (C.subsample_mode == 'proportion')
+    if prop_on and not prop:
+        raise ValueError('子采样模式 proportion 需要 subsample_prop ∈ (0, 1]'
+                         f'（当前 {prop}）——请补比例参数或改回 prefix/random')
+    if not ((C.subsample and C.subsample > 0) or prop_on):
         return
     prep = os.path.join(C.sample_dir, '00_prep')
     os.makedirs(prep, exist_ok=True)
@@ -412,9 +440,12 @@ def _stage_subsample(C):
             with safe_open(os.path.join(prep, 'subsample.json')) as f:
                 prev = json.load(f)
             reuse = (
-                prev.get('n_pairs') == C.subsample
-                and prev.get('mode') == C.subsample_mode
+                prev.get('mode') == C.subsample_mode
                 and prev.get('seed', 42) == C.subsample_seed
+                and prev.get('prop', 0) == (prop if prop_on else 0)
+                # proportion 的 n_pairs 是"源总数×比例"的导出值，随输入
+                # 变化，由指纹+prop 隐含，不直接比对；其余模式仍比条数。
+                and (prop_on or prev.get('n_pairs') == C.subsample)
                 and prev.get('inputs') == [
                     _ifp(p) for p in (C.cur_r1, C.cur_r2) if p])
         except (OSError, ValueError):
@@ -427,25 +458,34 @@ def _stage_subsample(C):
         # 进度/ETA 分母同步改为子样本实际大小（否则仍按全量估算）
         C.st.set_input_bytes(_fsize(sub1) + _fsize(sub2))
         if C.logger:
-            C.logger.log(f"子采样已完成（{C.subsample:,} 对），复用 00_prep/sub_*")
+            C.logger.log(f"子采样已完成（{(prev.get('n_pairs') if prop_on
+                          else C.subsample):,} 对），复用 00_prep/sub_*")
     else:
-        C.st.prog('subsample', 0.05,
-                  (f'随机抽样 {C.subsample:,} 对（seed={C.subsample_seed}）'
-                   if C.subsample_mode == 'random'
-                   else f'截取前 {C.subsample:,} 对 reads'))
+        if prop_on:
+            sub_msg = (f'比例抽样 {prop:g}（seed={C.subsample_seed}，'
+                       '先数总数再精确抽）')
+        elif C.subsample_mode == 'random':
+            sub_msg = f'随机抽样 {C.subsample:,} 对（seed={C.subsample_seed}）'
+        else:
+            sub_msg = f'截取前 {C.subsample:,} 对 reads'
+        C.st.prog('subsample', 0.05, sub_msg)
         # 源指纹必须在采样前取——调用返回后 C.cur_r1/r2 已指向 sub_*（P1-1）
         from .preprocess import input_fingerprint as _ifp_sub
         src_fps = [_ifp_sub(p) for p in (C.cur_r1, C.cur_r2) if p]
         C.cur_r1, C.cur_r2 = subsample_fastq(
             C.cur_r1, C.cur_r2, prep, C.subsample, C.logger,
             progress=lambda p, m: C.st.prog('subsample', p, m),
-            mode=C.subsample_mode, seed=C.subsample_seed)
+            mode=C.subsample_mode, seed=C.subsample_seed,
+            proportion=(prop if prop_on else None))
         C.st.set_input_bytes(_fsize(sub1) + _fsize(C.cur_r2))
         C.st.prog('subsample', 1.0, '子采样完成')
+        # proportion 的实际条数由源总数决定，写实测值（digest/复用都认它）
+        n_out = (_count_fastq_records(sub1) if prop_on else C.subsample)
         with safe_open(os.path.join(prep, 'subsample.json'), 'wt') as f:
-            # 复用判据全量记录（P1-1）：采样数 + 模式 + 源输入指纹
-            json.dump({'n_pairs': C.subsample, 'mode': C.subsample_mode,
-                       'seed': C.subsample_seed, 'inputs': src_fps},
+            # 复用判据全量记录（P1-1）：条数 + 模式 + 比例 + 源输入指纹
+            json.dump({'n_pairs': n_out, 'mode': C.subsample_mode,
+                       'seed': C.subsample_seed,
+                       'prop': (prop if prop_on else 0), 'inputs': src_fps},
                       f, ensure_ascii=False)
         mark_step_done(prep, 'subsample')
     C.st.end('subsample')
@@ -987,6 +1027,7 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
                  threads=None, confidence=0.0, assembly_mode='rnaviral',
                  memory_gb=64, subsample=0, min_contig_len=200, top_n_refs=10,
                  subsample_mode='prefix', subsample_seed=42,
+                 subsample_prop=0.0,
                  tree_tool='fasttree', tree_sampling='blast', ncbi_refs=None,
                  primer_mode='conserved', do_trim=True,
                  do_specificity=False, min_orf_aa=100,
@@ -1012,6 +1053,14 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
         logger.log(f"忽略未知阶段名：{', '.join(map(str, _unknown))}（"
                    f"可用阶段：{', '.join(STAGE_ORDER)}）", "WARN")
     stages = [s for s in STAGE_ORDER if s in _sel]
+    # 库路径 None 兜底（2026-10-17）：CLI/网页前端会填默认值，但任何
+    # 程序化调用方（MCP/执行单/API）传 None 时必须落到平台默认库，
+    # 否则 ① 宿主去除阶段 host_db_info(None) 直接 TypeError。
+    from .config import get_config as _gc
+    _cfg0 = _gc()
+    db_host = db_host or _cfg0.databases['host']
+    db_virus = db_virus or _cfg0.databases['virus']
+    threads = threads or _cfg0.threads   # None 会把字面量 'None' 传进引擎 argv
     # 可选步骤在工具缺失/用户关闭时剔除——每次剔除都必须留痕（静默跳过铁律）
     if 'fastp' in stages:
         from .preprocess import fastp_available
@@ -1089,10 +1138,13 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
     C.confidence, C.assembly_mode = confidence, assembly_mode
     C.memory_gb, C.subsample = memory_gb, subsample
     # 子采样模式（P1-2）：prefix=前缀快速冒烟（默认）；random=固定
-    # seed 蓄水池抽样（代表性抽检）。复用判据与 subsample.json 同步记录。
+    # seed 蓄水池抽样；proportion=按 subsample_prop 比例随机（两遍法，
+    # 条数精确，对齐 seqkit sample2 -p）。复用判据与 subsample.json 同步记录。
     C.subsample_mode = (subsample_mode if subsample_mode in
-                        ('prefix', 'random') else 'prefix')
+                        ('prefix', 'random', 'proportion') else 'prefix')
     C.subsample_seed = int(subsample_seed)
+    # proportion 模式的抽样比例（0=不生效；仅 mode='proportion' 时使用）
+    C.subsample_prop = min(max(float(subsample_prop or 0.0), 0.0), 1.0)
     C.min_contig_len, C.top_n_refs = min_contig_len, top_n_refs
     C.tree_tool, C.tree_sampling = tree_tool, tree_sampling
     C.ncbi_refs = ncbi_refs

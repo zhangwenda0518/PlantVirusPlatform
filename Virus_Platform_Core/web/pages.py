@@ -47,7 +47,7 @@ def _asset_version():
     except OSError:
         return '1'
     for _f in names:
-        if not _f.endswith(('.js', '.css')):
+        if not _f.endswith(('.js', '.css', '.png')):
             continue
         try:
             mt = max(mt, os.path.getmtime(os.path.join(_WWW, 'static', _f)))
@@ -157,6 +157,17 @@ NAV_GROUPS = [
          'desc': 'Cas12a crRNA × RPA/PCR 引物协同设计：多分离物 MSA 保守性 → '
                  'TTTV PAM 扫描 + 漏斗过滤 → 双库特异性筛查（宿主 + 近缘病毒）'
                  '→ 复合评分 × 群体覆盖率 → 订购表 + L1–L5 验证清单'},
+        # 2026-10-20：CONAN-SWIFT（Cas3 / I 型 I-E）crRNA 设计。引擎
+        # Virus_Platform_Core/conan_design.py（净室实现，规则来源见模块头：
+        # bioRxiv 2026.08.25.746999 + conan-swift-designer MIT），工具卡 t-conan。
+        # 与 t-crispr 的分工：那是 Cas12a/Cas13a（TTTV PAM / 无 PAM）+ 引物
+        # 协同；这张是 Cas3（AAG PAM、种子忽略 +6 位）+ 负组同源位点双重
+        # 失配评分 + 纯 crRNA 输出（RT-LAMP 侧流路线）。
+        {'id': 't-conan', 'title': 'CONAN-SWIFT 检测设计（Cas3）',
+         'desc': 'Cas3 / I 型 I-E crRNA 设计（RT-LAMP + 侧流层析路线）：多分离物'
+                 '目标 + 负组合并 MAFFT → AAG PAM + 32nt spacer 双链扫描 → '
+                 '负组同源位点双重失配评分（leak/覆盖率）→ 末端/GC/种子过滤 → '
+                 '候选表 + 位点核查 + 中文报告'},
         {'id': 't-dsrna', 'title': 'dsRNA 设计',
          'desc': '全链路：dsRNAmax 确定性选窗（maximin 多候选）→ dsRIP 效价 → '
                  '面板脱靶扫描（致死基因加权 + 0 错配一票否决）→ T7 引物（限定最优窗）'
@@ -213,6 +224,12 @@ NAV_GROUPS = [
     {'id': 'result', 'label': '结果中心', 'path': '结果中心', 'items': [
         {'href': '/results', 'title': '样品结果 / 专项结果',
          'desc': '报告 / 专项运行 / SDT / MSA / 进化树 / 序列查看'},
+        # 2026-10-23：内置 svguest（GPL-3.0，单文件、纯前端）——把各模块
+        # 产出的 SVG/PNG 结果图合并、排版、加标注，再导出 PNG/SVG/PDF。
+        # 图形数据不出本机；入口同时放在 /results 顶栏与各文件列表行。
+        {'href': '/svguest/', 'title': '🎨 结果图整理（svguest）',
+         'desc': '本地 SVG 编辑器：多图合并 / 排版 / 标注 / 加比例尺，'
+                 '导出 PNG · SVG · PDF；文件不上传'},
     ]},
     {'id': 'trace', 'label': '溯源与提交', 'path': '溯源与提交', 'items': [
         {'href': '/logan', 'title': 'LOGAN 溯源 / 批量提交', 'desc': '公共样本追踪'},
@@ -236,7 +253,8 @@ _PATH_TO_GROUP = {'/meta': 'resource', '/virome': 'resource',
                   '/orf': 'annotate', '/annotation': 'annotate',
                   '/genome': 'annotate', '/primer': 'detect',
                   '/cds-export': 'compare',
-                  '/logan': 'trace', '/submit': 'trace'}
+                  '/logan': 'trace', '/submit': 'trace',
+                  '/svguest/': 'result', '/svguest': 'result'}
 
 
 @bp.app_context_processor
@@ -394,6 +412,22 @@ def page_results():
                             '%Y-%m-%d %H:%M',
                             time.localtime(os.path.getmtime(d)))})
     return render_template('results.html', samples=samples, archived=archived)
+
+
+@bp.route('/svguest/')
+def page_svguest():
+    """内置 svguest 单文件编辑器（结果图整理）。
+
+    纯前端页面：读图/编辑/导出都在浏览器完成，服务端只做一次静态发送。
+    `?open=<同源 URL>` 由内置补丁解析，用于从结果列表直接载入某张图。
+    """
+    p = check_path(os.path.join(_WWW, 'static', 'vendor', 'svguest',
+                                'app.html'),
+                   must_exist=True, in_platform=True)
+    resp = send_file(p, mimetype='text/html')
+    # 单文件应用带内联脚本；禁用缓存以外的额外策略，保持与上游一致。
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
 
 
 def _sample_project(sample_dir):

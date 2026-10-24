@@ -1,0 +1,25 @@
+{
+ "sample": "sample_demo",
+ "manifest": [
+  {
+   "title": "流程漏斗",
+   "sources": [
+    "stage_funnel.tsv",
+    "stage_funnel.png",
+    "stage_funnel_retention.png"
+   ]
+  },
+  {
+   "title": "宿主预测旭日图（科 → 属 → 种）",
+   "sources": [
+    "08_host_analysis/summary.json"
+   ]
+  },
+  {
+   "title": "宿主类别汇总",
+   "sources": [
+    "08_host_analysis/summary.json"
+   ]
+  }
+ ]
+}

@@ -293,10 +293,13 @@ def _kv_ensure_figures(base):
     已齐全则直接返回。任何失败降级为返回当前已有的图。
     """
     fig_dir = os.path.join(base, 'figures')
-    listed = sorted(f for f in (os.listdir(fig_dir) if os.path.isdir(fig_dir)
-                                else []) if f.lower().endswith('.png'))
+    _names = (os.listdir(fig_dir) if os.path.isdir(fig_dir) else [])
+    listed = sorted(f for f in _names if f.lower().endswith('.png'))
+    have_svg = {f.lower() for f in _names if f.lower().endswith('.svg')}
+    # 旧运行只有 PNG：也要补一次 SVG（结果图整理的原件），故把
+    # freq 的 SVG 一并纳入「已齐全」判据。
     need = {'freq_multi_metrics.png'}
-    if need <= set(listed):
+    if need <= set(listed) and 'freq_multi_metrics.svg' in have_svg:
         return listed
     tsv = os.path.join(base, 'filter', 'filtered.tsv')
     if not os.path.isfile(tsv):

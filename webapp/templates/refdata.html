@@ -25,7 +25,8 @@
         <b>gget·Ensembl</b>（覆盖水稻、番茄、小麦等 NCBI 之外的植物宿主）、<b>NCBI taxon</b>（按物种）、
         <b>NCBI accession</b>（按组装号精确下载，可染色体过滤）。产物落到 host-db/&lt;TaxID&gt;_&lt;物种&gt;/genome.fa，
         下载完成后去「数据库构建」页点「构建宿主库」即可（路径 TaxID 自动解析）。
-        gget 需先安装：pip install "gget==0.30.5"；accession 模式需 datasets CLI（python main.py datasets-setup）。</p>
+        gget 需先安装：pip install "gget==0.30.5"；accession 模式需 datasets CLI（python main.py datasets-setup）。
+        NCBI 源不填 accession 时先查询再下载：仅 1 个组装自动选用；多个组装版本会列出供选用，不会盲下。</p>
         <div class="grid2">
           <div><label data-i18n="bd.hostDlSpecies">宿主物种拉丁名</label>
             <input id="hostDlSpecies" type="text" data-i18n-ph="bd.hostDlSpeciesPh"
@@ -47,6 +48,9 @@
         </div>
         <button class="btn primary" onclick="dlHostGenome(this)" data-i18n="bd.hostDlBtn"
                 style="margin-top:6px">⬇ 下载到 host-db/</button>
+        <button class="btn" onclick="qryHostAsm(this)" data-i18n="rd.qryAsmBtn"
+                style="margin-top:6px">🔍 查询 NCBI 组装</button>
+        <div id="hostQryResult" class="hint" style="margin-top:6px"></div>
         <div id="hostDlResult" class="hint" style="margin-top:6px"></div>
       </div>
 
@@ -55,7 +59,8 @@
         <p class="hint" data-i18n="rd.virusHint">按病毒 taxon（可加<b>宿主过滤</b>）拉取 NCBI 病毒基因组，自动产出
         reference.fasta + reference.ref_info.tsv（含 Taxid/宿主/地理列），落
         databases/virusref_db/&lt;名&gt;/，「数据库构建」页「原始数据集」卡即时识别——一键建鉴定库索引或 kunpeng 分类库。
-        需 NCBI datasets CLI（未装时执行 python main.py datasets-setup 自动安装）。</p>
+        需 NCBI datasets CLI（未装时执行 python main.py datasets-setup 自动安装）。
+        下载前可先点「🔍 查询匹配序列」预览命中的记录；查询表里也可挑单条 accession 精确下载。</p>
         <div class="grid2">
           <div><label data-i18n="bd.dsDlTaxon">病毒 taxon</label>
             <input id="dsDlTaxon" type="text" data-i18n-ph="bd.dsDlTaxonPh"
@@ -67,6 +72,9 @@
         </div>
         <button class="btn primary" onclick="dlVirusDataset(this)" data-i18n="bd.dsDlBtn"
                 style="margin-top:6px">⬇ 下载病毒数据集</button>
+        <button class="btn" onclick="qryVirusSeq(this)" data-i18n="rd.qryVirusBtn"
+                style="margin-top:6px">🔍 查询匹配序列</button>
+        <div id="dsQryResult" class="hint" style="margin-top:6px"></div>
         <div id="dsDlResult" class="hint" style="margin-top:6px"></div>
       </div>
 
@@ -74,7 +82,8 @@
         <h2 id="m-dsgen" data-i18n="rd.genTitle">📥 NCBI datasets 通用下载（genome / gene / taxonomy）</h2>
         <p class="hint" data-i18n="rd.genHint">datasets CLI 其余模式：任意物种基因组包（taxon / accession+染色体过滤）、
         基因包（gene-id / symbol+taxon / 蛋白 accession）、分类报告包。产物落 datasets_dl/，
-        供注释、比对、建树等下游自取。旧版 --exclude-* 语法已自动翻译为 --include 组合。</p>
+        供注释、比对、建树等下游自取。旧版 --exclude-* 语法已自动翻译为 --include 组合。
+        下载前可先点「🔍 查询预览」确认匹配记录（genome 查询表可直接选用 accession）。</p>
         <div class="grid2">
           <div><label data-i18n="rd.genMode">模式</label>
             <select id="dsGenMode" style="width:100%" onchange="dsGenShow()">
@@ -109,6 +118,9 @@
         </div>
         <button class="btn primary" onclick="dlDsGeneric(this)" data-i18n="rd.genBtn"
                 style="margin-top:6px">⬇ 下载到 datasets_dl/</button>
+        <button class="btn" onclick="qryDsGen(this)" data-i18n="rd.qryGenBtn"
+                style="margin-top:6px">🔍 查询预览</button>
+        <div id="dsGenQryResult" class="hint" style="margin-top:6px"></div>
         <div id="dsGenResult" class="hint" style="margin-top:6px"></div>
       </div>
 
@@ -124,12 +136,7 @@
 /* ---------- ① 宿主基因组：dlHostGenome 在 app.js（本页 #hostDlResult 出结果） ---------- */
 
 /* ---------- ② NCBI datasets 病毒数据集（自 /build 迁入） ---------- */
-async function dlVirusDataset(btn) {
-  const taxon = $('dsDlTaxon').value.trim();
-  if (!taxon) { alert(t('bd.dsDlNeedTaxon', '请填写病毒 taxon')); return; }
-  const body = { taxon };
-  if ($('dsDlHost').value.trim()) body.host = $('dsDlHost').value.trim();
-  if ($('dsDlName').value.trim()) body.name = $('dsDlName').value.trim();
+async function _startVirusDl(btn, body) {
   let r;
   try {
     r = await fetch('/api/datasets_virus', {
@@ -152,6 +159,21 @@ async function dlVirusDataset(btn) {
       toast(t('bd.dsDlDone', '病毒数据集已就绪') + `: ${res.name}（${res.n_seqs} 条）`, '', {ttl: 6000});
     }
   });
+}
+
+async function dlVirusDataset(btn) {
+  const taxon = $('dsDlTaxon').value.trim();
+  if (!taxon) { alert(t('bd.dsDlNeedTaxon', '请填写病毒 taxon')); return; }
+  const body = { taxon };
+  if ($('dsDlHost').value.trim()) body.host = $('dsDlHost').value.trim();
+  if ($('dsDlName').value.trim()) body.name = $('dsDlName').value.trim();
+  await _startVirusDl(btn, body);
+}
+
+/* 查询表里挑单条：accession 精确下载（落 virusref_db/acc_<acc>/） */
+function dlVirusOne(btn, acc) {
+  const name = 'acc_' + String(acc).replace(/[^A-Za-z0-9_\-]/g, '_');
+  _startVirusDl(btn, { accession: acc, name: name });
 }
 
 /* ---------- ③ datasets 通用下载（genome / gene / taxonomy） ---------- */
@@ -199,6 +221,97 @@ async function dlDsGeneric(btn) {
       $('dsGenResult').innerHTML = `✅ ${esc(res.out_dir)} ${n}`;
     }
   });
+}
+
+/* ---------- 🔍 先查后下共用层（dsSummaryQuery / dsQryNote / dsQryTable /
+   fmtLen / qryHostAsm / pickHostAcc）已上移 app.js，与下载闸门共享 ---------- */
+
+/* ② 病毒数据集：查匹配序列（taxon + 宿主过滤），行可单条下载 */
+async function qryVirusSeq(btn) {
+  const taxon = $('dsDlTaxon').value.trim();
+  const out = $('dsQryResult');
+  if (!taxon) { alert(t('bd.dsDlNeedTaxon', '请填写病毒 taxon')); return; }
+  const body = { kind: 'virus', taxon, limit: 500,
+                 host: $('dsDlHost').value.trim() || undefined };
+  const d = await dsSummaryQuery(out, body);
+  if (!d) return;
+  const head = [t('rd.qryThAcc', 'Accession'), t('rd.qryThLen', '长度 (bp)'),
+    t('rd.qryThHost', '宿主'), t('rd.qryThGeo', '地理'),
+    t('rd.qryThIso', '分离物'), t('rd.qryThDate', '采集日期'),
+    t('rd.qryThComp', '完整度'), t('rd.qryThSrc', '来源'), ''];
+  const rows = d.rows.map(x => '<tr>'
+    + `<td><code>${esc(x.accession)}</code></td>`
+    + `<td class="num">${fmtLen(x.length)}</td>`
+    + `<td>${esc(x.host)}</td><td>${esc(x.geo)}</td><td>${esc(x.isolate)}</td>`
+    + `<td>${esc(x.collected)}</td><td>${esc(x.completeness)}</td><td>${esc(x.source)}</td>`
+    + `<td><button class="btn" style="padding:2px 8px" onclick="dlVirusOne(this,'${x.accession}')">${t('rd.qryDlOne', '⬇ 此条')}</button></td></tr>`);
+  out.innerHTML = '✅ ' + dsQryNote(d) + dsQryTable(head, rows);
+}
+
+/* ③ 通用下载：按当前模式查预览（genome 行可选用 accession） */
+async function qryDsGen(btn) {
+  const mode = $('dsGenMode').value;
+  const out = $('dsGenQryResult');
+  const body = { kind: mode };
+  if (mode === 'genome') {
+    body.taxon = $('dsGenTaxon').value.trim();
+    body.accession = $('dsGenAcc').value.trim();
+    if (!body.taxon && !body.accession) {
+      alert(t('rd.genNeedG', '请填写物种 taxon 或 Assembly Accession')); return;
+    }
+    body.limit = 200;
+  } else if (mode === 'gene') {
+    if ($('dsGenGid').value.trim()) body['gene-id'] = $('dsGenGid').value.trim();
+    if ($('dsGenSym').value.trim()) body.symbol = $('dsGenSym').value.trim();
+    if ($('dsGenSymTaxon').value.trim()) body.taxon = $('dsGenSymTaxon').value.trim();
+    if ($('dsGenPacc').value.trim()) body['protein-accession'] = $('dsGenPacc').value.trim();
+    if (!body['gene-id'] && !body['protein-accession']
+        && !(body.symbol && body.taxon)) {
+      alert(t('rd.genNeedGene', 'gene 模式查询需要 Gene ID，或 symbol + 物种，或蛋白 accession'));
+      return;
+    }
+  } else {
+    body.taxons = $('dsGenTaxons').value.trim();
+    if (!body.taxons) { alert(t('rd.genNeedT', '请填写 taxon')); return; }
+  }
+  const d = await dsSummaryQuery(out, body);
+  if (!d) return;
+  let head, rows;
+  if (mode === 'genome') {
+    head = [t('rd.qryThAcc', 'Accession'), t('rd.qryThName', '组装名称'),
+      t('rd.qryThOrg', '物种'), t('rd.qryThLen', '长度 (bp)'),
+      t('rd.qryThLevel', '组装级别'), t('rd.qryThSrc', '来源'),
+      t('rd.qryThRel', '发布日期'), ''];
+    rows = d.rows.map(x => '<tr>'
+      + `<td><code>${esc(x.accession)}</code></td>`
+      + `<td>${esc(x.name)}</td><td>${esc(x.organism)}</td>`
+      + `<td class="num">${fmtLen(x.length)}</td>`
+      + `<td>${esc(x.level)}</td><td>${esc(x.source)}</td><td>${esc(x.released)}</td>`
+      + `<td><button class="btn" style="padding:2px 8px" onclick="pickGenAcc('${x.accession}')">${t('rd.qryPick', '选用')}</button></td></tr>`);
+  } else if (mode === 'gene') {
+    head = [t('rd.qryThGene', 'Gene'), t('rd.qryThDesc', '描述'),
+      t('rd.qryThOrg', '物种'), t('rd.qryThChr', '染色体'),
+      t('rd.qryThType', '类型'), t('rd.qryThProt', '蛋白数'), ''];
+    rows = d.rows.map(x => '<tr>'
+      + `<td><code>${esc(x.accession)}</code> ${esc(x.name)}</td>`
+      + `<td>${esc(x.desc)}</td><td>${esc(x.organism)}</td>`
+      + `<td>${esc(x.chroms)}</td><td>${esc(x.type)}</td>`
+      + `<td class="num">${esc(x.n_proteins)}</td><td></td></tr>`);
+  } else {
+    head = [t('rd.qryThTaxid', 'TaxID'), t('rd.qryThOrg', '物种'),
+      t('rd.qryThRank', '类群'), t('rd.qryThLineage', '分类地位'), ''];
+    rows = d.rows.map(x => '<tr>'
+      + `<td><code>${esc(x.accession)}</code></td><td>${esc(x.name)}</td>`
+      + `<td>${esc(x.rank)}</td><td>${esc(x.lineage)}</td><td></td></tr>`);
+  }
+  out.innerHTML = '✅ ' + dsQryNote(d) + dsQryTable(head, rows);
+}
+
+function pickGenAcc(acc) {
+  $('dsGenAcc').value = acc;
+  if (typeof toast === 'function') {
+    toast(t('rd.qryPicked', '已填入 Assembly Accession') + ': ' + acc, '', {ttl: 4000});
+  }
 }
 </script>
 </body>

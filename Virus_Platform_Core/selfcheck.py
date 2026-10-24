@@ -262,10 +262,25 @@ def _check_databases():
                 if h.get('conflicted'):
                     item['detail'] += (' | ⚠ 元数据冲突 '
                                        f"{h.get('taxids_in_map')}")
+                # 分发口径（2026-10-24）：宿主库按物种而异、任何安装包都
+                # 不随包——legacy 固定槽位 host/classify 上"没有库"是全新
+                # 部署的**预期状态**，判 ✘ 会让分发版永远过不了自检。降级
+                # 为 warn（首次建库或「加载已构建宿主库」后自然转绿）；
+                # 非 legacy 槽位的真实库不完整仍判失败。
+                if (not ok and h.get('legacy') and not h.get('ready')
+                        and not h.get('has_manifest')):
+                    item['ok'] = True
+                    item['warn'] = True
+                    item['detail'] += ('（未配置宿主库——分发版默认不带，'
+                                       '属预期；到「数据库构建」页自建，'
+                                       '或「📂 加载已构建宿主库」）')
         items.append(item)
     return {'id': 'databases', 'title': '数据库',
-            'ok': all(i['ok'] for i in items), 'warn': False,
-            'summary': f"{sum(i['ok'] for i in items)}/{len(items)}",
+            'ok': all(i['ok'] for i in items),
+            'warn': any(i.get('warn') for i in items),
+            'summary': f"{sum(i['ok'] for i in items)}/{len(items)}"
+                       + ('（含未配置宿主库提示）'
+                          if any(i.get('warn') for i in items) else ''),
             'items': items}
 
 

@@ -1,0 +1,4 @@
+NC_076132.1	gb2gtf	CDS	206	3406	.	+	0	gene_id "replicase"; transcript_id "replicase"; gene_name "replicase";
+NC_076132.1	gb2gtf	CDS	3432	4106	.	+	0	gene_id "TGB1"; transcript_id "TGB1"; gene_name "TGB1";
+NC_076132.1	gb2gtf	CDS	4084	4386	.	+	0	gene_id "TGB2"; transcript_id "TGB2"; gene_name "TGB2";
+NC_076132.1	gb2gtf	CDS	4407	5072	.	+	0	gene_id "coat_protein"; transcript_id "coat_protein"; gene_name "coat_protein";

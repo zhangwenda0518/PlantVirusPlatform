@@ -392,12 +392,15 @@ function outFilesHtml(task) {
     const { label, color } = dlLabel(base, f.path);
     const cls = color ? ` dlbtn ${color}` : ' dlbtn';
     const low = base.toLowerCase();
+    // 图件（SVG/PNG）额外给一个「整理」入口：同源 URL 直接喂给内置 svguest。
+    const edit = (run && /\.(svg|png)$/i.test(base))
+      ? ' ' + svgEditLink(href, '整理', 'dlbtn') : '';
     // 基因组图 (SVG)：直接内联预览，不再只给下载按钮。
     if (low.endsWith('.svg') && run) {
       const img = `<img src="/tool_runs/${encodeURIComponent(run)}/${segs}" alt="${esc(base)}" style="display:block;width:100%;height:220px;object-fit:contain;border:1px solid var(--line-100);border-radius:8px;margin:8px 0;background:#fff" loading="lazy">`;
-      return `<div class="svg-prev" style="border-radius:8px;padding:8px;background:#fff">${img}<a class="${cls.trim()}" href="${href}" download="${esc(dl)}" title="${esc(f.path)}【${esc(f.size)}】">⬇ 下载 ${esc(label)}</a></div>`;
+      return `<div class="svg-prev" style="border-radius:8px;padding:8px;background:#fff">${img}<a class="${cls.trim()}" href="${href}" download="${esc(dl)}" title="${esc(f.path)}【${esc(f.size)}】">⬇ 下载 ${esc(label)}</a>${edit}</div>`;
     }
-    return `<a class="${cls.trim()}" href="${href}" download="${esc(dl)}" title="${esc(f.path)}【${esc(f.size)}】">⬇ ${esc(label)}</a>`;
+    return `<a class="${cls.trim()}" href="${href}" download="${esc(dl)}" title="${esc(f.path)}【${esc(f.size)}】">⬇ ${esc(label)}</a>${edit}`;
   }).join('');
   return `<div class="dlbtn-row">${btns}</div>`;
 }

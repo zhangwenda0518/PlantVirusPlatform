@@ -1,0 +1,10 @@
+{
+ "groups": [
+  {
+   "group": "demo",
+   "dir": "demo",
+   "tree": null,
+   "best_identity_to_ref": 97.5
+  }
+ ]
+}

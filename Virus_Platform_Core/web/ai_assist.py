@@ -13,6 +13,7 @@
 且无任何副作用（不写配置、不发起网络请求），故不进 DESTRUCTIVE_POST。
 """
 import json
+import os
 import re
 import time
 
@@ -25,6 +26,7 @@ from Virus_Platform_Core.ai_agent import chat as ai_chat
 from Virus_Platform_Core.ai_agent import digest
 from Virus_Platform_Core.ai_agent.provider import (PROVIDER_PRESETS,
                                                    ai_ready, test_connection)
+from Virus_Platform_Core.config import _ai_local_path
 from Virus_Platform_Core.web.state import cfg
 
 bp = Blueprint('ai_assist', __name__)
@@ -41,6 +43,126 @@ def _masked(ai):
     out[_SECRET] = ('••••' + key[-4:]) if len(key) > 4 else ('••••' if key else '')
     return out
 
+
+
+
+# ------------------------------------------------------------------
+# 供应商档案（ZCode 式多端点并存）：列表/保存/切换/删除。Key 分离存
+# run/ai_local.json provider_keys[name]；platform.json 永不落 Key。
+# 「切换」= 把档案值灌进平铺 cfg.ai（base_url/model/温度/长度/Key）并
+# 落盘——对话坞/执行单/播报全链路立即使用新端点，零重启。
+# ------------------------------------------------------------------
+
+def _pf_local_read():
+    try:
+        with open(_ai_local_path(), encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _pf_local_write(d):
+    lp = _ai_local_path()
+    os.makedirs(os.path.dirname(lp), exist_ok=True)
+    with open(lp, 'w', encoding='utf-8') as f:
+        json.dump(d, f, ensure_ascii=False, indent=1)
+
+
+@bp.route('/api/ai/profiles', methods=['GET'])
+def api_ai_profiles_get():
+    keys = _pf_local_read().get('provider_keys') or {}
+    active = str(cfg.ai.get('active_profile') or '')
+    out = [{'name': p.get('name'), 'base_url': p.get('base_url'),
+            'model': p.get('model'), 'temperature': p.get('temperature'),
+            'max_tokens': p.get('max_tokens'),
+            'key_set': bool(keys.get(p.get('name'))),
+            'active': p.get('name') == active}
+           for p in (cfg.ai.get('providers') or [])]
+    return jsonify({'count': len(out), 'profiles': out, 'active': active})
+
+
+@bp.route('/api/ai/profiles/save', methods=['POST'])
+def api_ai_profiles_save():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get('name') or '').strip()
+    if not name or len(name) > 40 or '/' in name or chr(92) in name:
+        abort(400, '档案名须为 1~40 字符，且不含路径分隔符')
+    base_url = str(body.get('base_url') or '').strip()
+    model = str(body.get('model') or '').strip()
+    if not base_url or not model:
+        abort(400, 'base_url 与 model 必填')
+    try:
+        temp = min(2.0, max(0.0, float(body.get('temperature', 0.3))))
+    except (TypeError, ValueError):
+        abort(400, 'temperature 须为 0~2 的数字')
+    try:
+        mtok = max(64, min(32768, int(body.get('max_tokens', 2048))))
+    except (TypeError, ValueError):
+        abort(400, 'max_tokens 须为 64~32768 的整数')
+    provs = [p for p in (cfg.ai.get('providers') or [])
+             if p.get('name') != name]
+    provs.append({'name': name, 'base_url': base_url, 'model': model,
+                  'temperature': temp, 'max_tokens': mtok})
+    cfg.ai = dict(cfg.ai, providers=provs)
+    key = str(body.get('api_key') or '').strip()
+    if key and not key.startswith('••••'):     # 掩码回传 = 未修改，保留旧 Key
+        local = _pf_local_read()
+        pk = local.get('provider_keys') or {}
+        pk[name] = key
+        local['provider_keys'] = pk
+        _pf_local_write(local)
+    try:
+        cfg.save()
+    except OSError as e:
+        abort(500, f'配置保存失败: {e}')
+    return jsonify({'ok': True, 'name': name})
+
+
+@bp.route('/api/ai/profiles/activate', methods=['POST'])
+def api_ai_profiles_activate():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get('name') or '').strip()
+    prof = next((p for p in (cfg.ai.get('providers') or [])
+                 if p.get('name') == name), None)
+    if not prof:
+        abort(400, f'档案不存在: {name}')
+    key = _pf_local_read().get('provider_keys', {}).get(name, '')
+    cfg.ai = dict(cfg.ai, provider='custom', base_url=prof['base_url'],
+                  model=prof['model'],
+                  temperature=prof.get('temperature', 0.3),
+                  max_tokens=prof.get('max_tokens', 2048),
+                  api_key=key, active_profile=name)
+    try:
+        cfg.save()
+    except OSError as e:
+        abort(500, f'配置保存失败: {e}')
+    return jsonify({'ok': True, 'active': name, 'ready': ai_ready(cfg.ai),
+                    'config': _masked(cfg.ai)})
+
+
+@bp.route('/api/ai/profiles/delete', methods=['POST'])
+def api_ai_profiles_delete():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get('name') or '').strip()
+    provs = [p for p in (cfg.ai.get('providers') or [])
+             if p.get('name') != name]
+    if len(provs) == len(cfg.ai.get('providers') or []):
+        abort(400, f'档案不存在: {name}')
+    cfg.ai = dict(cfg.ai, providers=provs,
+                  active_profile=('' if cfg.ai.get('active_profile') == name
+                                  else cfg.ai.get('active_profile')))
+    local = _pf_local_read()
+    pk = local.get('provider_keys') or {}
+    if name in pk:
+        pk.pop(name)
+        local['provider_keys'] = pk
+        _pf_local_write(local)
+    try:
+        cfg.save()
+    except OSError as e:
+        abort(500, f'配置保存失败: {e}')
+    return jsonify({'ok': True})
 
 @bp.route('/api/ai/config', methods=['GET'])
 def api_ai_config_get():

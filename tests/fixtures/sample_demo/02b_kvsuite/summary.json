@@ -1,0 +1,11 @@
+{
+ "engine": "minibwa",
+ "species_detected": [
+  "Pepper yellows virus",
+  "Grapevine Roditis leaf discoloration-associated virus"
+ ],
+ "passed": 2,
+ "rejected": 0,
+ "viral_reads": 1834,
+ "reads_unit": "reads"
+}

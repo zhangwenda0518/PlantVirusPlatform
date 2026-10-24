@@ -14,6 +14,10 @@
  *   example_tree.nwk            示例树
  *   example_synteny_A/B/C.gb    同属三基因组（GenBank 集合导入示例）
  *   example_tmv/pvy/cmv/pstvd/mix.fasta  Metabuli 示例病毒
+ *   example_sim100x_R1/R2.fastq.gz  模拟多病毒混染双端 reads（96 条植物
+ *                              病毒参考基因组、固定 100×、166,436 对 /
+ *                              150 bp；reads 头=来源登记号-坐标/1|2，自带
+ *                              ground truth；仅 /samples 接入示例用）
  *
  * 新增模块只改下面的 MAP / PAGE_MAP 两个表，不要在页面里散写示例路径。
  * ============================================================ */
@@ -24,6 +28,12 @@
   var F = {
     R1: DIR + 'example_R1.fastq.gz',
     R2: DIR + 'example_R2.fastq.gz',
+    /* 模拟数据示例（不参与生成）：多病毒混染模拟 reads（服务器
+       snap/simulator-data eval3_depth100，固定 100×，96 条植物病毒参考
+       基因组）。只接 /samples 样品接入页 —— 分析卡的 ✨ 仍用合成示例，
+       因为捆绑的「👁 示例结果」是拿合成 reads 跑出来的，输入换数据会对不上。 */
+    SIM_R1: DIR + 'example_sim100x_R1.fastq.gz',
+    SIM_R2: DIR + 'example_sim100x_R2.fastq.gz',
     CONTIGS: DIR + 'example_viral_contigs.fasta',
     CONTIG1: DIR + 'example_contig_1.fasta',
     SET: DIR + 'example_virus_set.fasta',
@@ -78,7 +88,11 @@
     '/genome':      { gp_ann: 'GENOME' },
     '/primer':      { pd_fa: 'CONTIGS' },  /* primer3 页（PCR 引物设计）示例=2 条病毒 contig，与页内自带 ✨ 一致 */
     '/logan':       { pasteSeq: 'TMV_TEXT' },  /* 文本域：填序列内容 */
-    '/samples':     { sample: 'example_reads', r1: 'R1', r2: 'R2' },
+    /* 样品接入示例用模拟多病毒数据（sim100x，166,436 对，固定 100×）；该页
+       无捆绑示例结果，换数据不会造成输入↔结果错位。reads 由已知病毒参考
+       模拟而来，kvsuite/组装/变异演示保证有信号。注册后即可在
+       kvsuite/kvchain 等按样品名运行的模块里直接用 sim100x。 */
+    '/samples':     { sample: 'sim100x', r1: 'SIM_R1', r2: 'SIM_R2' },
     /* 该框是「物种拉丁名」= 检索**宿主/物种**的测序数据，不是病毒名：
        填病毒名（曾写 Tobacco mosaic virus）会让人以为在按病毒检索，且与
        placeholder「如 Lycium barbarum」和平台示例宿主（host-db/112863_
@@ -149,19 +163,39 @@
     return true;
   }
 
-  /* kvsuite / kvchain 要的是样品名而不是文件路径：用示例 reads 建一个样品。
-     两张卡各有自有的样品输入框（kvsuite=kv_samples / 一键全流程=kvc_samples），
-     对应卡片各填自己的那个；两个都在时都填，便于两页来回对照。 */
+  /* kvsuite / kvchain 示例：之前把样品名填成 EXAMPLE，但那个样品从来没人
+     创建过——打包生成示例结果的脚本（tests/make_example_results.py）也只是
+     拿临时样品表指向内置 reads，明确「不建真样品」；用户清掉 run/results
+     或换测试数据后点启动，就报「路径不存在: run\results\EXAMPLE」。
+     改为填两张卡各自的「直接输入测序数据」R1/R2（后端该入口不必先建样品，
+     _tool_job_kvsuite 的 reads 分支会自行配对），并清空样品框，避免触发
+     「样品与直接输入测序数据只能二选一」；两卡字段都在时都填，便于来回对照。 */
   function fillKvsuiteExample() {
-    var ids = ['kv_samples', 'kvc_samples'];
     var n = 0;
-    ids.forEach(function (id) {
+    ['kv_samples', 'kvc_samples'].forEach(function (id) {
       var el = $(id);
-      if (!el) return;
-      el.value = 'EXAMPLE';
+      if (!el || !el.value) return;
+      el.value = '';
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    [['kv_reads_r1', F.R1], ['kv_reads_r2', F.R2],
+     ['kvc_reads_r1', F.R1], ['kvc_reads_r2', F.R2]].forEach(function (kv) {
+      var el = $(kv[0]);
+      if (!el) return;
       n++;
+      var put = function (v) {
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      /* 绝对路径来自 /api/example_paths（app.js 的 _exampleAbs），后端 reads
+         分支直接 os.path.isfile 校验原始 token，相对路径会受服务端 CWD 影响 */
+      if (typeof _exampleAbs === 'function') {
+        _exampleAbs(kv[1]).then(put);
+      } else {
+        put(kv[1]);
+      }
     });
     return n;
   }

@@ -1,4 +1,0 @@
-OS = Windows 11 10.0.26200
-Python = 3.12.10
-CPU = Intel64 Family 6 Model 151 Stepping 2, GenuineIntel | logical cores = 20
-RAM unknown: unsupported operand type(s) for /: '_ctypes.CField' and 'int'

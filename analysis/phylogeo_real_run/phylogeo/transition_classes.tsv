@@ -1,0 +1,5 @@
+parent	child	from	to	label	geo_km	step_km	edge_snp	dt_years	n_p	n_c	group_size	intro	note
+(node)	(node)	Asia	Americas	Distant	15122.5		37	9.0	1	10	4	1	sparse-sampling
+(node)	SIM_Americas_5|Asia|2018	Americas	Asia	Distant	15122.5		5	6	3	1	1	1	low-divergence;sparse-sampling
+(node)	(node)	Americas	Europe	Distant	9157.6		78	-4	5	5	5	1	
+(node)	SIM_Asia_5|Europe|2009	Asia	Europe	Distant	7187.2		4	8	1	1	1	1	low-divergence;sparse-sampling

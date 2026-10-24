@@ -78,6 +78,120 @@ def test_build_virus_genome_and_protein():
         dc.build_virus_args()
 
 
+def test_build_virus_accession_single():
+    """查询表挑单条：accession 精确下载（taxon/protein 均缺省时生效）。"""
+    assert dc.build_virus_args(accession='NC_045512.2') == [
+        'download', 'virus', 'genome', 'accession', 'NC_045512.2',
+        '--include', 'genome']
+    assert dc.build_virus_args(accession='NC_045512.2', host='dog') == [
+        'download', 'virus', 'genome', 'accession', 'NC_045512.2',
+        '--host', 'dog', '--include', 'genome']
+    # taxon 优先级高于 accession（旧行为不变）
+    assert dc.build_virus_args(taxon='sars-cov-2', accession='NC_045512.2')[
+        3] == 'taxon'
+
+
+# ── summary 查询（先查后下）────────────────────────────────
+def test_build_summary_args_all_kinds():
+    assert dc.build_summary_args('genome', taxon='Oryza sativa',
+                                 limit=200) == [
+        'summary', 'genome', 'taxon', 'Oryza sativa', '--limit', '200']
+    # limit 未给时不带 --limit（query_records 才会按 kind 默认值 +1 探测截断）
+    assert dc.build_summary_args('genome', accession='GCF_000001405.40') == [
+        'summary', 'genome', 'accession', 'GCF_000001405.40']
+    assert dc.build_summary_args('virus', taxon='sars-cov-2', host='dog',
+                                 limit=5) == [
+        'summary', 'virus', 'genome', 'taxon', 'sars-cov-2',
+        '--host', 'dog', '--limit', '5']
+    assert dc.build_summary_args('gene', gene_id=672) == [
+        'summary', 'gene', 'gene-id', '672']
+    assert dc.build_summary_args('gene', symbol='brca1', taxon='mus') == [
+        'summary', 'gene', 'symbol', 'brca1', '--taxon', 'mus']
+    assert dc.build_summary_args('gene', protein_acc='NP_000483.3') == [
+        'summary', 'gene', 'accession', 'NP_000483.3']
+    # taxonomy 记录数固定，不带 --limit
+    assert dc.build_summary_args('taxonomy', taxons='human,x') == [
+        'summary', 'taxonomy', 'taxon', 'human,x']
+
+
+def test_build_summary_args_validation():
+    with pytest.raises(ValueError):
+        dc.build_summary_args('genome')
+    with pytest.raises(ValueError):
+        dc.build_summary_args('virus')
+    with pytest.raises(ValueError):
+        dc.build_summary_args('gene', symbol='brca1')   # 缺 taxon
+    with pytest.raises(ValueError):
+        dc.build_summary_args('taxonomy')
+    with pytest.raises(ValueError):
+        dc.build_summary_args('bogus', taxon='x')
+
+
+def test_dig_dual_style_paths():
+    """summary 输出 snake_case、download 报告 camelCase，双风格都要接。"""
+    assert dc._dig({'a': {'b_c': 'v'}}, 'a.b_c', 'a.bC') == 'v'
+    assert dc._dig({'a': {'bC': 'v'}}, 'a.b_c', 'a.bC') == 'v'
+    assert dc._dig({'a': {'b_c': ''}}, 'a.b_c') == ''
+    assert dc._dig({}, 'x.y') == ''
+
+
+def test_norm_summary_row_genome_snake():
+    row = dc._norm_summary_row('genome', {
+        'accession': 'GCA_1.1',
+        'assembly_info': {'assembly_name': 'ASM1', 'assembly_level':
+                          'Scaffold', 'release_date': '2020-01-02T00:00:00',
+                          'submitter': 'NCBI'},
+        'assembly_stats': {'total_sequence_length': '307224746'},
+        'organism': {'organism_name': 'Oryza sativa', 'tax_id': 4530},
+        'source_database': 'SOURCE_DATABASE_GENBANK'})
+    assert row['accession'] == 'GCA_1.1'
+    assert row['name'] == 'ASM1'
+    assert row['organism'] == 'Oryza sativa'
+    assert row['taxid'] == '4530'
+    assert row['length'] == '307224746'
+    assert row['source'] == 'GENBANK'                # 前缀被剥掉
+    assert row['released'] == '2020-01-02'           # 截到日期
+
+
+def test_norm_summary_row_virus_camel_fallback():
+    """download 风格的 camelCase 报告同样能归一化（容错双风格）。"""
+    row = dc._norm_summary_row('virus', {
+        'accession': 'KT383474.1', 'length': 6393,
+        'completeness': 'COMPLETE', 'sourceDatabase': 'GenBank',
+        'virus': {'organismName': 'Tomato brown rugose fruit virus',
+                  'taxId': 1761477},
+        'host': {'organismName': 'Solanum lycopersicum', 'taxId': 4081},
+        'isolate': {'name': 'Tom1-Jo', 'collectionDate': '2015-04-17'},
+        'location': {'geographicLocation': 'Jordan'}})
+    assert row['virus'] == 'Tomato brown rugose fruit virus'
+    assert row['host'] == 'Solanum lycopersicum'
+    assert row['geo'] == 'Jordan'
+    assert row['collected'] == '2015-04-17'
+    assert row['completeness'] == 'COMPLETE'
+
+
+def test_norm_summary_row_gene_and_taxonomy():
+    grow = dc._norm_summary_row('gene', {'gene': {
+        'gene_id': '672', 'symbol': 'BRCA1', 'taxname': 'Homo sapiens',
+        'description': 'BRCA1 DNA repair associated',
+        'chromosomes': ['17'], 'type': 'protein-coding',
+        'protein_count': 1, 'transcript_count': 5}})
+    assert grow['accession'] == '672'
+    assert grow['name'] == 'BRCA1'
+    assert grow['organism'] == 'Homo sapiens'
+    assert grow['chroms'] == '17'
+    trow = dc._norm_summary_row('taxonomy', {'taxonomy': {
+        'tax_id': 2697049,
+        'current_scientific_name': {'name':
+            'Severe acute respiratory syndrome coronavirus 2'},
+        'group_name': 'viruses',
+        'classification': {'family': {'id': 11118, 'name':
+                                      'Coronaviridae'}}}})
+    assert trow['accession'] == '2697049'
+    assert trow['name'] == 'Severe acute respiratory syndrome coronavirus 2'
+    assert trow['lineage'] == 'family: Coronaviridae'
+
+
 # ── 数据报告 → 引用注释表（列名对齐 kv_common.load_ref_info）──
 def _report_line(**over):
     rec = {

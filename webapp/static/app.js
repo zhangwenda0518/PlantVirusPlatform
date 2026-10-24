@@ -8,6 +8,18 @@ function esc(s) {
     c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+/* 结果图整理：内置 svguest 的 ?open= 只接受同源 URL（见 pages.py /svguest/）。
+   图形在浏览器内编辑/导出，不上传；href 用 encodeURIComponent 整体编码。 */
+function svgEditHref(href) {
+  return '/svguest/?open=' + encodeURIComponent(href);
+}
+function svgEditLink(href, label, cls) {
+  return `<a class="${cls || 'btn small'}" target="_blank" rel="noopener"`
+    + ` href="${esc(svgEditHref(href))}"`
+    + ` title="在本地 svguest 中整理（编辑与导出都在浏览器完成，不上传）">`
+    + `🎨 ${esc(label || '整理')}</a>`;
+}
+
 // 输入框取值（trim）；meta/download/submit 等页的历史页面依赖此全局函数
 function val(id) {
   const el = $(id);
@@ -1008,8 +1020,11 @@ function gxSyncProjSelect(sel, projs) {
 }
 
 function injectGlobalCtx() {
-  const nav = document.querySelector('.navlinks');
-  if (!nav || document.getElementById('navCtx')) return;
+  // 2026-10-21：导航改版（左侧栏 + 顶部工具条）。上下文胶囊属于「全局工具」，
+  // 挂到顶栏的 .navctx-host；旧写法挂进 .navlinks，改版后会掉进竖排侧栏。
+  const host = document.querySelector('.navctx-host') ||
+               document.querySelector('.navlinks');
+  if (!host || document.getElementById('navCtx')) return;
   const wrap = document.createElement('span');
   wrap.id = 'navCtx';
   wrap.className = 'navctx';
@@ -1018,19 +1033,9 @@ function injectGlobalCtx() {
     + `<span class="navctx-chip" id="navCtxProject" onclick="gxPickProject()"></span>`
     + `<button class="navctx-reset" id="navCtxReset" type="button" `
     + `onclick="gxGlobalReset(this)"></button>`;
-  // 把「上下文条 + 语言按钮 + 📂」收成一个**不可拆**的控制簇（.navtail）。
-  // 为什么必须成组：13 个一级链接约占 1150px，窗口刚好差几十像素时
-  // flex 换行只会把最后一个 📂 挤到第二行，单独一个图标孤零零待在右边，
-  // 看着就像坏了（实测 1884px 正是这个症状）。成组后要么整簇留在第一行，
-  // 要么整簇换到第二行，视觉上是"刻意分了两行"。
-  const tail = document.createElement('span');
-  tail.className = 'navtail';
-  tail.appendChild(wrap);
-  nav.appendChild(tail);
-  // i18n.js 先注入 #langBtn，这里把它与 📂 移进簇内（appendChild 即移动节点）
-  const anchors = [document.getElementById('langBtn'),
-                   nav.querySelector('.iconbtn')].filter(Boolean);
-  for (const el of anchors) tail.appendChild(el);
+  host.appendChild(wrap);
+  // 旧版这里还要把 #langBtn / 📂 收进 .navtail 防换行；改版后它们本来就在
+  // 顶栏的 .navtail 里，无需再搬。
   renderNavCtx();
 }
 
@@ -1449,16 +1454,110 @@ async function buildHostDb(btn) {
 
 /* 在线下载宿主基因组（gget·Ensembl / NCBI taxon / NCBI accession）→
    完成后回填建库表单，上下游在数据库构建页一条龙衔接 */
+/* ---------- 🔍 先查后下：datasets summary 预览（基因组查询下载页共用） ---------- */
+async function dsSummaryQuery(out, body) {
+  out.innerHTML = '⏳ ' + t('rd.qryRunning', '查询中…');
+  let r;
+  try {
+    r = await fetch('/api/datasets_summary', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)});
+  } catch (e) { out.innerHTML = '❌ ' + t('c.startFail', '启动失败') + ': ' + e; return null; }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { out.innerHTML = '❌ ' + t('rd.qryFail', '查询失败') + ': ' + esc((d && d.error) || r.status); return null; }
+  if (!d.rows || !d.rows.length) {
+    out.innerHTML = '⚠ ' + t('rd.qryNone', '没有匹配记录（换个 taxon/条件再试）');
+    return null;
+  }
+  return d;
+}
+
+function dsQryNote(d) {
+  return d.truncated
+    ? t('rd.qryTrunc', '匹配数超出预览上限，显示前 {n} 条（下载会取完整集合）').replace('{n}', d.returned)
+    : t('rd.qryMatched', '共 {n} 条匹配').replace('{n}', d.total_count || d.returned);
+}
+
+function dsQryTable(head, rows) {
+  return '<div style="max-height:380px;overflow:auto;margin-top:4px">'
+    + '<table class="tbl"><thead><tr>'
+    + head.map(h => `<th>${h}</th>`).join('')
+    + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
+}
+
+function fmtLen(n) { return n ? (+n).toLocaleString() : '-'; }
+
+function renderHostAsmTable(d, out) {
+  const head = [t('rd.qryThAcc', 'Accession'), t('rd.qryThName', '组装名称'),
+    t('rd.qryThOrg', '物种'), t('rd.qryThLen', '长度 (bp)'),
+    t('rd.qryThLevel', '组装级别'), t('rd.qryThSrc', '来源'),
+    t('rd.qryThRel', '发布日期'), ''];
+  const rows = d.rows.map(x => '<tr>'
+    + `<td><code>${esc(x.accession)}</code></td>`
+    + `<td>${esc(x.name)}</td>`
+    + `<td>${esc(x.organism)}${x.common ? ' (' + esc(x.common) + ')' : ''}</td>`
+    + `<td class="num">${fmtLen(x.length)}</td>`
+    + `<td>${esc(x.level)}</td><td>${esc(x.source)}</td><td>${esc(x.released)}</td>`
+    + `<td><button class="btn" style="padding:2px 8px" onclick="pickHostAcc('${x.accession}')">${t('rd.qryPick', '选用')}</button></td></tr>`);
+  out.innerHTML = '✅ ' + dsQryNote(d) + dsQryTable(head, rows);
+}
+
+/* ① 宿主基因组：查 NCBI 组装（taxon / TaxID / accession 三入口），行可选用 */
+async function qryHostAsm(btn) {
+  const acc = $('hostDlAcc').value.trim();
+  const sp = $('hostDlSpecies').value.trim();
+  const tid = $('hostDlTaxid').value.trim();
+  const out = $('hostQryResult');
+  if (!acc && !sp && !tid) {
+    alert(t('bd.hostDlNeedSp', '请填写宿主物种拉丁名（如 Oryza sativa）或 Assembly Accession'));
+    return;
+  }
+  const body = { kind: 'genome', limit: 200, accession: acc || undefined,
+                 taxon: acc ? undefined : (sp || tid) };
+  const d = await dsSummaryQuery(out, body);
+  if (!d) return;
+  renderHostAsmTable(d, out);
+}
+
+function pickHostAcc(acc) {
+  $('hostDlAcc').value = acc;
+  if (typeof toast === 'function') {
+    toast(t('rd.qryPicked', '已填入 Assembly Accession') + ': ' + acc, '', {ttl: 4000});
+  }
+}
+
 async function dlHostGenome(btn) {
   const species = $('hostDlSpecies').value.trim();
-  const accession = ($('hostDlAcc') && $('hostDlAcc').value.trim()) || '';
+  let accession = ($('hostDlAcc') && $('hostDlAcc').value.trim()) || '';
   if (!species && !accession) {
     alert(t('bd.hostDlNeedSp', '请填写宿主物种拉丁名（如 Oryza sativa）或 Assembly Accession'));
     return;
   }
+  const source = $('hostDlSource').value || 'gget';
+  if (source === 'ncbi' && !accession) {
+    /* 先查后下闸门：同一物种常有多个组装版本，盲下会把多个版本合并进
+       同一个宿主库（互相污染）。单版本自动选用后继续；多版本渲染选用表
+       并拦下本次下载，用户选定 accession 后再点下载。 */
+    const out = $('hostQryResult') || $('hostDlResult');
+    const d = await dsSummaryQuery(out, { kind: 'genome', taxon: species,
+                                          limit: 200 });
+    if (!d) return;                        // 查询失败/无结果：out 里已有原因
+    if (d.returned > 1) {
+      renderHostAsmTable(d, out);
+      out.insertAdjacentHTML('afterbegin', '⚠ ' +
+        t('rd.hostDlGate', '该物种匹配到 {n} 个组装/版本，请从下方表格选用一个 accession 再下载').replace('{n}', d.returned) + '<br>');
+      return;
+    }
+    accession = d.rows[0].accession;
+    if ($('hostDlAcc')) $('hostDlAcc').value = accession;
+    if (typeof toast === 'function') {
+      toast(t('rd.hostDlAuto', '该物种仅 1 个组装，已自动选用') + ': ' + accession,
+            '', {ttl: 5000});
+    }
+  }
   const body = {
     species,
-    source: $('hostDlSource').value || 'gget',
+    source,
   };
   if (accession) body.accession = accession;
   if ($('hostDlChr') && $('hostDlChr').value.trim()) body.chromosomes = $('hostDlChr').value.trim();
@@ -1610,9 +1709,13 @@ async function toggleFiles(sample, btn) {
     if (!box.dataset.loaded) {
       const r = await fetch('/api/sample_files/' + encodeURIComponent(sample));
       const d = await r.json();
-      box.innerHTML = (d.files || []).map(f =>
-        `<a href="/api/samples/${encodeURIComponent(sample)}/${f.path}?dl=1" download>${esc(f.path)} (${esc(f.size)})</a>`
-      ).join('') || `<span class="hint">${t('rs.noFiles')}</span>`;
+      box.innerHTML = (d.files || []).map(f => {
+        const segs = String(f.path).split('/').map(encodeURIComponent).join('/');
+        const base = `/api/samples/${encodeURIComponent(sample)}/${segs}`;
+        const edit = /\.(svg|png)$/i.test(f.path)
+          ? ' ' + svgEditLink(base, '整理', 'mono') : '';
+        return `<a href="${base}?dl=1" download>${esc(f.path)} (${esc(f.size)})</a>${edit}`;
+      }).join('') || `<span class="hint">${t('rs.noFiles')}</span>`;
       box.dataset.loaded = '1';
     }
   } else {

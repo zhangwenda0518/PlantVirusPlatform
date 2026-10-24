@@ -64,7 +64,8 @@ def check(name, cond, detail=''):
 # 同步改这里，否则守卫会漏检（本条是"守卫标签 ≠ 守卫范围"的防线）。
 # ------------------------------------------------------------------
 CASES = [
-    ('00_prep/subsample.json', 'subsample', ['n_pairs']),
+    ('00_prep/subsample.json', 'subsample',
+     ['n_pairs', 'mode', 'seed', 'prop']),
     ('00_prep/fq2fa.json', 'fq2fa', ['skipped']),
     ('01_host_removal/stats.json', 'host',
      ['ok', 'host_ratio', 'total_pairs', 'kept_pairs', 'dropped_pairs',
@@ -273,7 +274,8 @@ def _write_json(path, obj):
 # A) 合成夹具：12 个阶段全部造已知值（含边界）
 # ------------------------------------------------------------------
 FIXTURE = {
-    '00_prep/subsample.json': {'n_pairs': 200000},
+    '00_prep/subsample.json': {'n_pairs': 200000, 'mode': 'random',
+                               'seed': 42, 'prop': 0},
     # skipped=False 必须被保留（旧写法 v != '' 会误丢 False 吗？本守卫锁住）
     '00_prep/fq2fa.json': {'skipped': False, 'files': ['a.fa.gz']},
     '01_host_removal/stats.json': {

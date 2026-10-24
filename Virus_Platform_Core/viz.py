@@ -17,12 +17,13 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'Arial']
-plt.rcParams['axes.unicode_minus'] = False
+from . import sci_palette as sp
+sp.apply_sci_style()   # 样式唯一真源（字体链含微软雅黑，中文标签正常）
 
 import plotly.graph_objects as go
 
 from .utils import check_path, safe_open, iter_fasta, verify_svg
+from .io_utils import read_dicts as _io_read_dicts
 
 # 中文字体 & 离线 plotly.min.js 复制
 _JS_COPIED = False
@@ -80,19 +81,7 @@ def _read_json(p):
 
 
 def _read_tsv(p):
-    rows = []
-    with safe_open(p) as f:
-        header = None
-        for line in f:
-            line = line.rstrip('\n')
-            if not line:
-                continue
-            parts = line.split('\t')
-            if header is None:
-                header = parts
-                continue
-            rows.append(dict(zip(header, parts)))
-    return rows
+    return _io_read_dicts(p, sep='\t', default=[])
 
 
 # ------------------------------------------------------------------
@@ -447,9 +436,8 @@ def fig_host_sunburst(host_rows, lineage_by_contig=None):
 
     # 配色（Krona 视觉口径）：第一分类环（realm）按 Okabe-Ito 分色，后代
     # 继承变浅；未定支灰色。全蓝单色会让多环不可读（2026-10-11 目检）。
-    import colorsys as _cs
-    _PAL = ('#E64B35', '#4DBBD5', '#00A087', '#3C5488', '#F39B7F',
-            '#8491B4', '#91D1C2', '#DC9EC9', '#7E6148', '#B09C85')
+    # 色板自 2026-10-12 起统一走 sci_palette（原 NPG 十色）。
+    _PAL = sp.OKABE_ITO
     # 按 family 分支配色（三个 contig 通常同 realm——按 realm 分色会全同色；
     # family 才是视觉上能区分分支的层级）。family 之前的环用中性灰蓝。
     fam_colors = {}
@@ -781,6 +769,19 @@ def build_report(sample_dir, logger=None):
         logger.log('报告缺少以下阶段产物，对应小节已省略（需要完整报告请先运行这些阶段）: '
                    + '、'.join(_missing_inputs), 'WARN')
 
+    # 流程漏斗三件套（MMPV 蓝本）：TSV + 梯形漏斗图 + 留存率图。
+    # 全缺产物返回 None → 整节省略；单图失败由 safe_plot 内部降级。
+    funnel = None
+    try:
+        from .stage_funnel import render as _funnel_render
+        funnel = _funnel_render(sample_dir, out_dir=out_dir, logger=logger)
+    except Exception as e:
+        if logger:
+            logger.log(f"流程漏斗生成失败（漏斗章节省略）: {e}", "WARN")
+
+    # 图表溯源清单：title 前缀 → 数据源文件（相对样本目录）
+    manifest = []
+
     figures = []          # (title, html_div or img_tag)
 
     # ②b 已知病毒识别与定量 → 桑基 + 旭日 + 柱状
@@ -1057,6 +1058,62 @@ def build_report(sample_dir, logger=None):
             '<table><tr><th>引物对</th><th>靶标</th><th>正向引物</th><th>Tm</th>'
             f'<th>反向引物</th><th>Tm</th><th>产物bp</th></tr>{trs}</table>'))
 
+    # ---- 流程漏斗章节：KPI 卡增补 + 双图置顶 + 明细表 + 溯源登记 ----
+    if funnel:
+        existing = {k for k, _ in cards}
+        for k, v, _note in funnel.get('kpi') or []:
+            if k not in existing:      # 引物等既有卡不重复
+                cards.append((k, v))
+        _fun_png = funnel.get('png')
+        if _fun_png and os.path.isfile(_fun_png):
+            figures.insert(0, ('流程漏斗（阶段产物层层衰减）',
+                f'<img style="max-width:100%" src="data:image/png;'
+                f'base64,{png_b64(_fun_png)}">'))
+        _ret_png = os.path.join(out_dir, 'stage_funnel_retention.png')
+        if os.path.isfile(_ret_png):
+            figures.insert(1, ('阶段留存率（相对输入）',
+                f'<img style="max-width:100%" src="data:image/png;'
+                f'base64,{png_b64(_ret_png)}">'))
+        _frows = [r for r in funnel.get('rows') or []
+                  if r.get('value') is not None]
+        if _frows:
+            _trs = ''.join(
+                f"<tr><td>{esc_html(r['stage_zh'])}</td>"
+                f"<td style='text-align:right'>{int(r['value']):,}</td>"
+                f"<td>{esc_html(r.get('note') or '')}</td>"
+                f"<td><code>{esc_html(r.get('src') or '')}</code></td></tr>"
+                for r in _frows)
+            tables.insert(0, ('流程漏斗明细',
+                '<table><tr><th>阶段</th><th>记录数</th><th>说明</th>'
+                f'<th>数据源</th></tr>{_trs}</table>'))
+        manifest.append({'title': '流程漏斗',
+                         'sources': ['stage_funnel.tsv',
+                                     'stage_funnel.png',
+                                     'stage_funnel_retention.png']})
+
+    # ---- 图表溯源：按标题前缀登记各章节数据源（相对样本目录） ----
+    _SRC_MAP = [
+        ('Reads 分类流向桑基图', ['01_host_removal/stats.json',
+                                  '02b_kvsuite/summary.json']),
+        ('病毒分类组成旭日图', ['02b_kvsuite/summary.json']),
+        ('病毒丰度柱状图', ['02b_kvsuite/summary.json']),
+        ('宿主预测桑基图', ['08_host_analysis/summary.json']),
+        ('宿主预测旭日图', ['08_host_analysis/summary.json']),
+        ('宿主类别汇总', ['08_host_analysis/summary.json']),
+        ('ORF 功能类别分布', ['04b_orf_annot/summary.json']),
+        ('ORF 病毒科分布', ['04b_orf_annot/summary.json']),
+        ('系统进化树', ['05_phylo/']),
+        ('SDT identity 矩阵', ['05_phylo/']),
+        ('病毒基因组图', ['09_genome_plots/summary.json']),
+        ('病毒 contig', ['03_assembly/contigs.filtered.fasta',
+                         '04_orf/pyrodigal.gff']),
+    ]
+    for _title, _fig in figures:
+        for _prefix, _srcs in _SRC_MAP:
+            if _title.startswith(_prefix):
+                manifest.append({'title': _title, 'sources': _srcs})
+                break
+
     import time as _t
     html = f"""<!DOCTYPE html>
 <html lang="zh"><head><meta charset="utf-8">
@@ -1089,6 +1146,16 @@ def build_report(sample_dir, logger=None):
     report = os.path.join(out_dir, 'report.html')
     with safe_open(report, 'wt') as f:
         f.write(html)
+
+    # 图表溯源清单（机读）：每张图/表的数据来源文件，与报告同目录
+    try:
+        with safe_open(os.path.join(out_dir, 'fig_manifest.json'), 'wt') as f:
+            json.dump({'sample': os.path.basename(sample_dir),
+                       'manifest': manifest}, f, ensure_ascii=False, indent=1)
+    except Exception as e:
+        if logger:
+            logger.log(f"fig_manifest.json 写入失败: {e}", "WARN")
+
     if logger:
         logger.log(f"报告生成: {report}")
     return report

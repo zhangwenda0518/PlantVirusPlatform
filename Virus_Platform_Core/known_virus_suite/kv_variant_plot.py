@@ -12,11 +12,13 @@ kv_variant_plot.py — 变异分析可视化段
   <out>/variant_summary.json             变异段汇总（n_success/n_skipped/results/skipped）
 
 输出:
-  <out>/variant_plots/{accession}_variant_map.{pdf,png}      位点分布棒棒糖图
-  <out>/variant_plots/{accession}_variant_effect.{pdf,png}   效应谱（Annotation × Impact）
-  <out>/variant_plots/{accession}_variant_af_dp.{pdf,png)   等位频率 vs 深度散点
-  <out>/variant_plots/{accession}_variant_overview.{pdf,png} 三联组合主图
-  <out>/variant_plots/variant_plot_manifest.json             产物清单
+  <out>/variant_plots/{accession}_variant_map.{png,svg,pdf}      位点分布棒棒糖图
+  <out>/variant_plots/{accession}_variant_effect.{png,svg,pdf}   效应谱（Annotation × Impact）
+  <out>/variant_plots/{accession}_variant_af_dp.{png,svg,pdf}   等位频率 vs 深度散点
+  <out>/variant_plots/{accession}_variant_overview.{png,svg,pdf} 三联组合主图
+  <out>/variant_plots/{accession}_snipit.{png,svg,pdf}           跨样本 SNP 分型图
+  <out>/variant_plots/{accession}_snipit.snps.csv            snipit 位点明细表
+  <out>/variant_plots/variant_plot_manifest.json             产物清单（含 snipit 段）
 
 设计约束（大王 SCI 图偏好）:
   - 白底；Okabe-Ito 色盲友好配色；300 dpi；pdf.fonttype 42
@@ -24,10 +26,15 @@ kv_variant_plot.py — 变异分析可视化段
   - 图例不遮挡数据
 """
 
+import importlib.util
 import json
 import math
 import os
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import matplotlib
@@ -42,47 +49,21 @@ try:
 except Exception:  # noqa: BLE001
     _adjust_text = None
 
-plt.rcParams.update({
-    'pdf.fonttype': 42,
-    'ps.fonttype': 42,
-    'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-    'font.family': 'sans-serif',
-    'axes.unicode_minus': False,
-    'figure.facecolor': 'white',
-    'savefig.facecolor': 'white',
-    'savefig.dpi': 300,
-    'axes.linewidth': 0.8,
-    'axes.edgecolor': '#333333',
-    'xtick.major.width': 0.8,
-    'ytick.major.width': 0.8,
-})
+from .. import sci_palette as sp
+sp.apply_sci_style()   # 样式唯一真源（此前本模块手抄 rcParams，必漏键）
 
-# Okabe-Ito 色盲友好配色（Wong 2011, Nature Methods）
-OKABE_ITO = {
-    'orange':  '#E69F00',
-    'sky':     '#56B4E9',
-    'green':   '#009E73',
-    'yellow':  '#F0E442',
-    'blue':    '#0072B2',
-    'vermillion': '#D55E00',
-    'purple':  '#CC79A7',
-    'black':   '#000000',
-    'grey':    '#999999',
-}
-
-# SnpEff Impact 四级 → Okabe-Ito
-IMPACT_COLOR = {
-    'HIGH':     OKABE_ITO['vermillion'],
-    'MODERATE': OKABE_ITO['orange'],
-    'LOW':      OKABE_ITO['sky'],
-    'MODIFIER': OKABE_ITO['grey'],
-}
+# 色板引用（Okabe-Ito 唯一真源；本模块历史名保留为别名）
+OKABE_ITO = sp.OKABE
+IMPACT_COLOR = sp.IMPACT_COLOR
 IMPACT_ORDER = ['HIGH', 'MODERATE', 'LOW', 'MODIFIER']
 
 # 每张变异图最多标注的氨基酸标签数（防止极端样本糊成一片）
 MAX_AA_LABELS = 40
 # 氨基酸标签默认显示的 AF 门槛（与 246 参考脚本一致的 50%）
 AA_LABEL_AF_CUTOFF = 0.50
+
+# 默认出图格式：PNG 供网页/汇报，SVG 供 svguest 二次排版，PDF 供期刊投稿
+FIG_FORMATS = ('png', 'svg', 'pdf')
 
 
 def _is_nonsynonymous(row: dict) -> bool:
@@ -282,14 +263,20 @@ def _style_axis(ax, hide_top_right=True):
     ax.tick_params(labelsize=8, length=3)
 
 
-def _save(fig, out_dir: Path, stem: str, formats=('png', 'pdf')) -> list[str]:
+def _save(fig, out_dir: Path, stem: str, formats=FIG_FORMATS) -> list[str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     made = []
     try:
         for ext in formats:
             p = out_dir / f'{stem}.{ext}'
-            fig.savefig(p, format=ext, dpi=300, bbox_inches='tight',
-                        facecolor='white')
+            try:
+                fig.savefig(p, format=ext, dpi=300, bbox_inches='tight',
+                            facecolor='white')
+            except Exception:
+                # SVG 遇到不支持的 artist 时跳过，不阻断 PNG/PDF 主产物
+                if ext != 'svg':
+                    raise
+                continue
             made.append(str(p))
     finally:
         # 多个参考逐一出图时，savefig 抛异常不 close 会累积泄漏 figure
@@ -299,7 +286,7 @@ def _save(fig, out_dir: Path, stem: str, formats=('png', 'pdf')) -> list[str]:
 
 # ── 图一：位点分布棒棒糖图 ──────────────────────────────────────
 def plot_variant_map(variants, ann_rows, genes, accession, genome_len,
-                     out_dir, formats=('png', 'pdf'),
+                     out_dir, formats=FIG_FORMATS,
                      nonsyn_only=True, label_af_cutoff=AA_LABEL_AF_CUTOFF,
                      max_aa_labels=MAX_AA_LABELS):
     """沿参考坐标画变异位点；柱高=AF，按 Impact 着色，下方画基因轨道。
@@ -397,7 +384,10 @@ def plot_variant_map(variants, ann_rows, genes, accession, genome_len,
     ax.spines['right'].set_visible(False)
     _style_axis(ax, hide_top_right=False)
     title = f'{accession} — variant landscape'
-    ax.set_title(title, fontsize=10.5, fontweight='bold', pad=8)
+    # 轴上方三个文字带自下而上：统计行(1.01) → 图例(1.17) → 标题(y=1.30)。
+    # 原版标题用 pad=8 会撞进图例带、统计行撞进标题带
+    # （check_figures 体检实抓 108/160/69 px² 三对重叠）。
+    ax.set_title(title, fontsize=10.5, fontweight='bold', y=1.30, pad=0)
 
     # 标签防重叠（adjustText 可用时）
     if texts and _adjust_text is not None:
@@ -420,10 +410,10 @@ def plot_variant_map(variants, ann_rows, genes, accession, genome_len,
     stat = f'n = {n_total} nonsynonymous variants   HIGH {n_high}   MODERATE {n_mod}'
     if not nonsyn_only:
         stat = f'n = {n_total} variants   HIGH {n_high}   MODERATE {n_mod}'
-    ax.text(0.0, 1.005, stat, transform=ax.transAxes, fontsize=8,
+    ax.text(0.0, 1.01, stat, transform=ax.transAxes, fontsize=8,
             color='#444444', va='bottom')
 
-    # 图例（右上角外置，不遮挡）
+    # 图例（右上角外置，带位在统计行之上、标题之下，不遮挡）
     handles = [Line2D([], [], marker='o', color=c, linestyle='none',
                       ms=5, markeredgecolor='white', markeredgewidth=0.4,
                       label=k) for k, c in IMPACT_COLOR.items()]
@@ -431,7 +421,7 @@ def plot_variant_map(variants, ann_rows, genes, accession, genome_len,
                           linestyle='none', ms=4, label='Indel'))
     ax.legend(handles=handles, fontsize=7.5, frameon=False,
               loc='upper right', ncol=len(handles), handletextpad=0.4,
-              columnspacing=1.0, bbox_to_anchor=(1.0, 1.16))
+              columnspacing=1.0, bbox_to_anchor=(1.0, 1.17))
 
     # 基因轨道
     if axg is not None:
@@ -444,7 +434,9 @@ def plot_variant_map(variants, ann_rows, genes, accession, genome_len,
 
 def _draw_gene_track(ax, genes, genome_len):
     """基因轨道：横向矩形 + 链方向箭头，Okabe-Ito 循环配色。"""
-    ax.set_ylim(-0.5, len(genes) - 0.5 if len(genes) > 1 else 0.5)
+    # 顶部留 0.75 给最高一条基因的名字（i+0.30 起 6.5pt 文字，
+    # 原版 ylim 顶到 len-0.5 会把最上方基因名裁掉一半——目检实抓）
+    ax.set_ylim(-0.5, len(genes) + 0.25 if len(genes) > 1 else 1.25)
     ax.set_yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -465,7 +457,7 @@ def _draw_gene_track(ax, genes, genome_len):
 
 
 # ── 图二：效应谱 ───────────────────────────────────────────────────
-def plot_effect_spectrum(ann_rows, accession, out_dir, formats=('png', 'pdf')):
+def plot_effect_spectrum(ann_rows, accession, out_dir, formats=FIG_FORMATS):
     """Annotation 类型 × Impact 堆叠条形图。"""
     if not ann_rows:
         return []
@@ -514,7 +506,7 @@ def plot_effect_spectrum(ann_rows, accession, out_dir, formats=('png', 'pdf')):
 
 
 # ── 图三：等位频率 vs 深度 ─────────────────────────────────────────
-def plot_af_dp(variants, ann_rows, accession, out_dir, formats=('png', 'pdf')):
+def plot_af_dp(variants, ann_rows, accession, out_dir, formats=FIG_FORMATS):
     """AF vs DP 散点；颜色=Impact，大小=QUAL，虚线标 min-freq 阈值。"""
     pts = [v for v in variants if v['AF'] is not None and v['DP']]
     if not pts:
@@ -569,7 +561,7 @@ def plot_af_dp(variants, ann_rows, accession, out_dir, formats=('png', 'pdf')):
 
 # ── 组合主图（三面板）─────────────────────────────────────────────
 def plot_overview(variants, ann_rows, genes, accession, genome_len,
-                  out_dir, formats=('png', 'pdf')):
+                  out_dir, formats=FIG_FORMATS):
     """三面板组合主图：上=位点分布，左下=效应谱，右下=AF/DP。"""
     if not variants and not ann_rows:
         return []
@@ -702,19 +694,312 @@ def _panel_af_dp(ax, variants, ann_rows, accession):
     ax.set_axisbelow(True)
 
 
+# ── 跨样本 SNP 分型图（snipit 封装）───────────────────────────────
+# snipit（GPL-3.0，pip install snipit，Bioinformatics 2024 btae510）把比对
+# 序列相对参考的 SNP 画成「一行一样本」的分型图，回答现有三张图不覆盖的
+# 问题：同一种病毒的 N 个样本，谁携带哪些共享/私有 SNP。
+# 输入不重新比对——多样本 VCF 本身就在参考坐标系里（BcftoolsCaller 把全部
+# BAM 一起 calling），按基因型把 REF/ALT 套回参考序列即得伪比对，snipit
+# 只负责画。snipit 未安装时静默降级（与 adjustText 同一容错口径）。
+SNIPIT_MIN_SAMPLES = 2
+# vcf/ 里的 caller 中间产物（all.variants.raw/soft/filtered、demo 入口
+# VCF 等）不构成参考，靠参考序列查找天然排除之外再按名字显式跳过，
+# 避免 manifest 的 skipped 里堆噪音
+_SNIPIT_VCF_SKIP = re.compile(r'^(all|demo)\.variants')
+
+
+def _find_snipit_runner() -> list[str] | None:
+    """snipit 可用性探测。以 `python -m snipit.command` 调用（console
+    script 装在用户 Scripts 目录、不一定在 PATH 上）；未安装返回 None。"""
+    if importlib.util.find_spec('snipit') is None:
+        return None
+    return [sys.executable, '-m', 'snipit.command']
+
+
+def _read_vcf_genotypes(vcf_path: Path) -> tuple[list[str], list[dict]]:
+    """读多样本 VCF → (样本名列表, 行列表)。
+
+    行: {'CHROM', 'POS', 'REF', 'ALTS', 'GTS'}；GTS 与样本名对齐
+    （'0/1'、'1|2'、'./.'）。sites-only VCF 返回空样本列表。
+    """
+    samples: list[str] = []
+    rows: list[dict] = []
+    with open(vcf_path, encoding='utf-8', errors='replace') as fh:
+        for line in fh:
+            if line.startswith('##'):
+                continue
+            if line.startswith('#CHROM'):
+                samples = line.rstrip('\n').split('\t')[9:]
+                continue
+            if not line.strip():
+                continue
+            f = line.rstrip('\n').split('\t')
+            if len(f) < 8:
+                continue
+            gts: list = [None] * len(samples)
+            if len(f) > 9 and len(samples) == len(f) - 9:
+                fmt = f[8].split(':')
+                gi = fmt.index('GT') if 'GT' in fmt else -1
+                if gi >= 0:
+                    for si, sc in enumerate(f[9:]):
+                        parts = sc.split(':')
+                        gts[si] = parts[gi] if gi < len(parts) else None
+            try:
+                pos = int(f[1])
+            except ValueError:
+                continue
+            rows.append({'CHROM': f[0], 'POS': pos, 'REF': f[3].upper(),
+                         'ALTS': [a.upper() for a in f[4].split(',')],
+                         'GTS': gts})
+    return samples, rows
+
+
+def _load_ref_sequence(acc: str, out_dir: Path, gbk_dirs: list[Path]):
+    """取参考序列 (seq_id, seq)：virus-fasta/ 优先（header 与 accession
+    精确/裸版本号双向匹配，同 kv_variant.export_ref_fastas 的宽松口径），
+    GenBank 兜底（SnpEff 建库必有 .gb）。都取不到返回 None。"""
+    try:
+        from Bio import SeqIO
+    except ImportError:
+        return None
+    bare = str(acc).split('.')[0]
+    vfa = out_dir / 'virus-fasta'
+    if vfa.is_dir():
+        for p in sorted(vfa.glob('ref_*/*.ref.fasta')):
+            try:
+                rec = next(SeqIO.parse(str(p), 'fasta'))
+            except (StopIteration, ValueError, OSError):
+                continue
+            if rec.id == str(acc) or rec.id.split('.')[0] == bare:
+                return rec.id, str(rec.seq).upper()
+    for d in gbk_dirs:
+        if not d.is_dir():
+            continue
+        for cand in (d / f'{acc}.gb', d / f'{acc}.gbk',
+                     d / f'{bare}.gb', d / f'{bare}.gbk'):
+            if not cand.is_file():
+                continue
+            try:
+                rec = next(SeqIO.parse(str(cand), 'genbank'))
+                return (rec.id or str(acc)), str(rec.seq).upper()
+            except (StopIteration, ValueError, OSError):
+                break
+    return None
+
+
+def build_snipit_alignment(vcf_path: Path, ref_id: str, ref_seq: str,
+                           out_aln: Path, chrom: str | None = None) -> dict:
+    """从多样本 VCF 重建参考坐标伪比对（参考 + 各样本基因型套回）。
+
+    SNV/MNP 直接套换；纯缺失型（len(ALT)<len(REF)）套换后以 '-' 补齐
+    REF 跨度，snipit 读作 deletion；行内任一等位含插入（len(ALT)>
+    len(REF)）时整行跳过——定长伪比对表达不了插入（会错位），这些位点
+    保留在 VCF 与其余图件里。无基因型（./.）的样本该位点记参考碱基：
+    caller 无覆盖时等位本就未知，与共识序列口径一致。
+    chrom: 只套该染色体的行（缺省 None 不筛，调用方传 ref_id 更稳）。
+    返回统计 dict；样本数/可套位点数为 0 时调用方跳过。
+    """
+    samples, rows = _read_vcf_genotypes(vcf_path)
+    stats = {'n_samples': len(samples), 'n_rows': len(rows), 'n_sites': 0,
+             'n_rows_skipped_insertion': 0, 'samples': samples}
+    if not samples:
+        return stats
+    ref_bare = str(ref_id).split('.')[0]
+    seqs = {s: list(ref_seq) for s in samples}
+    for r in rows:
+        if chrom and not (r['CHROM'] == str(ref_id)
+                          or r['CHROM'].split('.')[0] == ref_bare):
+            continue
+        span = len(r['REF'])
+        end = r['POS'] - 1 + span
+        if end > len(ref_seq):
+            continue
+        if any(len(a) > span for a in r['ALTS']):
+            stats['n_rows_skipped_insertion'] += 1
+            continue
+        applied = False
+        for si, s in enumerate(samples):
+            gt = r['GTS'][si] if si < len(r['GTS']) else None
+            if not gt:
+                continue
+            for tok in str(gt).replace('|', '/').split('/'):
+                if tok in ('.', '0', ''):
+                    continue
+                try:
+                    k = int(tok)
+                except ValueError:
+                    continue
+                if not 1 <= k <= len(r['ALTS']):
+                    continue
+                alt = r['ALTS'][k - 1]
+                # 缺失型：套换 ALT 后用 '-' 补齐跨度（snipit 读作 deletion）
+                seqs[s][r['POS'] - 1:end] = list(alt) + ['-'] * (span - len(alt))
+                applied = True
+                break   # 一个样本一行只套第一个非参考等位
+        if applied:
+            stats['n_sites'] += 1
+
+    out_aln.parent.mkdir(parents=True, exist_ok=True)
+
+    # bcftools 多样本 calling 无 @RG/SM 时用 BAM 完整路径当样本列名，
+    # 直接进图会是一长串路径——清洗成裸文件名（去目录、去 .bam 后缀），
+    # 撞名时加序号兜底
+    display: dict[str, str] = {}
+    used: set[str] = set()
+    for s in samples:
+        name = Path(str(s)).name
+        for suf in ('.sorted.bam', '.bam'):
+            if name.endswith(suf):
+                name = name[:-len(suf)]
+                break
+        base, k = name, 2
+        while name in used:
+            name = f'{base}_{k}'
+            k += 1
+        used.add(name)
+        display[s] = name
+
+    def _wrap(s):
+        return '\n'.join(s[i:i + 80] for i in range(0, len(s), 80))
+
+    with open(out_aln, 'w', encoding='utf-8') as fh:
+        fh.write(f'>{ref_id}\n{_wrap(ref_seq)}\n')
+        for s in samples:
+            hdr = ''.join(c if not c.isspace() else '_' for c in display[s])
+            fh.write(f'>{hdr}\n{_wrap("".join(seqs[s]))}\n')
+    stats['samples'] = [display[s] for s in samples]
+    return stats
+
+
+def _snipit_one(acc, vcf_path, out_dir, gbk_dirs, plot_dir, runner,
+                min_samples, formats, res, _log):
+    """单参考的 snipit 出图（异常向上抛，由 run_snipit_plots 统一记 skipped）。"""
+    samples, _ = _read_vcf_genotypes(vcf_path)
+    if len(samples) < min_samples:
+        reason = ('VCF 无样本列（sites-only）' if not samples
+                  else f'样本数 {len(samples)} < {min_samples}（单样本 '
+                       f'variant_map 已覆盖）')
+        _log('info', f'  snipit {acc}: 跳过（{reason}）')
+        res['skipped'].append({'accession': acc, 'reason': reason})
+        return
+    ref = _load_ref_sequence(acc, out_dir, gbk_dirs)
+    if ref is None:
+        _log('warning', f'  snipit {acc}: 参考序列不可得'
+                        f'（virus-fasta/ 与 GenBank 均缺），跳过')
+        res['skipped'].append({'accession': acc, 'reason': '参考序列不可得'})
+        return
+    ref_id, ref_seq = ref
+    stem = f'{safe_name(acc)}_snipit'
+    made = []
+    # snipit 的 snps.csv 是固定文件名（snp_functions.write_out_snps 硬编码
+    # output_dir/snps.csv），必须落暂存目录再改名归位，避免条目间互相覆盖
+    with tempfile.TemporaryDirectory(prefix='snipit_') as td:
+        aln = Path(td) / 'aln.fasta'
+        st = build_snipit_alignment(vcf_path, ref_id, ref_seq, aln, chrom=ref_id)
+        if st['n_sites'] <= 0:
+            _log('info', f'  snipit {acc}: 无可套回变异，跳过')
+            res['skipped'].append({'accession': acc, 'reason': '无可套回变异'})
+            return
+        for i, ext in enumerate(formats):
+            cmd = runner + [str(aln), '-r', ref_id, '-o', stem,
+                            '-d', td, '-f', ext, '-s',
+                            '--sort-by-mutation-number', '--show-indels',
+                            '--solid-background']
+            p = subprocess.run(cmd, capture_output=True, text=True,
+                               encoding='utf-8', errors='replace')
+            src = Path(td) / f'{stem}.{ext}'
+            if p.returncode != 0 or not src.is_file():
+                tail = ((p.stderr or p.stdout or '').strip().splitlines()
+                        or [''])[-3:]
+                raise RuntimeError(
+                    f'snipit -f {ext} 失败(rc={p.returncode}): '
+                    + ' | '.join(tail))
+            plot_dir.mkdir(parents=True, exist_ok=True)
+            dst = plot_dir / f'{stem}.{ext}'
+            shutil.move(str(src), str(dst))
+            made.append(dst)
+            if i == 0:
+                snps_src = Path(td) / 'snps.csv'
+                if snps_src.is_file():
+                    dst_csv = plot_dir / f'{stem}.snps.csv'
+                    shutil.move(str(snps_src), str(dst_csv))
+                    made.append(dst_csv)
+    for p in made:
+        res['plots'].append(str(p))
+    res['accessions'][acc] = {
+        'n_samples': st['n_samples'], 'n_snps': st['n_sites'],
+        'n_rows_skipped_insertion': st['n_rows_skipped_insertion'],
+    }
+    _log('info', f'  snipit {acc}: {st["n_samples"]} 样本 × '
+                 f'{st["n_sites"]} 位点 → {len(made)} 个产物'
+                 + (f'（{st["n_rows_skipped_insertion"]} 行含插入未套回）'
+                    if st['n_rows_skipped_insertion'] else ''))
+
+
+def run_snipit_plots(out_dir, logger=None, accession_filter=None,
+                     gbk_dirs=None, min_samples=SNIPIT_MIN_SAMPLES,
+                     formats=FIG_FORMATS) -> dict:
+    """跨样本 SNP 分型图（snipit）编排入口。
+
+    为 <out>/vcf/*.vcf 中样本列 ≥ min_samples 的参考出图；snipit 未安装、
+    参考序列不可得、sites-only VCF、样本数不足均按条跳过，不抛异常。
+    产物: variant_plots/{gid}_snipit.{png,pdf} + {gid}_snipit.snps.csv
+    返回 {'available', 'n_accessions', 'plots', 'accessions', 'skipped'}
+    """
+    out_dir = Path(out_dir)
+    vcf_dir = out_dir / 'vcf'
+    plot_dir = out_dir / 'variant_plots'
+    res = {'available': True, 'n_accessions': 0, 'plots': [],
+           'accessions': {}, 'skipped': []}
+
+    def _log(level, msg):
+        if logger is not None:
+            getattr(logger, level, logger.info)(msg)
+
+    runner = _find_snipit_runner()
+    if runner is None:
+        _log('info', 'snipit 未安装，跳过跨样本 SNP 分型图'
+                     '（pip install snipit 启用）')
+        res['available'] = False
+        return res
+    if not vcf_dir.is_dir():
+        res['available'] = False
+        return res
+
+    gbk_dirs = [Path(d) for d in (gbk_dirs or [])]
+    accs = sorted(p.stem for p in vcf_dir.glob('*.vcf')
+                  if not _SNIPIT_VCF_SKIP.match(p.stem))
+    if accession_filter:
+        keep = set(accession_filter)
+        accs = [a for a in accs if a in keep]
+
+    for acc in accs:
+        try:
+            _snipit_one(acc, vcf_dir / f'{acc}.vcf', out_dir, gbk_dirs,
+                        plot_dir, runner, min_samples, formats, res, _log)
+        except Exception as e:  # noqa: BLE001
+            _log('warning', f'  snipit {acc}: 失败 {e}')
+            res['skipped'].append({'accession': acc, 'reason': str(e)})
+    res['n_accessions'] = len(res['accessions'])
+    return res
+
+
 # ── 编排入口 ───────────────────────────────────────────────────────
-def run_variant_plots(out_dir, logger=None, formats=('png', 'pdf'),
+def run_variant_plots(out_dir, logger=None, formats=FIG_FORMATS,
                       accession_filter=None, nonsyn_only=True,
                       label_af_cutoff=AA_LABEL_AF_CUTOFF,
-                      max_aa_labels=MAX_AA_LABELS, gbk_dir=None) -> dict:
+                      max_aa_labels=MAX_AA_LABELS, gbk_dir=None,
+                      run_snipit=True) -> dict:
     """为 out_dir 下所有有变异+注释的参考出图。
 
     nonsyn_only: 变异图只画非同义突变（默认）
     label_af_cutoff: 标注氨基酸变化的 AF 下限（默认 0.50）
     max_aa_labels: 单张图标签数量上限（默认 40）
     gbk_dir: GenBank 目录；缺省时依次找 <out>/gbk_files、<out>/virus-annotations
+    run_snipit: 追加跨样本 SNP 分型图（snipit，未安装时静默跳过）
 
-    返回 {'n_accessions': n, 'plots': [...相对路径...], 'skipped': [...]}
+    返回 {'n_accessions': n, 'plots': [...相对路径...], 'skipped': [...],
+          'snipit': run_snipit_plots 的返回（run_snipit=False 时为空 dict）}
     """
     out_dir = Path(out_dir)
     vcf_dir = out_dir / 'vcf'
@@ -833,6 +1118,24 @@ def run_variant_plots(out_dir, logger=None, formats=('png', 'pdf'),
         'plots': sorted(all_plots),
         'skipped': skipped,
     }
+
+    # 跨样本 SNP 分型图（snipit）：样本列 ≥2 的参考逐条出图，独立于上面的
+    # 注释驱动循环（snipit 不需要 SnpEff 注释，只要 VCF 带样本列 + 参考序列）
+    if run_snipit:
+        try:
+            snipit_res = run_snipit_plots(out_dir, logger,
+                                          accession_filter=accession_filter,
+                                          gbk_dirs=gbk_dirs)
+            if snipit_res.get('n_accessions'):
+                manifest['n_snipit_plots'] = len(snipit_res.get('plots', []))
+                _log('info', f'跨样本分型图（snipit）：'
+                             f'{snipit_res["n_accessions"]} 条参考 → '
+                             f'{len(snipit_res.get("plots", []))} 个产物')
+        except Exception as e:  # noqa: BLE001
+            _log('warning', f'跨样本分型图（snipit）失败（不影响其余图件）: {e}')
+            snipit_res = {'available': True, 'error': str(e)}
+        manifest['snipit'] = snipit_res
+
     plot_dir.mkdir(parents=True, exist_ok=True)
     (plot_dir / 'variant_plot_manifest.json').write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')

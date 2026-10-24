@@ -72,8 +72,18 @@
         <label class="chk"><input type="checkbox" id="subsample_on">
           <span data-i18n="pp.subOn"> 创建时截取子样本（快速验证）</span></label>
         <div id="sub_row" style="display:none">
+          <label data-i18n="pp.subMode">子采样模式</label>
+          <select id="sub_mode">
+            <option value="prefix" data-i18n="pp.subModePrefix">前 N 对（快速冒烟）</option>
+            <option value="random" data-i18n="pp.subModeRandom">随机抽 N 对（等概率，seed 可复现）</option>
+            <option value="proportion" data-i18n="pp.subModeProp">按比例随机抽（条数精确）</option>
+          </select>
           <label data-i18n="pp.subPairs">子采样（对）</label>
           <input id="subsample" type="number" value="100000">
+          <div id="sub_prop_row" style="display:none">
+            <label data-i18n="pp.subProp">抽样比例（0~1，如 0.5 = 50%；仅比例模式生效）</label>
+            <input id="sub_prop" type="number" step="0.01" min="0.001" max="1" value="0.5">
+          </div>
         </div>
         <div style="margin-top:10px">
           <button class="btn primary" onclick="scCreate(this)" data-i18n="pp.create">创建样品 →</button>
@@ -115,6 +125,10 @@ function val(id) { return ($(id)?.value || '').trim(); }
 
 $('subsample_on')?.addEventListener('change', () => {
   $('sub_row').style.display = $('subsample_on').checked ? '' : 'none';
+});
+/* 比例模式只用"比例"输入，条数输入仅 prefix/random 有意义 */
+$('sub_mode')?.addEventListener('change', () => {
+  $('sub_prop_row').style.display = $('sub_mode').value === 'proportion' ? '' : 'none';
 });
 
 /* ---- 从文件夹批量导入：扫描 → 预览 → 一键创建 ---- */
@@ -219,6 +233,9 @@ async function scCreate(btn) {
     sample: val('sample'), r1: val('r1'), r2: val('r2') || null,
     project: val('s_project') || null,
     subsample: $('subsample_on')?.checked ? (+val('subsample') || 100000) : 0,
+    subsample_mode: $('sub_mode')?.value || 'prefix',
+    subsample_prop: ($('subsample_on')?.checked && $('sub_mode')?.value === 'proportion')
+      ? (+val('sub_prop') || 0.5) : 0,
   };
   const res = await apiCreateSample(body);
   if (!res.ok) {

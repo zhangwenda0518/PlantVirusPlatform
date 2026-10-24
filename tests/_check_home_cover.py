@@ -6,8 +6,9 @@
 判据（任一不满足就打印 FAIL，退出码 1）:
   1. 首页 200 且 .hero.cover 存在；
   2. 封面已无插图（.cover-art 不应再存在，主视觉位图已按需求删除）；
-  3. 四张叙事卡都有非空文案（i18n 键漏配时这里会空）；
-  4. 封面文字没溢出容器（右边界不出视口，横向无滚动条）。
+  3. 封面文字非空（i18n 键漏配时这里会空）；
+  4. 已按需求移除四张叙事卡与平台架构总览（.cover-card / .arch 不应存在）；
+  5. 封面文字没溢出容器（右边界不出视口，横向无滚动条）。
 """
 import io
 import sys
@@ -48,13 +49,14 @@ def main() -> int:
             # 封面插图已按需求删除：留着说明 home.html 或 CSS 没清干净
             if pg.locator('.cover-art').count():
                 bad.append('封面仍有 .cover-art 插图（应已删除）')
-            cards = pg.locator('.cover-card')
-            if cards.count() != 4:
-                bad.append(f'叙事卡应为 4 张，实际 {cards.count()}')
-            for i in range(cards.count()):
-                txt = (cards.nth(i).inner_text() or '').strip()
-                if len(txt) < 12:
-                    bad.append(f'叙事卡 {i + 1} 文案过短/为空: {txt!r}')
+            lead = (pg.locator('.hero.cover').inner_text() or '').strip()
+            if len(lead) < 12:
+                bad.append(f'封面文案过短/为空: {lead!r}')
+            # 2026-10-23 按需求移除：静态叙事卡与重复的架构总览
+            if pg.locator('.cover-card').count():
+                bad.append('仍有 .cover-card 叙事卡（应已移除）')
+            if pg.locator('.arch').count():
+                bad.append('仍有 .arch 架构总览（应已移除）')
 
             # 溢出检查：封面的实际右边界不能越过视口
             box = pg.locator('.hero.cover').bounding_box()
@@ -68,7 +70,7 @@ def main() -> int:
             pg.screenshot(path=str(out), clip={'x': 0, 'y': 0,
                                                'width': pg.viewport_size['width'],
                                                'height': 760})
-            print(f'  截图 {out.name}  cards={cards.count()}')
+            print(f'  截图 {out.name}')
             ctx.close()
         b.close()
 

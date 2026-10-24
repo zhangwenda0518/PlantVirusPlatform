@@ -75,17 +75,66 @@ async function psRun(btn) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    psPollLog(d.task);
-    watchTaskBtn(d.task, btn, '⏳ 预筛中…', async function (snap) {
-      const log = document.getElementById('psLog');
-      if (snap && snap.status === 'done') {
-        log.textContent += '\n' + t('ps.done', '✓ 预筛完成') + '\n';
-        await psRefresh();
-      } else if (snap) {
-        log.textContent += '\n✘ ' + (snap.error || snap.status) + '\n';
-      }
-    }, { cancelable: true });
+    psSaveName();
+    psAttachTask(d.task);
   } catch (e) { err.textContent = e.message; }
+}
+
+/* 项目名持久化：跳页回来后输入框不再为空，「读取已有结果」直接可用 */
+function psSaveName() {
+  const name = val('psName').trim();
+  if (!name) return;
+  try { localStorage.setItem('ps.lastName', name); } catch (e) { /* 隐私模式等 */ }
+}
+
+/* 看护一个预筛任务：日志跟随 + 按钮锁定 + 终态后自动读结果。
+   首次提交与切页回来恢复共用这一条路径。 */
+function psAttachTask(tid) {
+  psPollLog(tid);
+  watchTaskBtn(tid, document.getElementById('psRunBtn'), '⏳ 预筛中…',
+    psTaskEnd, { cancelable: true });
+}
+
+function psTaskEnd(snap) {
+  const log = document.getElementById('psLog');
+  const hint = document.getElementById('psHint');
+  if (hint) hint.textContent = '';
+  if (snap && snap.status === 'done') {
+    log.textContent += '\n' + t('ps.done', '✓ 预筛完成') + '\n';
+    psRefresh(true);
+  } else if (snap) {
+    log.textContent += '\n✘ ' + (snap.error || snap.status) + '\n';
+  }
+}
+
+/* ── 切页回来重挂运行中任务 ──
+ * 预筛在 TaskManager 线程里跑，与本页生命周期无关；但日志轮询与按钮看护
+ * 都是页面内存态，跳走即失（这是「点了运行去别页、回来找不到任务」的原因）。
+ * 页面加载时先问后端本页是否还有任务在跑：
+ *   有 → 回填项目名、重挂日志与按钮看护，完成后自动读取结果；
+ *   没有 → 回填上次的项目名，已有结果则静默加载（回来即见结果）。
+ */
+async function psResume() {
+  const nameInput = document.getElementById('psName');
+  let lastName = '';
+  try { lastName = localStorage.getItem('ps.lastName') || ''; } catch (e) { /* ignore */ }
+  try {
+    const d = await jfetch('/api/prescreen/running');
+    const t0 = (d.tasks || [])[0];          // 最新一条（列表新→旧序）
+    if (t0) {
+      nameInput.value = t0.name;
+      psSaveName();
+      const hint = document.getElementById('psHint');
+      if (hint) hint.textContent = t('ps.resumed',
+        '已恢复运行中的预筛任务，完成后自动读取结果；离开本页不影响运行，也可去任务中心查看');
+      psAttachTask(t0.task);
+      return;
+    }
+  } catch (e) { /* 恢复失败不影响正常使用 */ }
+  if (lastName) {
+    nameInput.value = lastName;
+    psRefresh(true);
+  }
 }
 
 function psPollLog(tid) {
@@ -116,17 +165,19 @@ function psPollLog(tid) {
   }, 2000);
 }
 
-/* ── 读结果 ── */
-async function psRefresh() {
+/* ── 读结果 ──
+   quiet=true（切页回来自动恢复时）不弹「还没有结果」的提示，只隐藏结果卡 */
+async function psRefresh(quiet) {
   const name = val('psName').trim();
   if (!name) { alert(t('ps.needName2', '请先填写项目名')); return; }
+  psSaveName();
   const err = document.getElementById('psErr');
   err.textContent = '';
   try {
     const d = await jfetch('/api/prescreen/result?name=' + encodeURIComponent(name));
     if (!d.exists) {
       document.getElementById('psResultCard').style.display = 'none';
-      err.textContent = t('ps.noResult', '该项目还没有预筛结果，请先运行一次');
+      if (!quiet) err.textContent = t('ps.noResult', '该项目还没有预筛结果，请先运行一次');
       return;
     }
     PS.data = d;
@@ -676,4 +727,5 @@ function psVirFam(lv) {
 (function () {
   psSrcChange();
   psLoadProjects();
+  psResume();          // 切页回来：重挂运行中任务 / 回填上次项目名并读结果
 })();

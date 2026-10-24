@@ -1,0 +1,32 @@
+{
+ "n_success": 2,
+ "n_skipped": 1,
+ "results": [
+  {
+   "accession": "NC_076132.1",
+   "genome": "NC_076132",
+   "chrom": "NC_076132.1",
+   "vcf": "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\vcf\\NC_076132.vcf",
+   "n_variants": 43,
+   "n_coding_ann": 39,
+   "ann_vcf": "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\annotated\\NC_076132.ann.vcf",
+   "ann_tsv": "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\annotated\\NC_076132.ann.tsv"
+  },
+  {
+   "accession": "NC_077008.1",
+   "genome": "NC_077008",
+   "chrom": "NC_077008.1",
+   "vcf": "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\vcf\\NC_077008.vcf",
+   "n_variants": 43,
+   "n_coding_ann": 53,
+   "ann_vcf": "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\annotated\\NC_077008.ann.vcf",
+   "ann_tsv": "D:\\桌面\\植物病毒分析平台\\examples\\results\\variant\\kvsuite\\annotated\\NC_077008.ann.tsv"
+  }
+ ],
+ "skipped": [
+  {
+   "genome": "NC_077216",
+   "reason": "SnpEff build NC_077216 失败(rc=4294967295): ERROR: Database check failed."
+  }
+ ]
+}

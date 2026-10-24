@@ -29,6 +29,7 @@ import re
 from Virus_Platform_Core.phylodyn_kit import (
     read_text, date_to_decimal, validate_date_str,
 )
+from Virus_Platform_Core.sci_palette import seq_colors, OKABE
 
 # ================================================================
 # BEAST 注释 newick / NEXUS 解析
@@ -951,15 +952,17 @@ def treetime_rtt(aln_path, tree_path, meta_path, out_dir,
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(9, 5.5))
         regs = sorted({p['region'] for p in points if p['region']} or {'(全部)'})
-        cmap = plt.get_cmap('tab20', max(len(regs), 1))
+        # mpl≥3.9 已移除 plt.get_cmap；且 tab20 与全站 Okabe-Ito 口径不符，
+        # 统一改走 sci_palette 循环取色（2026-10-12）
+        reg_colors = seq_colors(len(regs))
         for i, rg in enumerate(regs):
             seg = [p for p in points if (p['region'] or '(全部)') == rg]
             ax.scatter([p['date'] for p in seg], [p['dist'] for p in seg],
-                       s=26, color=cmap(i), label=rg, alpha=0.85)
+                       s=26, color=reg_colors[i], label=rg, alpha=0.85)
         slope = reg.slope
         inter = reg.intercept
         xs2 = [min(xs), max(xs)]
-        ax.plot(xs2, [slope * x + inter for x in xs2], color='#00A0E9', lw=2)
+        ax.plot(xs2, [slope * x + inter for x in xs2], color=OKABE['blue'], lw=2)
         ax.set_xlabel('Sampling date (decimal year)')
         ax.set_ylabel('Distance from root (subs/site)')
         ax.set_title(f'Root-to-tip (TreeTime)  rate={rate:.3e}  R²={r2:.3f}'
@@ -969,6 +972,14 @@ def treetime_rtt(aln_path, tree_path, meta_path, out_dir,
         fig.tight_layout()
         pdf = os.path.join(out_dir, 'RootToTip.pdf')
         fig.savefig(pdf, format='pdf')
+        for _ext in ('png', 'svg'):
+            try:
+                fig.savefig(os.path.join(out_dir, f'RootToTip.{_ext}'),
+                            format=_ext,
+                            dpi=300 if _ext == 'png' else None,
+                            bbox_inches='tight')
+            except Exception:
+                pass      # 附加格式失败不影响 PDF 主产物
         plt.close(fig)
     except Exception:
         pdf = None

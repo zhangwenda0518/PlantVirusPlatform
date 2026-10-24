@@ -276,17 +276,10 @@ def _read_fasta_records(path):
 
 
 def _read_table(path):
-    """读 CSV/TSV → (header, rows)，自动判分隔符，剥 BOM 与 `#`。"""
-    with io.open(path, encoding='utf-8-sig', errors='replace', newline='') as f:
-        sample = f.read(8192)
-        f.seek(0)
-        delim = '\t' if sample.count('\t') > sample.count(',') else ','
-        rdr = csv.reader(f, delimiter=delim)
-        rows = [r for r in rdr]
-    if not rows:
-        return [], []
-    header = [h.strip().lstrip('#').strip() for h in rows[0]]
-    return header, [r for r in rows[1:] if any((c or '').strip() for c in r)]
+    """读 CSV/TSV → (header, rows)，自动判分隔符，剥 BOM 与 `#` 表头前缀。"""
+    from Virus_Platform_Core.io_utils import read_rows  # 懒加载：与旧实现行为一致
+    header, rows, _ = read_rows(path, skip_comments=True)
+    return (header or [], rows)
 
 
 # ================================================================ A0 prep

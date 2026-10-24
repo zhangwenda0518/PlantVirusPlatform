@@ -334,7 +334,8 @@ def test_run_chain_synthetic(synth, plat_dir):
     assert veto_site['veto'] is True and veto_site['top'] == 0
     for s in rep['sets']:
         cs = s['category_scores']
-        assert len(cs) == 7 and all(0 <= v <= 100 for v in cs.values())
+        # 6 类：2026-10-20 评审 C4 移除恒 0 死特征「交叉干扰」后为 6
+        assert len(cs) == 6 and all(0 <= v <= 100 for v in cs.values())
     assert rep['category_weights'] and abs(sum(
         rep['category_weights'].values()) - 1.0) < 1e-3
     # report.html 数据已注入且模板转义安全

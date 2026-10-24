@@ -1787,6 +1787,12 @@
       </div>
     </div>
     <p class="hint" data-i18n="tk.rdpQcHint" data-page-node-id="KKPpzvrV8PRFxgojnLb7Jo">进 RDP5 前先剔除不完整序列，口径同参照管道 align_qc：长度比 &lt; 0.90、gap &gt; 10%、N &gt; 5%（只在填了参考 ID 时才判「与参考 identity 偏离 &gt; 2%」）。剔除明细见运行目录 align_qc_report.tsv。</p>
+    <label data-i18n="tk.rdpOrfLbl" data-page-node-id="rdpOrfLblNew">基因坐标 CSV（可选：在断点分布图上叠加蛋白/基因条带）</label>
+    <div class="filerow" data-page-node-id="rdpOrfRowNew">
+      <input id="rdp_orf" type="text" placeholder="选择 ORFCoords.csv（Gene.symbol,Start,Stop；GenBank 参考序列坐标）" data-i18n-ph="tk.rdpOrfPh" data-page-node-id="rdpOrfInputNew">
+      <button class="btn small" onclick="browse('rdp_orf')" data-page-node-id="rdpOrfBtnNew">📁</button>
+    </div>
+    <p class="hint" data-i18n="tk.rdpOrfHint" data-page-node-id="rdpOrfHintNew">RDP5 命令行不产出基因坐标；可从 GenBank 注释抄 CDS 起点/终点（按参考序列，即 qc_ref 或比对首条），平台自动映射到比对坐标。</p>
     <div style="margin-top:10px" data-page-node-id="yE1sq7KTeYkdjJpvkWlSl2">
       <button class="btn primary" onclick="runRdp(this)" data-i18n="tk.rdpRun" data-page-node-id="u2mxyz0xJ9qWsKmwZ2qn33">▶ 运行重组分析</button>
       <span class="hint" style="margin-left:8px" data-i18n="tk.rdpRunHint" data-page-node-id="2G9QE0h5A4zvtmZVzJvABy">RDP5 九方法检测，逐方法 p 值；坐标为比对列位（1-based）</span>
@@ -2602,6 +2608,89 @@
       <div id="crSummary" style="margin-top:8px"></div>
       <div id="crTracks" style="margin-top:10px"></div>
       <div class="scroll-md" id="crTable" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- 2026-10-20：CONAN-SWIFT（Cas3 / I 型 I-E）crRNA 设计（t-conan）。引擎
+       Virus_Platform_Core/conan_design.py；净室实现，规则来源见模块头
+       （bioRxiv 2026.08.25.746999；conan-swift-designer / conan-crrna-webui
+       MIT，仅参数口径参考）。与 t-crispr（Cas12a/Cas13a + 引物协同）分工：
+       本卡 = AAG PAM + 种子忽略 +6 位 + 负组同源位点双重失配评分 +
+       纯 crRNA 输出（RT-LAMP + 侧流路线）。 -->
+  <section class="card" id="t-conan">
+    <h2 data-i18n="tk.cnH2">🧬 CONAN-SWIFT 检测设计（Cas3 crRNA，RT-LAMP·侧流路线）</h2>
+    <p class="hint" data-i18n="tk.cnHint">多分离物目标 FASTA（可多分体）+ 可选负组（近缘非目标）FASTA → 目标+负组合并 MAFFT → AAG PAM + 32nt spacer 双链扫描 → 逐候选同源位点核查：目标组要求 PAM 保留 + 种子（8nt，忽略 +6 位）匹配；负组要求 PAM 已变 且 种子有效错配（双双保留 = leak）→ 末端/GC/种子过滤 → 评分排序 → 候选表 + 位点核查 + 中文报告。<b>证据边界</b>：计算设计仅为候选优先级排序，不构成活性与区分度证据，实验结论须按 L1–L5 验证清单逐级建立；订购需在 spacer 5′ 端按所用系统 Protocol 补 I 型 DR 骨架。</p>
+    <label data-i18n="tk.cnTargetLbl">目标 FASTA（必选，多分离物；建议 ≥10 株）</label>
+    <div class="filerow">
+      <input id="cn_input" type="text" placeholder="目标病毒分离物 FASTA（如某病毒多国分离物集合）" data-i18n-ph="tk.cnTargetPh">
+      <button class="btn small" onclick="browse('cn_input')">📁</button>
+    </div>
+    <label data-i18n="tk.cnNegLbl">负组 FASTA（可选；近缘非目标病毒多株，用于同源位点背景核查）</label>
+    <div class="filerow">
+      <input id="cn_negative" type="text" placeholder="负组 FASTA（近缘非目标病毒；留空 = 不做负组评分）" data-i18n-ph="tk.cnNegPh">
+      <button class="btn small" onclick="browse('cn_negative')">📁</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:stretch;margin:8px 0 2px" id="cnFlow">
+      <div style="flex:1;min-width:120px;border:1px solid #e0e0e0;border-radius:6px;padding:6px 8px;background:#e3f2fd">
+        <b style="font-size:12px" data-i18n="tk.cnF1">① 输入：目标必选 / 负组可选</b></div>
+      <div style="align-self:center;color:#90a4ae">➜</div>
+      <div style="flex:1;min-width:120px;border:1px solid #e0e0e0;border-radius:6px;padding:6px 8px;background:#e8f5e9">
+        <b style="font-size:12px" data-i18n="tk.cnF2">② 参数：PAM / 种子 / 过滤</b></div>
+      <div style="align-self:center;color:#90a4ae">➜</div>
+      <div style="flex:1;min-width:120px;border:1px solid #e0e0e0;border-radius:6px;padding:6px 8px;background:#fff3e0">
+        <b style="font-size:12px" data-i18n="tk.cnF3">③ 扫描：正负链 AAG+32nt</b></div>
+      <div style="align-self:center;color:#90a4ae">➜</div>
+      <div style="flex:1;min-width:120px;border:1px solid #e0e0e0;border-radius:6px;padding:6px 8px;background:#f3e5f5">
+        <b style="font-size:12px" data-i18n="tk.cnF4">④ 评分：覆盖 / leak</b></div>
+      <div style="align-self:center;color:#90a4ae">➜</div>
+      <div style="flex:1;min-width:120px;border:1px solid #e0e0e0;border-radius:6px;padding:6px 8px;background:#ffebee">
+        <b style="font-size:12px" data-i18n="tk.cnF5">⑤ 导出：候选表 / 矩阵 / 图</b></div>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin-top:10px">
+      <div class="gp-item"><label data-i18n="tk.cnPamLbl">PAM（5′ 前置）</label>
+        <input id="cn_pam" type="text" value="AAG" style="width:70px"></div>
+      <div class="gp-item"><label data-i18n="tk.cnSpacerLbl">spacer 长度（默认 32）</label>
+        <input id="cn_spacer" type="number" value="32" min="24" max="36" style="width:80px"></div>
+      <div class="gp-item"><label data-i18n="tk.cnSeedLbl">种子长度（PAM+1 起）</label>
+        <input id="cn_seed" type="number" value="8" min="4" max="12" style="width:70px"></div>
+      <div class="gp-item"><label data-i18n="tk.cnIgnoredLbl">种子忽略位</label>
+        <input id="cn_ignored" type="text" value="6" style="width:60px" title="逗号分隔的 1 基位置；I-E Cascade 口径为 +6"></div>
+      <div class="gp-item"><label data-i18n="tk.cnMaxmmLbl">目标非种子错配上限</label>
+        <input id="cn_maxmm" type="number" value="4" min="0" max="36" style="width:70px"></div>
+      <div class="gp-item" style="display:flex;align-items:center;gap:4px">
+        <input id="cn_margin_on" type="checkbox" checked>
+        <label for="cn_margin_on" style="margin:0" data-i18n="tk.cnMarginOnLbl">末端排除</label>
+        <input id="cn_margin" type="number" value="150" min="0" max="2000" style="width:70px"></div>
+      <div class="gp-item" style="display:flex;align-items:center;gap:4px">
+        <input id="cn_gc_on" type="checkbox" checked>
+        <label for="cn_gc_on" style="margin:0">GC%</label>
+        <input id="cn_gcmin" type="number" value="35" min="0" max="100" style="width:60px">–
+        <input id="cn_gcmax" type="number" value="65" min="0" max="100" style="width:60px"></div>
+      <div class="gp-item" style="display:flex;align-items:center;gap:4px">
+        <input id="cn_homo_on" type="checkbox" checked>
+        <label for="cn_homo_on" style="margin:0" data-i18n="tk.cnHomoOnLbl">种子 run≥</label>
+        <input id="cn_homo" type="number" value="3" min="2" max="12" style="width:60px"></div>
+      <div class="gp-item"><label data-i18n="tk.cnTopnLbl">输出候选数</label>
+        <input id="cn_topn" type="number" value="20" min="1" max="200" style="width:80px"></div>
+      <div class="gp-item" style="display:flex;align-items:center;gap:4px">
+        <input id="cn_group" type="checkbox" checked>
+        <label for="cn_group" style="margin:0" data-i18n="tk.cnGroupLbl">按片段标签分组（RNA1/S2…）</label></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn primary" onclick="runConan(this)" data-i18n="tk.cnRun">▶ 运行 CONAN-SWIFT 设计</button>
+    </div>
+    <div class="tool-out">
+      <div class="tool-out-head" data-i18n="c.outHead">📤 输出</div>
+      <div class="toolrun" id="toolrun-conan"></div>
+    </div>
+    <div id="cnResult" class="card" style="margin-top:12px;display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b id="cnTitle">CONAN-SWIFT 设计结果</b>
+        <button class="btn small" onclick="$('cnResult').style.display='none'">✕</button>
+      </div>
+      <div id="cnSummary" style="margin-top:8px"></div>
+      <div class="scroll-md" id="cnTable" style="margin-top:10px"></div>
+      <div id="cnMatrices" style="margin-top:10px"></div>
     </div>
   </section>
 
@@ -4192,7 +4281,9 @@ function renderVariant(d) {
         <div class="mono" style="font-size:11px;margin-bottom:4px">${esc(f)}</div>
         <img src="${url(f)}" style="width:100%;max-width:900px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:zoom-in"
              onclick="window.open('${url(f)}','_blank')">
-        <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.pdf'))}" target="_blank">${t('tl.pdf')}</a></div>
+        <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.pdf'))}" target="_blank">${t('tl.pdf')}</a>
+          · <a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.svg'))}" target="_blank">SVG</a>
+          · ${svgEditLink(url(f.replace(/\.png$/i, '.svg')), '整理', 'mono')}</div>
       </div>`).join('')
     : `<p class="hint">${t('tl.noBasePlot')}</p>`;
 
@@ -4230,7 +4321,9 @@ function renderVariant(d) {
         <div class="mono" style="font-size:11px;margin-bottom:4px">${esc(a)}</div>
         <img src="${url(f)}" style="width:100%;max-width:900px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:zoom-in"
              onclick="window.open('${url(f)}','_blank')">
-        <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.pdf'))}" target="_blank">${t('tl.pdf')}</a></div>
+        <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.pdf'))}" target="_blank">${t('tl.pdf')}</a>
+          · <a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.svg'))}" target="_blank">SVG</a>
+          · ${svgEditLink(url(f.replace(/\.png$/i, '.svg')), '整理', 'mono')}</div>
       </div>`);
     });
     out.push('</div>');
@@ -4299,12 +4392,155 @@ async function runCrispr(btn) {
     amp_mode: val('cr_amp') || 'RPA',
     probe_type: val('cr_probe') || 'none',
     profile: val('cr_profile') || 'strict',
-    spacer_len: +val('cr_spacer') || 20,
+    // spacer_len 只在此处出现一次（此前与上方 Cas13a 分支重复同名键，
+    // 后值恒胜使分支失效——评审 C1）
     top_n: +val('cr_topn') || 20,
     flank: +val('cr_flank') || 250,
   };
   return _submitTool('crispr', params, null, btn,
     '⏳ CRISPR 试剂设计中…', loadCrisprResult);
+}
+
+/* ---------- CONAN-SWIFT（Cas3/I-E）crRNA 设计（t-conan 卡，引擎 conan_design.py） ---------- */
+function _conanRate(v) {
+  return (typeof v === 'number') ? v.toFixed(2) : (v == null ? '—' : String(v));
+}
+async function runConan(btn) {
+  if (!val('cn_input')) { alert(t('ui.tk.needFasta')); return; }
+  const params = {
+    input: val('cn_input'),
+    negative: val('cn_negative') || undefined,
+    pam: val('cn_pam') || 'AAG',
+    spacer_len: +val('cn_spacer') || 32,
+    seed_len: +val('cn_seed') || 8,
+    ignored: val('cn_ignored') || '6',
+    max_nonseed_mm: val('cn_maxmm') === '' ? 4 : (+val('cn_maxmm') || 0),
+    exclude_terminal: $('cn_margin_on').checked ? '1' : '0',
+    terminal_margin: +val('cn_margin') || 0,
+    select_gc: $('cn_gc_on').checked ? '1' : '0',
+    gc_min: +val('cn_gcmin') || 0,
+    gc_max: +val('cn_gcmax') || 0,
+    exclude_homopolymer: $('cn_homo_on').checked ? '1' : '0',
+    homopolymer: +val('cn_homo') || 3,
+    group_by_segment: $('cn_group').checked ? '1' : '0',
+    top_n: +val('cn_topn') || 20,
+  };
+  return _submitTool('conan', params, null, btn,
+    '⏳ CONAN-SWIFT 设计中…', loadConanResult);
+}
+
+async function loadConanResult(run) {
+  if (!run) return;
+  let rep;
+  try {
+    rep = await (await fetch('/tool_runs/' + encodeURIComponent(run)
+      + '/conan/summary.json')).json();
+  } catch (e) { return; }
+  if (!rep) return;
+  $('cnResult').style.display = '';
+  $('cnTitle').textContent = 'CONAN-SWIFT 设计结果 · ' + run;
+  const segs = (rep.segments || []).map(s =>
+    esc(s.segment) + '：' + s.n_targets + ' 株 / 候选 ' + s.n_raw +
+    ' → 过滤后 ' + s.n_kept).join('；');
+  const hasNeg = (rep.segments || []).some(s => s.n_negatives);
+  const f = rep.files || {};
+  // 指标卡（论文图1a 的「N selected out of M candidates」口径）
+  const agg = (rep.segments || []).reduce((a, s) => {
+    a.raw += s.n_raw || 0; a.kept += s.n_kept || 0;
+    a.allT += s.all_targets_pass || 0; a.bg += s.background_clear || 0;
+    return a; }, { raw: 0, kept: 0, allT: 0, bg: 0 });
+  const mcard = (v, lbl, color) =>
+    '<div style="flex:1;min-width:120px;border:1px solid #e0e0e0;'
+    + 'border-radius:6px;padding:6px 10px;text-align:center;background:#fff">'
+    + '<div style="font-size:20px;font-weight:700;color:' + color + '">'
+    + v + '</div><div class="hint" style="margin:0">' + lbl + '</div></div>';
+  $('cnSummary').innerHTML =
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+    + mcard(agg.kept, '选出候选（过滤后）', '#2e7d32')
+    + mcard(agg.raw, '扫描原始候选', '#455a64')
+    + mcard(agg.allT, '全目标通过', '#1565c0')
+    + mcard(hasNeg ? agg.bg : '—', '背景干净（负组全过）',
+      hasNeg ? '#6a1b9a' : '#9e9e9e')
+    + '</div>'
+    + '<div class="hint" style="margin:2px 0 0">' + segs
+    + (hasNeg ? '' : '（未提供负组：负组项按 0 计）') + '</div>'
+    + '<div class="hint" style="margin-top:4px">产物：conan/candidates.tsv · '
+    + 'conan/target_checks.tsv' + (hasNeg ? ' · conan/negative_checks.tsv' : '')
+    + (f.top_plot ? ' · conan/top_candidates.png' : '')
+    + (f.locus_plot ? ' · conan/locus_overview.png' : '')
+    + ' · conan/report.md</div>'
+    + ((f.top_plot || f.locus_plot) ?
+      '<div style="margin-top:8px">' +
+      (f.top_plot ? '<img src="/tool_runs/' + encodeURIComponent(run)
+        + '/conan/top_candidates.png" style="max-width:100%" '
+        + 'alt="Top 候选图">' : '') +
+      (f.locus_plot ? '<img src="/tool_runs/' + encodeURIComponent(run)
+        + '/conan/locus_overview.png" style="max-width:100%;margin-top:6px" '
+        + 'alt="位点总览图">' : '') +
+      '</div>' : '');
+  const ps = rep.params_snapshot || {};
+  const spLen = ps.spacer_len || 32, seedLen = ps.seed_len || 8;
+  const conanStruct = r => {
+    const pl = r.pam_len || 3, W = 90, H = 14, tot = pl + spLen;
+    const pw = (W * pl / tot).toFixed(1), sw = (W - pw).toFixed(1);
+    const seedW = (sw * seedLen / spLen).toFixed(1);
+    return '<svg width="' + W + '" height="' + H
+      + '" style="vertical-align:middle">'
+      + '<rect x="0" y="2" width="' + pw + '" height="10" fill="#1565c0">'
+      + '<title>PAM</title></rect>'
+      + '<rect x="' + pw + '" y="2" width="' + sw + '" height="10" '
+      + 'fill="#bbdefb"><title>spacer</title></rect>'
+      + '<rect x="' + pw + '" y="2" width="' + seedW + '" height="10" '
+      + 'fill="#1e88e5" opacity="0.75"><title>seed ' + seedLen
+      + 'nt</title></rect></svg>';
+  };
+  const rows = rep.top || [];
+  $('cnTable').innerHTML = rows.length ? (
+    '<table class="tb" style="font-size:12px;width:100%"><thead><tr>' +
+    ['#', 'ID', '片段组', '链', '位点(共识)', '结构', 'guide spacer（5→3，RC 列）',
+     'GC%', '覆盖%', 'leak%', 'score', '全目标通过', '背景干净']
+      .map(h => '<th>' + h + '</th>').join('') +
+    '</tr></thead><tbody>' + rows.map((r, i) =>
+      '<tr><td>' + (i + 1) + '</td><td>' + esc(r.candidate_id) + '</td><td>' +
+      esc(r.segment) + '</td><td>' + r.strand + '</td><td>' + r.cons_start +
+      '-' + r.cons_end + '</td><td>' + conanStruct(r) +
+      '</td><td><code>' + esc(r.guide) + '</code></td><td>' +
+      r.gc + '</td><td>' + _conanRate(r.coverage) + '</td><td>' +
+      _conanRate(r.leak) + '</td><td>' + _conanRate(r.score) + '</td><td>' +
+      (r.all_targets_pass ? '✓' : '') + '</td><td>' +
+      (r.all_negatives_locus_pass === true ? '✓'
+        : (r.all_negatives_locus_pass == null
+          || r.all_negatives_locus_pass === 'not_run' ? '—' : '')) +
+      '</td></tr>').join('') + '</tbody></table>')
+    : '<div class="hint">无候选通过过滤——检查 PAM/参数或负组设置</div>';
+  // 位点核查矩阵热图（CONAN-SWIFT 图1e 布局的计算侧类比：
+  // 候选 × 目标/负组记录；绿=通过，橙=PAM/种子失配，红=leak）
+  const cellBg = v => v == null ? '#fafafa'
+    : v === 'leak' ? '#ffcdd2' : v === 'ok' ? '#c8e6c9'
+      : (v === 'pam' || v === 'seed') ? '#ffe0b2'
+        : v === 'gap' ? '#eceff1' : '#fff8e1';
+  const cellTx = v => v == null ? '' : v === 'ok' ? '✓'
+    : v === 'leak' ? 'leak' : v === 'pam' ? 'PAM'
+      : v === 'seed' ? '种子' : v === 'gap' ? '—' : v;
+  const trunc = n => n.length > 12 ? n.slice(0, 12) + '…' : n;
+  $('cnMatrices').innerHTML = (rep.matrices || []).map(m => {
+    const head = '<tr><th>候选</th>' + m.cols.map(c =>
+      '<th title="' + esc(c.name) + '">'
+      + (c.kind === 'T' ? '<span style="color:#1565c0">T</span>'
+        : '<span style="color:#c62828">N</span>')
+      + ':' + esc(trunc(c.name)) + '</th>').join('') + '</tr>';
+    const body = m.rows.map(r => '<tr><td>' + esc(r.candidate_id) + '</td>'
+      + m.cols.map(c => {
+        const v = r.cells[c.name];
+        return '<td style="background:' + cellBg(v)
+          + ';text-align:center;padding:2px 6px">' + cellTx(v) + '</td>';
+      }).join('') + '</tr>').join('');
+    return '<div><b style="font-size:12px">位点核查矩阵 · '
+      + esc(m.segment) + '</b> <span class="hint">（T=目标，N=负组；'
+      + '绿 ✓=通过，橙=PAM/种子失配，黄=非种子错配，红=leak，灰=窗口缺失）'
+      + '</span><table class="tb" style="font-size:11px;margin-top:4px">'
+      + '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+  }).join('');
 }
 
 async function loadCrisprResult(run) {
@@ -4515,6 +4751,8 @@ async function loadDsrnaResult(run) {
   if (!run) return;
   $('dsResult').style.display = '';
   $('dsTitle').textContent = 'dsRNA 设计结果 · ' + run;
+  const _staleCharts = $('dsCharts');
+  if (_staleCharts) _staleCharts.innerHTML = '';   /* 换 run 时清旧图 */
   let rep = null;
   try {
     rep = await (await fetch('/tool_runs/' + encodeURIComponent(run)
@@ -4629,6 +4867,158 @@ async function loadDsrnaResult(run) {
     '（dsrnamax/ 目录下）</p>';
   $('dsSummary').innerHTML = html;
   $('dsTable').innerHTML = '';
+  drawDsrnaCharts(rep, sc);
+}
+
+/* ── 结果可视化（2026-10-14）。平台实装默认未装脱靶面板
+   （databases/dsrna/panel/ 为空 → 纯效价模式），主图 = 逐 siRNA 效价分布；
+   目标覆盖常驻，分离株覆盖 / 脱靶面板两图仅在数据存在时渲染。
+   x 一律臂（正义链）帧 nt，与结果表最优窗坐标、primers.tsv 的
+   amp_start/end 同帧，可直接叠放。 */
+function drawDsrnaCharts(rep, sc) {
+  let box = $('dsCharts');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'dsCharts';
+    $('dsSummary').after(box);
+  }
+  box.innerHTML = '';
+  const CFG = { displayModeBar: false, responsive: true };
+  const COLORS = ['#2f7ed8', '#e8743b', '#19a979', '#945ecf', '#e0457b', '#6b8e23'];
+  const redArms = rep.red_lines || [];
+  const arms = rep.arms || [];
+  /* 1) 每臂效价分布：combined（选窗量）实线 + 最优窗底纹 + 扩增子范围；
+        有脱靶数据时叠加纯效价虚线对照。 */
+  arms.forEach((a, ai) => {
+    const r = sc[a.name] || {};
+    const prof = r.profile;
+    if (!prof || !(prof.x || []).length) return;   /* 旧报告无 profile，跳过 */
+    const bw = r.best_window || {};
+    const ws = bw.sense_nt_start, we = bw.sense_nt_end;
+    const traces = [];
+    if (!r.efficacy_only) {
+      traces.push({ type: 'scatter', mode: 'lines', name: '效价（纯）',
+        x: prof.x, y: prof.total_score,
+        line: { color: '#9aa5b1', width: 1, dash: 'dot' } });
+    }
+    traces.push({ type: 'scatter', mode: 'lines', name: 'combined（选窗量）',
+      x: prof.x, y: prof.combined, line: { color: '#2f7ed8', width: 2 } });
+    const shapes = [];
+    if (ws != null && we != null) {
+      shapes.push({ type: 'rect', xref: 'x', yref: 'paper', x0: ws, x1: we,
+        y0: 0, y1: 1, fillcolor: 'rgba(47,126,216,0.12)', line: { width: 0 } });
+    }
+    (rep.primers || []).forEach(pe => {
+      if (pe.arm !== a.name) return;
+      (pe.pairs || []).forEach(p => {
+        if (p.amp_start_in_arm == null || p.amp_end_in_arm == null) return;
+        shapes.push({ type: 'rect', xref: 'x', yref: 'paper',
+          x0: p.amp_start_in_arm, x1: p.amp_end_in_arm, y0: 0, y1: 1,
+          fillcolor: 'rgba(50,168,82,0.10)',
+          line: { color: 'rgba(50,168,82,0.55)', width: 1 } });
+      });
+    });
+    const div = document.createElement('div');
+    div.id = 'dsProf_' + ai;
+    div.style.width = '100%';
+    box.appendChild(div);
+    const hitRed = redArms.some(s => s.indexOf(a.name) >= 0);
+    Plotly.newPlot(div, traces, {
+      margin: { l: 44, r: 14, t: 34, b: 42 },
+      title: { text: a.name + ' siRNA 效价分布（臂 ' + a.length + ' nt · GC ' + a.gc + '%'
+        + (ws != null ? ' · 最优窗 ' + ws + '–' + we : '') + '）' + (hitRed ? ' ⛔' : ''),
+        font: { size: 13 } },
+      xaxis: { title: { text: '臂坐标 (nt，正义链 5′→3′)', font: { size: 11 } },
+               range: [1, a.length] },
+      yaxis: { title: { text: '分数', font: { size: 11 } }, range: [0, 105] },
+      shapes: shapes,
+      showlegend: traces.length > 1,
+      legend: { orientation: 'h', y: 1.16 },
+      hovermode: 'x unified'
+    }, CFG);
+  });
+  /* 2) 目标 21-mer 完美覆盖：分组条形图（弱覆盖目标一眼可见） */
+  const tg = arms.filter(a => (a.target_stats || []).length);
+  if (tg.length) {
+    const names = Array.from(new Set(
+      tg.flatMap(a => a.target_stats.map(t => t.target))));
+    const div = document.createElement('div');
+    div.id = 'dsTargets';
+    div.style.width = '100%';
+    box.appendChild(div);
+    Plotly.newPlot(div, tg.map((a, i) => ({
+      type: 'bar', name: a.name, x: names,
+      y: names.map(n => {
+        const t = a.target_stats.find(v => v.target === n);
+        return t ? t.kmer_matches : 0;
+      }),
+      marker: { color: COLORS[i % COLORS.length] }
+    })), {
+      margin: { l: 44, r: 14, t: 34, b: 90 },
+      title: { text: '目标 21-mer 完美覆盖', font: { size: 13 } },
+      barmode: 'group',
+      xaxis: { tickangle: -30, automargin: true },
+      yaxis: { title: { text: '命中数', font: { size: 11 } } },
+      legend: { orientation: 'h', y: 1.16 }
+    }, CFG);
+  }
+  /* 3) 分离株覆盖（给了 isolates 才有）：每臂 × 每分离株 21-mer 完美覆盖 */
+  const iso = rep.isolate_coverage || {};
+  const isoArms = Object.keys(iso);
+  if (isoArms.length) {
+    const names = Array.from(new Set(isoArms.flatMap(
+      an => Object.keys(iso[an].per_isolate || {}))));
+    if (names.length) {
+      const div = document.createElement('div');
+      div.id = 'dsIso';
+      div.style.width = '100%';
+      box.appendChild(div);
+      Plotly.newPlot(div, isoArms.map((an, i) => ({
+        type: 'bar', name: an, x: names,
+        y: names.map(n => {
+          const v = (iso[an].per_isolate || {})[n];
+          return v == null ? 0 : v;
+        }),
+        marker: { color: COLORS[i % COLORS.length] }
+      })), {
+        margin: { l: 44, r: 14, t: 34, b: 90 },
+        title: { text: '分离株池 21-mer 完美覆盖（1 = 全覆盖）', font: { size: 13 } },
+        barmode: 'group',
+        xaxis: { tickangle: -30, automargin: true },
+        yaxis: { title: { text: '覆盖比例', font: { size: 11 } }, range: [0, 1.05] },
+        legend: { orientation: 'h', y: 1.16 }
+      }, CFG);
+    }
+  }
+  /* 4) 脱靶面板命中（装了面板才有数据；本机默认无 → 不渲染） */
+  const otSum = ((rep.offtarget_panel || {}).summary) || {};
+  const otArms = Object.keys(otSum);
+  if (otArms.length) {
+    const tot = {};
+    otArms.forEach(an => Object.entries(otSum[an].per_species || {})
+      .forEach(([sp, c]) => { tot[sp] = (tot[sp] || 0) + (c.mm0 || 0) + (c.mm1 || 0); }));
+    const names = Object.keys(tot).sort((a, b) => tot[b] - tot[a]).slice(0, 15);
+    const div = document.createElement('div');
+    div.id = 'dsOt';
+    div.style.width = '100%';
+    box.appendChild(div);
+    Plotly.newPlot(div, otArms.map((an, i) => ({
+      type: 'bar', name: an, x: names,
+      y: names.map(sp => ((otSum[an].per_species || {})[sp] || {}).mm0 || 0),
+      text: names.map(sp => {
+        const c = ((otSum[an].per_species || {})[sp]) || {};
+        return '0mm ' + (c.mm0 || 0) + ' / 1mm ' + (c.mm1 || 0);
+      }),
+      marker: { color: COLORS[i % COLORS.length] }
+    })), {
+      margin: { l: 44, r: 14, t: 34, b: 90 },
+      title: { text: '脱靶面板命中（0 错配 siRNA 数，Top15 物种）', font: { size: 13 } },
+      barmode: 'group',
+      xaxis: { tickangle: -30, automargin: true },
+      yaxis: { title: { text: '0mm siRNA 数', font: { size: 11 } } },
+      legend: { orientation: 'h', y: 1.16 }
+    }, CFG);
+  }
 }
 
 loadDsrnaPanel();
@@ -4728,6 +5118,7 @@ async function runRdp(btn) {
   } else {
     params.qc = '0';        // 只用于排障：不做完整性过滤直接跑
   }
+  if (val('rdp_orf')) params.orf_csv = val('rdp_orf');
   return _submitTool('rdp', params, null, btn,
     '⏳ RDP5 检测中…', loadRdpResult);
 }
@@ -4791,7 +5182,7 @@ async function loadRdpResult(run) {
   $('rdpEvents').innerHTML =
     '<table class="tbl" style="margin:0"><thead><tr>' + head +
     '</tr></thead><tbody>' + body + '</tbody></table>';
-  loadRdpBdp(run);
+  loadRdpBdp(run, evs, d.gene_map);
 }
 
 /* ── 断点分布 Plotly 重绘（2026-09-21，方案 A）：
@@ -4822,7 +5213,7 @@ function _pdShortPair(s) {
   const n = x => (String(x || '').split('|')[0] || x);
   return n(p[0]) + '→' + n(p[1]);
 }
-async function loadRdpBdp(run) {
+async function loadRdpBdp(run, evs, genes) {
   const box = $('rdpBdpPlot');
   if (!box) return;
   box.style.display = 'block';
@@ -4882,6 +5273,66 @@ async function loadRdpBdp(run) {
     type: 'scatter', mode: 'lines', x: positions, y: lower,
     line: { color: '#87B4A9', width: 1 }, hoverinfo: 'skip',
   });
+  /* 断点交互标注（2026-10-12）：每个事件的两个断点按事件着色——
+     虚线纵贯全图（shape），断点处放可悬停标记，tooltip 展示事件完整信息
+     （重组体 / 主次亲本 / 方法 / p 值）。RDP5 原产 CSV 与平台重建 CSV 通吃。 */
+  const cleanName = v => String(v == null ? '' : v).replace(/[<>]/g, '');
+  let bdpShapes = null, bdpAnnos = null;
+  if (evs && evs.length) {
+    const EV_COLORS = ['#1a7f37', '#d62728', '#1f77b4', '#ff7f0e',
+                       '#9467bd', '#8c564b'];
+    const rbnAt = p => {
+      // 步长 2 的奇数起点网格：floor 取 ≤p 的窗起点，窗口必含 p 本身
+      const i = Math.min(Math.max(Math.floor((p - positions[0]) / 2),
+                                  0), rbn.length - 1);
+      return rbn[i] || 0;
+    };
+    const yTop = Math.max(1, Math.max.apply(null, rbn)) * 1.25;
+    bdpShapes = [];
+    bdpAnnos = [];
+    evs.forEach((e, i) => {
+      const color = EV_COLORS[i % EV_COLORS.length];
+      const evName = t('tk.rdpBdpEv', '事件') + ' ' + (i + 1);
+      const evTxt = '<b>' + evName + '</b>'
+        + '<br>' + t('tk.rdpBdpBp', '断点') + ': ' + e.start + '–' + e.end
+        + '<br>' + t('tk.rdpThR', '候选重组体') + ': ' + cleanName(e.recombinant)
+        + '<br>' + t('tk.rdpThMaj', '主亲本') + ': ' + cleanName(e.major)
+        + '<br>' + t('tk.rdpThMin', '次亲本') + ': ' + cleanName(e.minor)
+        + '<br>' + t('tk.rdpThMethods', '方法') + ': '
+        + cleanName((e.methods || []).join(', '))
+        + '<br>p = ' + (typeof e.pvalue === 'number'
+          ? (e.pvalue < 0.001 ? e.pvalue.toExponential(1)
+                              : e.pvalue.toPrecision(3))
+          : '—');
+      const bps = e.start === e.end ? [e.start] : [e.start, e.end];
+      bps.forEach((bp, j) => {
+        bdpShapes.push({
+          type: 'line', x0: bp, x1: bp, y0: 0, y1: yTop,
+          xref: 'x', yref: 'y',
+          line: { color: color, width: 1.3, dash: 'dot' },
+        });
+        traces.push({
+          type: 'scatter', mode: 'markers',
+          x: [bp], y: [rbnAt(bp)],
+          marker: { symbol: 'diamond', size: 10, color: color,
+                    line: { color: 'black', width: 1 } },
+          text: [evTxt + (bps.length > 1
+            ? '<br>' + t('tk.rdpBdpBp', '断点') + (j === 0 ? '①' : '②')
+              + ' = ' + bp : '')],
+          hovertemplate: '%{text}<extra></extra>',
+          name: evName,
+        });
+      });
+      if (evs.length <= 6) {
+        bdpAnnos.push({
+          x: e.start, y: yTop, xref: 'x', yref: 'y',
+          text: 'E' + (i + 1), showarrow: false,
+          font: { color: color, size: 11 }, yanchor: 'bottom',
+          xanchor: 'left',
+        });
+      }
+    });
+  }
   const layout = {
     margin: { l: 56, r: 20, t: 36, b: 50 },
     xaxis: { title: { text: t('tk.rdpBdpX', 'Nucleotide position in alignment') }, tickfont: { size: 9 } },
@@ -4889,6 +5340,50 @@ async function loadRdpBdp(run) {
     showlegend: false,
     hovermode: 'x unified',
   };
+  if (bdpShapes) {
+    layout.shapes = bdpShapes;
+    layout.annotations = bdpAnnos;
+    layout.yaxis.range = [0, Math.max(1, Math.max.apply(null, rbn)) * 1.25];
+  }
+  /* 基因/蛋白条带（2026-10-12 增）：数据来自可选 ORFCoords CSV（后端已把
+     参考序列坐标映射到比对坐标）。条带画在分布上方，重叠自动换行；配色
+     复刻 Rgrapher 的青绿渐变；基因名标注在条带右端，悬停显示坐标。 */
+  if (genes && genes.length) {
+    const maxRbn = Math.max(1, Math.max.apply(null, rbn));
+    const sorted = genes.slice().sort((a, b) => a.start - b.start);
+    const rowEnds = [];
+    sorted.forEach(g => {
+      let row = rowEnds.findIndex(re => g.start > re);
+      if (row < 0) { rowEnds.push(g.end); row = rowEnds.length - 1; }
+      else rowEnds[row] = Math.max(rowEnds[row], g.end);
+      g.row = row;
+    });
+    const geneBase = maxRbn * 1.32;
+    const geneH = maxRbn * 0.16;
+    const ombre = ['#043F3D', '#085F63', '#0B7F89', '#13A3A9', '#17C6C9'];
+    const geneColor = i => ombre[i % ombre.length];
+    const alnMax = positions[positions.length - 1] || 1;
+    if (!layout.shapes) layout.shapes = [];
+    if (!layout.annotations) layout.annotations = [];
+    layout.yaxis.range = [0, geneBase + rowEnds.length * geneH + maxRbn * 0.16];
+    sorted.forEach((g, i) => {
+      const gy0 = geneBase + g.row * geneH;
+      layout.shapes.push({
+        type: 'rect', xref: 'x', yref: 'y',
+        x0: g.start, x1: g.end, y0: gy0, y1: gy0 + geneH,
+        fillcolor: geneColor(i), opacity: 0.75,
+        line: { color: 'black', width: 1 }, layer: 'above',
+      });
+      layout.annotations.push({
+        x: g.end - alnMax * 0.004, y: gy0 + geneH / 2,
+        xref: 'x', yref: 'y', text: cleanName(g.name).toUpperCase(),
+        showarrow: false, font: { size: 10, color: 'black' },
+        xanchor: 'right', yanchor: 'middle',
+        hovertext: cleanName(g.name) + ': ' + g.start + '–' + g.end,
+        hoverlabel: { bgcolor: '#fff', font: { size: 11 } },
+      });
+    });
+  }
   box.style.display = 'block';
   Plotly.newPlot(box, traces, layout, { displayModeBar: false, responsive: true });
 }
@@ -7116,7 +7611,9 @@ function renderKvCharts(d, ids) {
         <img src="${url(stem + '.png')}" alt="${esc(label)}"
              style="width:100%;max-width:1400px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:zoom-in"
              onclick="window.open('${url(stem + '.png')}','_blank')">
-        <div style="margin-top:3px"><a class="mono" style="font-size:10.5px" href="${url(stem + '.pdf')}" target="_blank">${t('tl.pdf', 'PDF')}</a></div>
+        <div style="margin-top:3px"><a class="mono" style="font-size:10.5px" href="${url(stem + '.pdf')}" target="_blank">${t('tl.pdf', 'PDF')}</a>
+          · <a class="mono" style="font-size:10.5px" href="${url(stem + '.svg')}" target="_blank">SVG</a>
+          · ${svgEditLink(url(stem + '.svg'), '整理', 'mono')}</div>
       </div>`);
     });
   });
@@ -7168,7 +7665,9 @@ function renderKvVariantPlots(d, ids) {
       <img src="${url(f)}" alt="${esc(label)} variant overview"
            style="width:100%;max-width:900px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:zoom-in"
            onclick="window.open('${url(f)}','_blank')">
-      <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${pdfUrl(f)}" target="_blank">${t('tl.pdf')}</a></div>
+      <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${pdfUrl(f)}" target="_blank">${t('tl.pdf')}</a>
+        · <a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.svg'))}" target="_blank">SVG</a>
+        · ${svgEditLink(url(f.replace(/\.png$/i, '.svg')), '整理', 'mono')}</div>
     </div>`);
   });
   if (others.length) {
@@ -7179,7 +7678,8 @@ function renderKvVariantPlots(d, ids) {
         <img src="${url(f)}" alt="${esc(label)}"
              style="width:100%;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:zoom-in"
              onclick="window.open('${url(f)}','_blank')">
-        <div class="mono" style="font-size:10.5px;margin-top:3px;color:#666">${esc(label)}</div>
+        <div class="mono" style="font-size:10.5px;margin-top:3px;color:#666">${esc(label)}
+          · ${svgEditLink(url(f.replace(/\.png$/i, '.svg')), '整理', 'mono')}</div>
       </div>`);
     });
     parts.push('</div>');
@@ -7236,7 +7736,9 @@ function renderKvEvo(d, ids) {
           <img src="${url(f)}" alt="${esc(a)} ${esc(mod)}"
                style="width:100%;max-width:900px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:zoom-in"
                onclick="window.open('${url(f)}','_blank')">
-          <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.pdf'))}" target="_blank">${t('tl.pdf')}</a></div>
+          <div style="margin-top:4px"><a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.pdf'))}" target="_blank">${t('tl.pdf')}</a>
+            · <a class="mono" style="font-size:10.5px" href="${url(f.replace(/\.png$/i, '.svg'))}" target="_blank">SVG</a>
+            · ${svgEditLink(url(f.replace(/\.png$/i, '.svg')), '整理', 'mono')}</div>
         </div>`);
       });
       out.push('</div>');

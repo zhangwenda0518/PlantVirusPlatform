@@ -1,5 +1,6 @@
 {
   "threads": 19,
+  "plugin_index_url": "",
   "tools": {
     "kunpeng": "3rd\\bin\\kun_peng-v0.7.12-x86_64-pc-windows-msvc.exe",
     "spades": "3rd\\tools\\SPAdes-Windows\\bin\\spades.bat",
@@ -34,7 +35,7 @@
     "dsRNAmax": "3rd\\tools\\dsrnamax\\dsRNAmax_det.exe"
   },
   "databases": {
-    "host": "host-db\\4081_Solanum_lycopersicum_host_db",
+    "host": "host-db\\112863_genomes_host_db",
     "virus": "databases\\kunpeng_db\\plant"
   },
   "defaults": {
@@ -81,13 +82,15 @@
       "assembly"
     ],
     "exec_auto": false,
-    "exec_auto_tune": false
+    "exec_auto_tune": false,
+    "providers": [],
+    "active_profile": ""
   },
   "output_root": "",
   "input_root": "",
   "database_root": "",
   "examples_root": "",
-  "active_host_db": "4081_Solanum_lycopersicum_host_db",
+  "active_host_db": "112863_genomes_host_db",
   "extra_virus_libs": [],
   "extra_kv_indexes": [],
   "extra_db_roots": []

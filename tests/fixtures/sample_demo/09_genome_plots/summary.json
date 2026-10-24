@@ -1,0 +1,9 @@
+{
+ "stage": "gbdraw",
+ "engine": "gbdraw",
+ "plots": [
+  "genome.circular.svg",
+  "genome.linear.svg"
+ ],
+ "n_seqs": 0
+}

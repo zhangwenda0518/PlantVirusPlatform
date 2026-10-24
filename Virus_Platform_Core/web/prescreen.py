@@ -262,6 +262,27 @@ def api_prescreen_run():
     return jsonify({'task': tid, 'name': name})
 
 
+@bp.route('/api/prescreen/running')
+def api_prescreen_running():
+    """本页仍在运行/排队中的预筛任务（前端切页回来后重挂进度用）。
+
+    预筛的日志轮询与按钮看护都活在前端页面内存里，跳页即失；但任务本体
+    在 TaskManager 线程里继续跑。这里按 link='/prescreen' 精确筛出本页
+    任务（排队中的任务快照对外也呈现为 running），并从任务名
+    「病毒预筛 <项目名>」反解出项目名，供前端回填输入框与重挂看护。
+    """
+    from Virus_Platform_Core.web.tasks import tm
+    out = []
+    for snap in tm.list_all(logs=0):
+        if snap.get('link') != '/prescreen' or snap.get('status') != 'running':
+            continue
+        m = re.fullmatch(r'病毒预筛 (.+)', snap.get('name') or '')
+        if m:
+            out.append({'task': snap['id'], 'name': m.group(1),
+                        'msg': snap.get('msg') or ''})
+    return jsonify({'tasks': out})
+
+
 # ------------------------------------------------------------------
 # 读结果
 # ------------------------------------------------------------------

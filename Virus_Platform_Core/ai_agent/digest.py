@@ -286,11 +286,13 @@ def _stage_verify(sd):
 
 
 def _stage_subsample(sd):
-    """子采样：只报了 N 对 reads，但决定后面所有数字的"分母"，必须让 AI 知道。"""
+    """子采样：只报了 N 对 reads，但决定后面所有数字的"分母"，必须让 AI 知道。
+    mode/seed/prop 一并带上——AI 判断样本代表性（prefix vs random/proportion）
+    与复现性时要看。"""
     s = _json_at(sd, os.path.join('00_prep', 'subsample.json'))
     if not s:
         return None
-    return _pick(s, ['n_pairs'])
+    return _pick(s, ['n_pairs', 'mode', 'seed', 'prop'])
 
 
 def _stage_fq2fa(sd):

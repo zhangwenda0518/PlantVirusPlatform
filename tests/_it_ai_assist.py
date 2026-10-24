@@ -23,6 +23,8 @@ for _s in (sys.stdout, sys.stderr):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _fixture_smoke_e2e import ensure as _ensure_smoke_e2e  # noqa: E402
 os.environ.setdefault('VP_NO_RECOVER', '1')
 # 本守卫会发布大量事件 / 建执行单；关掉审计落盘，避免往 run/ai_audit/
 # 写测试垃圾（审计本身的正确性由 tests/_check_ai_audit.py 在临时目录专测）。
@@ -90,6 +92,7 @@ def _sse_events(resp):
 
 
 def main():
+    _ensure_smoke_e2e()
     from app import app as flask_app
     c = flask_app.test_client()
 

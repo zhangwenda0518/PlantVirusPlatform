@@ -11,7 +11,8 @@
   /* 设置页侧边导航（2026-10-16）：窄屏自动退化为横向词条 */
   .se-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr);
                gap: 18px; align-items: start; }
-  .se-side { position: sticky; top: 14px; max-height: calc(100vh - 28px);
+  .se-side { position: sticky; top: calc(var(--topbar-h) + 10px);
+             max-height: calc(100vh - var(--topbar-h) - 20px);
              overflow: auto; padding: 6px 4px;
              border-right: 1px solid rgba(127, 140, 120, .18); }
   .se-group { font-size: 11.5px; color: var(--ink-400, #7b8a99);
@@ -23,7 +24,22 @@
   .se-side a.on { background: var(--green-50, #f2f8f4);
                   color: var(--green-700, #14603b); font-weight: 600; }
   .se-main { min-width: 0; }
-  .se-main section, .se-main h2[id] { scroll-margin-top: 14px; }
+
+  /* 2026-10-21 修：设置卡片改单列流式排布。
+     原先三列 auto-fit 网格把「输出/输入/数据库目录」排在同一行，而侧栏
+     按文档顺序逐个列出 —— 同一行的三张卡 top 完全相同（实测都是 167），
+     点哪个都滚到同一处，看起来就是"跳转很乱、没对齐"。单列后侧栏顺序 =
+     视觉顺序，点谁到谁。卡片内部的小网格（#defaultsGrid）不受影响。 */
+  .se-main > .settings-grid { display: block; }
+  .se-main > .settings-grid > .card { margin-bottom: 18px; }
+  .se-main > .settings-grid > .card:last-child { margin-bottom: 0; }
+
+  /* 锚点落位必须让开吸顶顶栏：顶栏 54px，滚动后目标卡片顶边贴在视口 0
+     处会被压住（实测 top=14 vs 顶栏底 54，标题被吃掉 40px）。
+     --topbar-h 由 app.css 定义，两处同源。 */
+  .se-main section, .se-main h2[id] {
+    scroll-margin-top: calc(var(--topbar-h) + 12px);
+  }
     .pf-list { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-chip { display: inline-flex; align-items: center; gap: 6px;
                padding: 4px 10px; border: 1px solid var(--ink-400, #cbd5e1);
@@ -125,6 +141,25 @@
       <div id="exRootMsg" class="hint" style="margin-top:6px"></div>
   </section>
 
+  <!-- 存储与磁盘：归「目录与存储」组。2026-10-21 从「数据库」之后移到这里 ——
+       原位置让它夹在「通用设置 / 数据库」中间，侧栏按文档顺序渲染时
+       「目录与存储」会被拆成两截，分组标题重复出现。 -->
+  <section id="sec-storage" class="card" style="margin-top:18px">
+      <h2 data-i18n="se.storage">💾 存储与磁盘</h2>
+      <p class="hint" data-i18n="se.storageHint">磁盘剩余空间与各目录占用。
+         目录占用为后台统计（数据库较大时约需几十秒），结果缓存 10 分钟。
+         平台所在盘剩余低于 20GB 时，页面顶部会出现黄色水位横幅。</p>
+      <div id="storagePanel" style="margin-top:10px"></div>
+  </section>
+
+  <!-- 平台目录：同属「目录与存储」组，2026-10-21 与 sec-storage 一起前移，
+       避免该组在侧栏里被「通用设置 / 数据库 / 分析默认参数」拆成两截。 -->
+  <section id="sec-paths" class="card" style="margin-top:18px">
+    <h2 data-i18n="se.paths">平台目录</h2>
+    <p class="hint" data-i18n="se.pathsHint">数据与产物的存放位置（打开目录）</p>
+    <div id="setDirRows"></div>
+  </section>
+
   <section id="sec-general" class="card">
       <h2 data-i18n="se.general">通用设置</h2>
       <div class="set-row">
@@ -162,14 +197,6 @@
   </div>
 
   <!-- 存储与磁盘（目录占用表格较长，通栏放置避免网格内卡片高度失衡） -->
-  <section id="sec-storage" class="card" style="margin-top:18px">
-      <h2 data-i18n="se.storage">💾 存储与磁盘</h2>
-      <p class="hint" data-i18n="se.storageHint">磁盘剩余空间与各目录占用。
-         目录占用为后台统计（数据库较大时约需几十秒），结果缓存 10 分钟。
-         平台所在盘剩余低于 20GB 时，页面顶部会出现黄色水位横幅。</p>
-      <div id="storagePanel" style="margin-top:10px"></div>
-  </section>
-
   <!-- 分析默认参数 -->
   <section id="sec-defaults" class="card" style="margin-top:18px">
     <h2 data-i18n="se.defaults">分析默认参数</h2>
@@ -178,12 +205,6 @@
   </section>
 
   <!-- 平台目录 -->
-  <section id="sec-paths" class="card" style="margin-top:18px">
-    <h2 data-i18n="se.paths">平台目录</h2>
-    <p class="hint" data-i18n="se.pathsHint">数据与产物的存放位置（打开目录）</p>
-    <div id="setDirRows"></div>
-  </section>
-
   <!-- 工具探测（环境自检，从「数据库构建」页移入） -->
   <section class="card" style="margin-top:18px">
     <h2 id="m-tools" data-i18n="bd.toolDetect">🧰 工具探测</h2>
@@ -1066,23 +1087,106 @@ async function aiTest() {
   ];
   const side = document.getElementById('seSide');
   if (!side) return;
-  let html = ''; const ids = [];
+
+  /* 2026-10-21 修：侧栏条目按**文档实际顺序**排序，不照抄 GROUPS 的书写顺序。
+     两处曾经不一致 —— 侧栏把 sec-paths 归在「目录与存储」组末尾，但文档里
+     它排在 sec-storage 之后、sec-defaults **之后**。结果点「平台目录」
+     时，按位置算出来的当前区块是夹在中间的 sec-defaults，高亮跳到别人身上。
+     以 DOM 位置为准后，侧栏顺序 = 视觉顺序 = 高亮判定顺序，三者同源。 */
+  const docTop = (el) => {
+    let y = 0, n = el;
+    while (n) { y += n.offsetTop || 0; n = n.offsetParent; }
+    return y;
+  };
+  const entries = [];
   for (const g of GROUPS) {
-    html += `<div class="se-group">${esc(t(g.key, g.fb))}</div>`;
     for (const [id, key] of g.items) {
-      if (!document.getElementById(id)) continue;
-      html += `<a href="#${id}" data-for="${id}">${esc(t(key, id))}</a>`;
-      ids.push(id);
+      const el = document.getElementById(id);
+      if (!el) continue;
+      entries.push({ id, key, gkey: g.key, gfb: g.fb, pos: docTop(el) });
     }
+  }
+  entries.sort((a, b) => a.pos - b.pos);
+
+  let html = ''; const ids = []; let lastGroup = null;
+  for (const en of entries) {
+    if (en.gkey !== lastGroup) {
+      html += `<div class="se-group">${esc(t(en.gkey, en.gfb))}</div>`;
+      lastGroup = en.gkey;
+    }
+    html += `<a href="#${en.id}" data-for="${en.id}">${esc(t(en.key, en.id))}</a>`;
+    ids.push(en.id);
   }
   side.innerHTML = html;
   const setActive = (id) => side.querySelectorAll('a').forEach(a =>
     a.classList.toggle('on', a.dataset.for === id));
-  const obs = new IntersectionObserver((ents) => {
-    for (const en of ents) if (en.isIntersecting) setActive(en.target.id);
-  }, { rootMargin: '-15% 0px -70% 0px' });
-  ids.forEach(id => obs.observe(document.getElementById(id)));
-  if (ids.length) setActive(ids[0]);
+
+  /* 当前区块判定：取「顶边已越过顶栏下沿 + 一点余量」的最后一个。
+     不用 IntersectionObserver —— 它在一行多个区块同时进入观察带时，
+     后触发的那个会覆盖前一个（实测点「输入目录」高亮跳到「数据库目录」）。
+     这里按滚动位置算，结果确定且与点击顺序无关。
+
+     ⚠ 不能假设"后面的都在下方就 break"：从下往上跳（如 sec-plugins →
+     sec-paths）时，目标上方仍有多个区块越过顶栏，提前退出会停在上一个
+     错项上（实测 sec-paths 亮成 sec-defaults）。必须扫完全部。 */
+  const TOPBAR = 54, GAP = 16;
+  const pickActive = () => {
+    let cur = ids[0];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (el.getBoundingClientRect().top - TOPBAR - GAP <= 0) cur = id;
+    }
+    return cur;
+  };
+  let ticking = false;
+  let lockUntil = 0;                  // 点击后的高亮锁（见下）
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      // 平滑滚动途中会连续触发 scroll；此时按位置算出的仍是"上一屏"的
+      // 区块，会把刚点亮的目标覆盖掉（实测点「通用设置」亮着「示例数据」）。
+      // 锁到期后交还给位置计算，用户后续手动滚动照样能跟随。
+      if (Date.now() < lockUntil) return;
+      setActive(pickActive());
+    });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  /* 点侧栏：显式滚动到目标，并立即高亮该项。 */
+  side.addEventListener('click', (e) => {
+    const a = e.target.closest('a[data-for]');
+    if (!a) return;
+    e.preventDefault();
+    const id = a.dataset.for;
+    const el = document.getElementById(id);
+    if (!el) return;
+    setActive(id);
+    const y = el.getBoundingClientRect().top + window.scrollY
+            - TOPBAR - GAP + 2;
+    // 锁 = 平滑滚动的最长预期时长；期间不接受位置计算的高亮
+    lockUntil = Date.now() + 700;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    // 同步地址栏（不新增历史记录）：刷新/分享后仍能落到同一区块
+    try { history.replaceState(null, '', '#' + id); } catch (err) {}
+  });
+
+  setActive(pickActive());
+
+  /* 带 #hash 直接进入（从别的页面跳 /settings#aiCard 等）：等布局稳定后
+     按同一套偏移滚一次，避免浏览器默认落点被顶栏压住。 */
+  const hash = (location.hash || '').replace('#', '');
+  if (hash && document.getElementById(hash)) {
+    setTimeout(() => {
+      const el = document.getElementById(hash);
+      const y = el.getBoundingClientRect().top + window.scrollY
+              - TOPBAR - GAP + 2;
+      window.scrollTo({ top: Math.max(0, y) });
+      setActive(hash);
+    }, 60);
+  }
 })();
 
 loadAiConfig();

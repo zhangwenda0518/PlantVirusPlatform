@@ -240,6 +240,7 @@
   "/settings": "settings.page_settings",
   "/submissions/<name>/<path:fname>": "submit.submissions_download",
   "/submit": "submit.page_submit",
+  "/svguest/": "pages.page_svguest",
   "/tasks": "pages.page_tasks",
   "/tool_runs/<run>/<path:filename>": "tools.page_tool_run_file",
   "/tools": "tools.page_tools",
@@ -969,6 +970,9 @@
    "GET"
   ],
   "/submit": [
+   "GET"
+  ],
+  "/svguest/": [
    "GET"
   ],
   "/tasks": [

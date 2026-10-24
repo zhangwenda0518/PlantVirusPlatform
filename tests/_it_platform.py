@@ -251,9 +251,11 @@ def main():
     _d_ids = {it.get('id') or it.get('href') for it in _g['detect']['items']}
     _a_ids = {it.get('id') or it.get('href') for it in _g['annotate']['items']}
     # 2026-10-06：detect 组新增 t-crispr（CRISPR/Cas12a 检测试剂设计卡），
-    # 断言清单随 NAV_GROUPS 更新（旧清单缺 t-crispr 导致批量回归误报）
-    check(_d_ids == {'/primer', 't-crispr', 't-dsrna', 't-mirna'},
-          f'检测与防治组 = 引物设计 + CRISPR + dsRNA + miRNA（实际 {sorted(_d_ids)}）')
+    # 断言清单随 NAV_GROUPS 更新（旧清单缺 t-crispr 导致批量回归误报）；
+    # 2026-10-24：detect 组再增 t-conan（CONAN-SWIFT Cas3 crRNA 设计卡）
+    check(_d_ids == {'/primer', 't-conan', 't-crispr', 't-dsrna', 't-mirna'},
+          f'检测与防治组 = 引物设计 + CONAN + CRISPR + dsRNA + miRNA'
+          f'（实际 {sorted(_d_ids)}）')
     check(not ({'/primer'} & _a_ids),
           '注释组不再含引物设计')
 

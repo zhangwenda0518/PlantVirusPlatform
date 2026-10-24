@@ -151,6 +151,18 @@ TESTS = [
     # 四个「同步阻塞→后台任务」改造的真实浏览器验证（.sqn / 物种名校验 /
     # AI 总结 / CDS 导出）；外部依赖全部用桩。无浏览器时自动 SKIP。
     ('tests/_it_async_ui.py',       900,  False),
+    # 浏览器验收组（2026-10-13 入编；此前 6 个用例全都不在批量里——仓库
+    # 第三次踩「写了测试没人跑」坑，本次一次性收编。无浏览器自动 SKIP）：
+    # 格式转换双端 / 下载页输出位置 / meta 任务卡日志 / 顶部导航自适应 /
+    # 工具卡运行日志不随新任务更新 / 样本处理四卡输出目录。
+    ('tests/_check_convert_paired.py', 600, False),
+    ('tests/_check_dl_outdir.py',   600,  False),
+    ('tests/_check_meta_tasklog.py', 600, False),
+    ('tests/_it_nav_responsive.py', 600,  False),
+    ('tests/_check_toolrun_latest.py', 600, False),
+    ('tests/_check_tool_outdir_ui.py', 600, False),
+    # 全局上下文（当前样品/项目）与全局清理按钮的浏览器验证（自起临时实例）。
+    ('tests/_it_global_ctx_ui.py',  600,  False),
     # 任务中心页对「非样品类后台任务」的渲染与可操作性（进度条/日志/
     # 停止/前往），以及「只看当前样品」筛选的真实语义。无浏览器时自动 SKIP。
     ('tests/_it_taskcenter_ui.py',  600,  False),
@@ -195,6 +207,10 @@ TESTS = [
     # 新增/丢失/方法变化都会报红（改路由后需 python tests/_route_inventory.py
     # --save 更新基线）；只读、不启动分析任务，秒级。
     ('tests/_route_inventory.py',    60,  False),
+    # 跨层契约审计（2026-10-13 入编）：前端 URL ↔ 后端路由、i18n 键、
+    # 模板静态资源、模块可达性。只读；此前的 i18n 未定义键漏网即证
+    # （4 个 tk.rdpTh* 键漏定义、英文界面露中文——写了审计却不在批量里）。
+    ('tests/_audit_contract.py',    120,  False),
     # 全路由健壮性巡检：对每条路由发一次空参数请求，只找「未捕获异常 500」；
     # 破坏性路由（空 POST 就改状态/删数据）在脚本内 DESTRUCTIVE_POST 里显式
     # 跳过，且请求前后比对 run/tasks 增删。只写 tests/_audit_routes_report.txt
@@ -211,6 +227,10 @@ TESTS = [
     # 关键全局函数存在性。**逐页独立进程**驱动（同进程连续访问会随机段错误），
     # 约 2-4 分钟；无 playwright 时自动 SKIP 并返回 0。
     ('tests/_check_pages_console.py', 900, False),
+    # 设置页侧栏锚点对齐：13 个条目逐个点击，断言落点在顶栏下方 12~30px、
+    # 高亮的就是被点项、各条目滚动位置互不相同（防"三列网格同排挤在一处"
+    # 与"侧栏顺序 ≠ 文档顺序"两类回归）。无 playwright 时 SKIP（~25s）。
+    ('tests/_check_settings_nav.py', 300, False),
     # ⚡一键分析（全流程）卡：自起临时实例 + 真浏览器，验证本卡自有输入/参数/
     # 输出区齐全、示例与参数互取落到本卡、内联结果链路（桩 API）不串卡（~30s）。
     # 无 playwright（开发依赖未装）时自动 SKIP 并返回 0。
@@ -263,6 +283,9 @@ TESTS = [
     # （坏输入必须红）。VirPhyKit Example 目录不在时 Example 段 SKIP。
     # TreeTime 全量跑约 40s（500 叶）；--fast 可跳。Example 不在本机也全绿。
     ('tests/_check_phylodyn_kit.py',  900, False),
+    # t-phylodyn「时间与地理推断·本地全链」任务层 + 真浏览器端到端（32 项，
+    # 2026-10-13 入编；此前不在批量里）。模块级全绿 ≠ 卡片接线对，这层专抓接线。
+    ('tests/_check_phylodyn_e2e.py',  900, False),
     # VirPhyKit Example 全目录验证（2026-09-17）：42 个文件逐个被对应工具真实
     # 消费并断言（含 Total=各区行和自洽、RRT Min/Max 与 20 副本逐棵核对、
     # na_20/na_200/ebola 三个负例的精确拒绝、全目录覆盖检查漏一个文件即失败）。
@@ -292,6 +315,11 @@ TESTS = [
     ('tests/_check_identity_aa.py', 600, False),
     ('tests/_check_genome_circos.py', 120, False),
     ('tests/_check_svg_wellformed.py', 60, False),
+    # 图形体检扫描守卫（2026-10-13 入编）：对 stage_funnel / kv_fig /
+    # kv_variant_plot / landscape_plot 四个可复跑绘图模块跑 check_figures
+    # 质检（文字重叠/越界 0 FAIL）。variant annotated/ 缺失时自动重建，
+    # Java/snpEff 缺失按 SKIP。
+    ('tests/_check_fig_qa_scans.py', 300, False),
     ('tests/_check_primer.py', 600, False),
     ('tests/_check_examples_inputs.py', 120, False),
     # 在线获取（替代 SeqHarvester 的便利层）+ **输出 schema 一致性**：
@@ -328,6 +356,20 @@ TESTS = [
     # 本条是**消费侧链路**：残缺 SVG 不得进入 report.html（修得动的就地修复后
     # 内嵌、修不动的跳过），对照臂证明"未校验"时确实会漏进报告。
     ('tests/_it_svg_embed_chain.py', 300, False),
+    # 全局重置 / 任务清理 / 队列落盘回归（2026-10-13 入编；此前不在批量里，
+    # _persist 落盘格式从裸列表升级为 {items,paused} 后断言静默腐烂）。
+    # DIRS/队列文件全程指向 run/_it_global_reset_tmp 临时目录，批量安全。
+    ('tests/_it_global_reset.py',   180,  False),
+    # 样品名归一化 + 磁盘真实目录名解析回归（2026-10-13 入编）。
+    ('tests/_it_sample_names.py',   120,  False),
+    # project.json 从既有产物回填（samples-backfill）回归（2026-10-13 入编）。
+    ('tests/_it_manifest_backfill.py', 120, False),
+    # 2026-10-10 审查修复全量回归：P0-1 零命中旧阳性污染 / P1-2 随机子采样 /
+    # P1-6 ani_status 等（2026-10-13 入编，此前不在批量里）。
+    ('tests/_it_review_fixes.py',   300,  False),
+    # 样本处理四工具「输出目录（可选）」API 层验证：convert/fastp/prepchain
+    # 真实跑通 + 指针目录清理（2026-10-13 入编）。
+    ('tests/_check_tool_outdir.py', 400,  False),
 
     # ---- AI 助手（对话驱动智能代理）----
     # 2026-10-08 入编：这 6 个用例此前**存在但从不在批量里**（批量入口是硬编码
@@ -362,6 +404,14 @@ TESTS = [
     ('tests/test_utils_pure.py',      120, False),
     ('tests/test_datasets_cli.py',    120, False),
     ('tests/test_web_guard.py',       120, False),
+    # ---- 2026-10-13 入编：又一批「存在但不在批量里」的 pytest 文件 ----
+    # test_crispr_ui（t-crispr 卡 UI 契约）与 2026-10 新模块的 4 个单测
+    # （io_utils / sci_palette / stage_funnel / rdp5 断点分布兜底）。
+    ('tests/test_crispr_ui.py',       120, False),
+    ('tests/test_io_utils.py',        120, False),
+    ('tests/test_sci_palette.py',      60, False),
+    ('tests/test_stage_funnel.py',    300, False),
+    ('tests/test_rdp5_bdp.py',        120, False),
 ]
 
 # pytest 风格用例：用 pytest 的 fixture / importorskip，且**没有 __main__
@@ -375,6 +425,11 @@ PYTEST_FILES = {
     'tests/test_utils_pure.py',
     'tests/test_datasets_cli.py',
     'tests/test_web_guard.py',
+    'tests/test_crispr_ui.py',
+    'tests/test_io_utils.py',
+    'tests/test_sci_palette.py',
+    'tests/test_stage_funnel.py',
+    'tests/test_rdp5_bdp.py',
 }
 _PYTEST_OK = None
 
@@ -511,7 +566,9 @@ def _run(plan, quick):
             if isinstance(raw, str):
                 raw = raw.encode('utf-8', 'replace')
         txt = raw.decode('utf-8', errors='replace')
-        tail = '\n'.join(txt.strip().splitlines()[-14:])
+        # 尾部 24 行：浏览器类测试一段 ✔ 明细很长，14 行会把真正的
+        # "✘ 失败项"清单截掉（2026-10-13 _it_nav_responsive 实抓）。
+        tail = '\n'.join(txt.strip().splitlines()[-24:])
         dur = time.time() - ts
         if timed_out:
             status = f'TIMEOUT(>{_fmt_secs(to)})'

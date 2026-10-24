@@ -1,0 +1,507 @@
+{
+ "tool": "phylogeo",
+ "n_seqs": 15,
+ "trait": "",
+ "method": "nj",
+ "regions": {
+  "Asia": 5,
+  "Americas": 4,
+  "Europe": 6
+ },
+ "n_transitions": 4,
+ "transitions_top": [
+  {
+   "from": "Asia",
+   "to": "Americas",
+   "count": 1
+  },
+  {
+   "from": "Americas",
+   "to": "Europe",
+   "count": 1
+  },
+  {
+   "from": "Americas",
+   "to": "Asia",
+   "count": 1
+  },
+  {
+   "from": "Asia",
+   "to": "Europe",
+   "count": 1
+  }
+ ],
+ "matrix": [
+  {
+   "from": "Asia",
+   "to": "Americas",
+   "count": 1
+  },
+  {
+   "from": "Americas",
+   "to": "Europe",
+   "count": 1
+  },
+  {
+   "from": "Americas",
+   "to": "Asia",
+   "count": 1
+  },
+  {
+   "from": "Asia",
+   "to": "Europe",
+   "count": 1
+  }
+ ],
+ "unresolved": 0,
+ "n_years": 15,
+ "warnings": [],
+ "transition_classes": {
+  "counts": {
+   "Distant": 4
+  },
+  "thresholds": {
+   "q33": 500.0,
+   "q67": 3000.0,
+   "src": "default(n<6)"
+  },
+  "flags": {
+   "sparse-sampling": 3,
+   "low-divergence": 2
+  },
+  "n_edges": 4,
+  "n_intro": 4,
+  "n_no_tips": 0,
+  "n_unknown_state": 0,
+  "n_state_changes": 4,
+  "snp_median": 21.0,
+  "n_with_step": 0,
+  "rows": [
+   {
+    "parent": "(node)",
+    "child": "(node)",
+    "from": "Asia",
+    "to": "Americas",
+    "geo_km": 15122.5,
+    "step_km": null,
+    "edge_snp": 37,
+    "dt_years": 9.0,
+    "n_p": 1,
+    "n_c": 10,
+    "group_size": 4,
+    "intro": true,
+    "label": "Distant",
+    "note": "sparse-sampling"
+   },
+   {
+    "parent": "(node)",
+    "child": "SIM_Americas_5|Asia|2018",
+    "from": "Americas",
+    "to": "Asia",
+    "geo_km": 15122.5,
+    "step_km": null,
+    "edge_snp": 5,
+    "dt_years": 6,
+    "n_p": 3,
+    "n_c": 1,
+    "group_size": 1,
+    "intro": true,
+    "label": "Distant",
+    "note": "low-divergence;sparse-sampling"
+   },
+   {
+    "parent": "(node)",
+    "child": "(node)",
+    "from": "Americas",
+    "to": "Europe",
+    "geo_km": 9157.6,
+    "step_km": null,
+    "edge_snp": 78,
+    "dt_years": -4,
+    "n_p": 5,
+    "n_c": 5,
+    "group_size": 5,
+    "intro": true,
+    "label": "Distant",
+    "note": ""
+   },
+   {
+    "parent": "(node)",
+    "child": "SIM_Asia_5|Europe|2009",
+    "from": "Asia",
+    "to": "Europe",
+    "geo_km": 7187.2,
+    "step_km": null,
+    "edge_snp": 4,
+    "dt_years": 8,
+    "n_p": 1,
+    "n_c": 1,
+    "group_size": 1,
+    "intro": true,
+    "label": "Distant",
+    "note": "low-divergence;sparse-sampling"
+   }
+  ],
+  "rows_truncated": 0,
+  "method": "分类口径（自研）：主标签 = 两端区划锚点的 haversine 距离**运行内分位带**（≤q33 Direct / ≥q67 Distant / 中间 Indirect）。阈值随数据自适应，不沿用 phymapr 的固定公里阈值；跨区边 <6 条或分位退化时退回 500/3000 km（thresholds.src 标注）。低分化远程（edge_snp ≤ 中位数）与同期远程（|dt| ≤1 年）只作证据标记，不改分类。另给 intro/group_size（是否为引入边及其连续同区叶组大小；与 import/export 同一判定，因几乎每条带叶跨区边都满足，故不作主标签）。"
+ },
+ "corridor_classes": [
+  {
+   "from": "Americas",
+   "to": "Asia",
+   "label": "Distant",
+   "counts": {
+    "Distant": 1
+   },
+   "n": 1,
+   "n_intro": 1,
+   "max_group": 1
+  },
+  {
+   "from": "Americas",
+   "to": "Europe",
+   "label": "Distant",
+   "counts": {
+    "Distant": 1
+   },
+   "n": 1,
+   "n_intro": 1,
+   "max_group": 5
+  },
+  {
+   "from": "Asia",
+   "to": "Americas",
+   "label": "Distant",
+   "counts": {
+    "Distant": 1
+   },
+   "n": 1,
+   "n_intro": 1,
+   "max_group": 4
+  },
+  {
+   "from": "Asia",
+   "to": "Europe",
+   "label": "Distant",
+   "counts": {
+    "Distant": 1
+   },
+   "n": 1,
+   "n_intro": 1,
+   "max_group": 1
+  }
+ ],
+ "motp": {
+  "axis": "tip_years",
+  "bin_width": 1.0,
+  "bins": [
+   {
+    "lo": 2009.0,
+    "hi": 2010.0,
+    "n": 1
+   },
+   {
+    "lo": 2010.0,
+    "hi": 2011.0,
+    "n": 1
+   },
+   {
+    "lo": 2011.0,
+    "hi": 2012.0,
+    "n": 0
+   },
+   {
+    "lo": 2012.0,
+    "hi": 2013.0,
+    "n": 1
+   },
+   {
+    "lo": 2013.0,
+    "hi": 2014.0,
+    "n": 0
+   },
+   {
+    "lo": 2014.0,
+    "hi": 2015.0,
+    "n": 0
+   },
+   {
+    "lo": 2015.0,
+    "hi": 2016.0,
+    "n": 0
+   },
+   {
+    "lo": 2016.0,
+    "hi": 2017.0,
+    "n": 0
+   },
+   {
+    "lo": 2017.0,
+    "hi": 2018.0,
+    "n": 0
+   },
+   {
+    "lo": 2018.0,
+    "hi": 2019.0,
+    "n": 1
+   }
+  ],
+  "rows": [
+   {
+    "lo": 2009.0,
+    "hi": 2010.0,
+    "from": "Asia",
+    "to": "Europe",
+    "count": 1
+   },
+   {
+    "lo": 2010.0,
+    "hi": 2011.0,
+    "from": "Americas",
+    "to": "Europe",
+    "count": 1
+   },
+   {
+    "lo": 2012.0,
+    "hi": 2013.0,
+    "from": "Asia",
+    "to": "Americas",
+    "count": 1
+   },
+   {
+    "lo": 2018.0,
+    "hi": 2019.0,
+    "from": "Americas",
+    "to": "Asia",
+    "count": 1
+   }
+  ],
+  "n_undated": 0,
+  "series": [
+   {
+    "from": "Americas",
+    "to": "Asia",
+    "points": [
+     [
+      2018.5,
+      1
+     ]
+    ]
+   },
+   {
+    "from": "Americas",
+    "to": "Europe",
+    "points": [
+     [
+      2010.5,
+      1
+     ]
+    ]
+   },
+   {
+    "from": "Asia",
+    "to": "Americas",
+    "points": [
+     [
+      2012.5,
+      1
+     ]
+    ]
+   },
+   {
+    "from": "Asia",
+    "to": "Europe",
+    "points": [
+     [
+      2009.5,
+      1
+     ]
+    ]
+   }
+  ],
+  "note": "时间轴用的是**后代叶采样年的中位**（近似），不是节点年代 —— 要严格年代请先跑「时间信号与定年」里的 LSD2，再把 `.date.nexus` 填进来。",
+  "flow_series": {
+   "centers": [
+    2009.5,
+    2010.5,
+    2011.5,
+    2012.5,
+    2013.5,
+    2014.5,
+    2015.5,
+    2016.5,
+    2017.5,
+    2018.5
+   ],
+   "total": [
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "regions": [
+    {
+     "region": "Americas",
+     "in": [
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "out": [
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+     ],
+     "net": [
+      0,
+      -1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      -1
+     ]
+    },
+    {
+     "region": "Asia",
+     "in": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+     ],
+     "out": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "net": [
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+     ]
+    },
+    {
+     "region": "Europe",
+     "in": [
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "out": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "net": [
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  "n_transitions": 4,
+  "n_timed": 4
+ },
+ "rrt": null,
+ "rssp": null,
+ "weight_bands": null,
+ "beast": null,
+ "rrt_perm": 0,
+ "rssp_bs": 0,
+ "seed": 0,
+ "motp_bin": 1.0,
+ "date_trait": "year",
+ "dated_tree": null,
+ "coords": {
+  "Americas": [
+   10.0,
+   -80.0
+  ],
+  "Asia": [
+   34.0,
+   100.0
+  ],
+  "Europe": [
+   50.0,
+   10.0
+  ]
+ },
+ "coord_src": {
+  "Americas": "builtin",
+  "Asia": "builtin",
+  "Europe": "builtin"
+ },
+ "coord_missing": [],
+ "coords_file": null,
+ "coord_skips": [],
+ "sample_points": [],
+ "n_sample_coords": 0,
+ "sample_points_truncated": 0,
+ "out_dir": "D:\\桌面\\植物病毒分析平台\\analysis\\phylogeo_real_run\\phylogeo"
+}

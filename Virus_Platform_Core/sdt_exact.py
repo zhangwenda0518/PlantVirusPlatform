@@ -29,6 +29,7 @@ from pathlib import Path
 import numpy as np
 
 from .utils import safe_open
+from . import sci_palette as sp
 
 # matplotlib Agg（与 landscape_plot 同口径）
 import matplotlib
@@ -36,9 +37,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
-mpl = matplotlib
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
+sp.apply_sci_style()   # 样式唯一真源（fonttype 42 等；2026-10-12 起不再手抄）
 
 # SDT 经典红黄色阶（10 档）+ 常用学术色阶（按 matplotlib cmap 采样 10 档）
 # ⚠️ 后端 SDT_COLORS 是**权威色值**：前端 `webapp/static/js/app-compare.js`
@@ -49,6 +48,15 @@ SDT_COLORS = [(0.49, 0.02, 0.05), (0.66, 0.11, 0.05), (0.80, 0.24, 0.06),
               (1.00, 1.00, 0.94)]
 PLOT_DPI = 300
 
+
+def _save_svg(obj, out_base):
+    """附带一份 SVG（供 svguest 等矢量编辑器二次排版）；失败不阻断 PNG/PDF。"""
+    try:
+        obj.savefig(f'{out_base}.svg', bbox_inches='tight', facecolor='white')
+    except Exception:
+        pass
+
+
 PALETTE_NAMES = ['sdt', 'cividis', 'viridis', 'RdYlBu', 'Spectral',
                  'YlGnBu', 'coolwarm', 'magma']
 
@@ -56,9 +64,13 @@ PALETTE_NAMES = ['sdt', 'cividis', 'viridis', 'RdYlBu', 'Spectral',
 def _cmap_colors(name):
     """任意 matplotlib colormap → 10 档 RGB 列表（供 BoundaryNorm 硬分界）。"""
     try:
-        cm = plt.get_cmap(name)
+        # mpl≥3.9 移除 plt.get_cmap，改用 colormaps 注册表
+        cm = matplotlib.colormaps[name]
         return [tuple(c[:3]) for c in cm(np.linspace(0, 1, 10))]
-    except (ValueError, TypeError):
+    except (KeyError, ValueError, TypeError):
+        # KeyError：'sdt' 这类自造名不在注册表里（旧 plt.get_cmap 时代抛
+        # ValueError，mpl 3.9+ 改抛 KeyError——不接住它，SDT 经典红黄色阶
+        # 回退整条失效，sdt/identity/compare 三处全部崩，2026-10-13 实测）。
         return list(SDT_COLORS)
 
 K_ORIENT = 21
@@ -504,6 +516,7 @@ def plot_heatmap(mat, labels, title, out_base, triangle_only=True,
 
     fig.savefig(f'{out_base}.png', dpi=PLOT_DPI, bbox_inches='tight',
                 facecolor='white')
+    _save_svg(fig, out_base)
     fig.savefig(f'{out_base}.pdf', bbox_inches='tight', facecolor='white')
     plt.close(fig)
 
@@ -550,6 +563,7 @@ def plot_distribution(mat, title, out_base, triangle_only=True):
     plt.grid(axis='y', linestyle='--', alpha=0.7, color='#CCCCCC')
     plt.savefig(f'{out_base}.png', dpi=PLOT_DPI, bbox_inches='tight',
                 facecolor='white')
+    _save_svg(plt, out_base)
     plt.savefig(f'{out_base}.pdf', bbox_inches='tight', facecolor='white')
     plt.close('all')
 
@@ -923,6 +937,7 @@ def plot_heatmap_composite(nt_full, aa_full, labels, title, out_base,
     cbar.set_label('Identity (%)  ·  Upper: NT / Lower: AA')
     fig.savefig(f'{out_base}.png', dpi=PLOT_DPI, bbox_inches='tight',
                 facecolor='white')
+    _save_svg(fig, out_base)
     fig.savefig(f'{out_base}.pdf', bbox_inches='tight', facecolor='white')
     plt.close(fig)
 

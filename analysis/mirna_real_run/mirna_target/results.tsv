@@ -1,0 +1,5 @@
+mirna_id	target_virus_id	target_virus_name	consensus_level	num_algorithms	consensus_detail	best_energy	best_identity	num_mismatches	seed_perfect_wc	seed_wobble_count	target_start	target_end	miranda_score	miranda_energy	miranda_identity	miranda_similarity	miranda_bin_score	miranda_bin_energy	rnahybrid_bin_mfe	pita_bin_dgopen
+Oryza_sativa-miRN73-5p	NC_002034	NC_002034	LOW+	2	miRanda+RNAhybrid	-26.700000762939453	76.19047619047619	3	6	1	822	843	71.0	-26.700000762939453	76.19047619047619	85.71428571428571				
+Rhamphospermum_arvense_miRNA_00033	NC_002035	NC_002035	LOW+	2	miRanda+RNAhybrid	-29.5	81.81818181818183	1	7	0	2491	2512	81.0	-21.5	81.81818181818183	86.36363636363636				
+Oryza_sativa-miRN73-5p	NC_001440	NC_001440	LOW	1	miRanda	-22.899999618530273	66.66666666666666	2	5	2	1692	1712	62.0	-22.899999618530273	66.66666666666666	80.95238095238095				
+Brachypodium_distachyon_miRNA_00736	NC_001440	NC_001440	LOW+	2	miRanda+psRNATarget	-23.0	66.66666666666666	3	4	3	1936	1955	67.0	-23.0	66.66666666666666	80.95238095238095				

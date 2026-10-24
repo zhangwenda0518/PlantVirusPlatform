@@ -1,0 +1,8 @@
+{
+ "n_annotated": 11,
+ "n_orfs": 14,
+ "n_families": 2,
+ "engine": "diamond",
+ "n_hmm_only": 1,
+ "n_bfvd_only": 0
+}

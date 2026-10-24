@@ -85,3 +85,14 @@ tkinterdnd2
 # 注意包名是 **phylo-treetime**（import 名才是 treetime）；裸 `pip install
 # treetime` 装到的是同名但更老的包，会缺 graphviz 等依赖。
 phylo-treetime>=0.11
+
+# ── MCP 服务器/控制台（2026-10-24 显式声明；此前仅靠传递依赖，干净克隆
+#    pip install -r 后 MCP 控制台/mcp_server 全部 ImportError）──
+# SDK 必须锁 v1：2.x 把 FastMCP 改名 MCPServer 且 API 不兼容
+# （与 mcp_server._ensure_mcp_sdk 的 mcp<2 同口径）。
+mcp>=1.0,<2
+anyio>=4.0             # mcp 传输层（mcp_server 直接 import）
+httpx>=0.27            # mcp 依赖（AI provider 亦用）
+pydantic>=2.0          # mcp 工具签名
+uvicorn>=0.23          # mcp_server --http 模式
+cycler>=0.11           # matplotlib 传递依赖，显式化（audit_deps 必需项）

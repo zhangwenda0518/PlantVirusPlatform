@@ -990,8 +990,14 @@ def _tool_job_kvsuite(ctx):
         for nm in names:
             # 勾选框给的是 /api/samples 返回的真实目录名 → 按磁盘解析后再取输入
             real = resolve_sample_name(nm, DIRS['results'])
-            sd = check_path(os.path.join(DIRS['results'], real),
-                            must_exist=True, in_platform=True)
+            sd = os.path.join(DIRS['results'], real)
+            if not os.path.isdir(sd):
+                # 先给出可读提示，而不是裸的「路径不存在: <绝对路径>」——
+                # 2026-10-13 用户换测试数据删掉样品目录后，报错完全看不出
+                # 是「样品没了」；示例按钮也不再依赖已注册样品（见 examples.js）
+                abort(400, f'样品不存在: {nm}（run/results 下无目录 {real}；'
+                           f'可在样品接入页重建，或改用「直接输入测序数据」）')
+            sd = check_path(sd, must_exist=True, in_platform=True)
             r1, r2, _proj = load_sample_input(sd)
             if not r1 or not os.path.isfile(r1):
                 abort(400, f'样品 {nm} 的 R1 不可用: {r1}')
@@ -1652,12 +1658,46 @@ def _tool_job_rdp(ctx):
         # summary.json 的 input 是 /api/tool/rdp_masked 回读原比对的依据：
         # 必须记 **RDP5 实际吃到的那份比对**（预筛后的 clean.fasta），
         # 否则掩蔽坐标与事件坐标对不上。原始输入另存 source_input 备查。
+        # 断点分布兜底（2026-10-12）：RDP5CL 的 -rbdp 只统计双亲本都已
+        # 鉴定的事件——事件带 Unknown 亲本时（真实数据常见）分布 CSV
+        # 静默全 0、前端画出 0 平线。此时用事件断点重建，并在摘要注明。
+        bdp_csv = os.path.join(out_dir, _r5.BDP_CSV)
+        rdp_note = None
+        if evs and _r5.breakpoint_distribution_degenerate(bdp_csv):
+            _r5.synthesize_breakpoint_distribution(bdp_csv, evs, aln_len)
+            rdp_note = ('断点分布由平台按检出事件的断点重建（RDP5 对含'
+                        '未鉴定亲本 Unknown 的事件不产出断点分布）')
+        # 基因图谱（2026-10-12 增，可选）：RDP5CL 命令行不产出 ORFCoords，
+        # 由用户给 Rgrapher 风格 CSV（Gene.symbol,Start,Stop，参考序列
+        # nt 坐标），经比对参考行的 gap 轮廓映射到比对坐标，前端画条带。
+        gene_map = None
+        orf_in = (ctx.p.get('orf_csv') or '').strip()
+        if orf_in:
+            try:
+                gene_map = _r5.orf_csv_to_aln_map(
+                    orf_in, aln_used, qc_ref or None)
+                with open(os.path.join(out_dir, 'gene_map.json'), 'w',
+                          encoding='utf-8') as f:
+                    json.dump(gene_map, f, ensure_ascii=False, indent=1)
+                if not gene_map['genes']:
+                    rdp_note = (rdp_note + '；' if rdp_note else '')
+                    rdp_note += ('基因坐标全部无法映射（参考序列坐标越界？'
+                                 '应按 qc_ref 参考序列给 GenBank 坐标）')
+            except Exception as exc:
+                log(f'[warn] 基因坐标解析失败：{type(exc).__name__}: {exc}')
+                rdp_note = (rdp_note + '；' if rdp_note else '')
+                rdp_note += f'基因坐标 CSV 解析失败：{exc}'
+                gene_map = None
         summary = {'tool': 'rdp', 'engine': 'rdp5',
                    'n_seqs': n_seqs, 'aln_len': aln_len,
                    'variable': n_var, 'n_events': len(evs),
                    'events': evs[:200], 'csv': csv_path,
                    'qc': _qc_brief(qc),
                    'input': aln_used, 'source_input': inp, 'out_dir': out_dir}
+        if gene_map:
+            summary['gene_map'] = gene_map
+        if rdp_note:
+            summary['note'] = rdp_note
         with open(os.path.join(out_dir, 'summary.json'), 'w',
                   encoding='utf-8') as f:
             json.dump(summary, f, ensure_ascii=False, indent=1)
@@ -2142,6 +2182,64 @@ def _tool_job_crispr(ctx):
         except cd.CrisprDesignError as e:
             raise RuntimeError(str(e))
         logger.close()
+        return summary
+    return job
+
+
+def _tool_job_conan(ctx):
+    """CONAN-SWIFT（Cas3 / I 型 I-E）crRNA 设计（引擎 conan_design.py）：
+
+    多分离物目标 FASTA（可多分体，header 含 RNA1/S2 等标签自动分组）
+    + 可选负组 FASTA → 目标+负组合并 MAFFT → AAG（3nt PAM）+ 32nt
+    spacer 双链扫描 → 逐候选同源位点核查：目标规则（PAM 保留 + 种子
+    有效匹配 + 非种子错配 ≤ max）/ 负组规则（PAM 已变 且 种子有效错配
+    = 背景干净，双双保留 = leak）→ 过滤（末端 margin / GC 区间 / 种子
+    同碱基 run）→ 评分排序。产物落 run_dir/conan/。与 t-crispr
+    （Cas12a/Cas13a）互不覆盖：评分模型与输出形态不同，规则来源与
+    许可口径见 conan_design 模块头注释。
+    """
+    targets = ctx.req('input', '目标 FASTA')
+
+    def _int_param(key, default, lo=None, hi=None):
+        raw = ctx.p.get(key)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return default
+        try:
+            v = int(str(raw).strip())
+        except (TypeError, ValueError):
+            v = default
+        if lo is not None:
+            v = max(lo, v)
+        if hi is not None:
+            v = min(hi, v)
+        return v
+
+    def job(log, prog, cancel):
+        from Virus_Platform_Core import conan_design as cnd
+        params = {
+            'negative': (ctx.p.get('negative') or '').strip(),
+            'pam': (ctx.p.get('pam') or '').strip().upper() or None,
+            # 以下默认与引擎常量一致（32/8/'6'/4/150/3），表单缺省同值
+            'spacer_len': _int_param('spacer_len', 32, 24, 36),
+            'seed_len': _int_param('seed_len', 8, 4, 12),
+            'ignored': (ctx.p.get('ignored') or '6').strip(),
+            'max_nonseed_mm': _int_param('max_nonseed_mm', 4, 0, 36),
+            'terminal_margin': _int_param('terminal_margin', 150, 0, 2000),
+            'exclude_terminal': ctx.p.get('exclude_terminal', '1'),
+            'select_gc': ctx.p.get('select_gc', '1'),
+            'gc_min': _int_param('gc_min', 35, 0, 100),
+            'gc_max': _int_param('gc_max', 65, 0, 100),
+            'exclude_homopolymer': ctx.p.get('exclude_homopolymer', '1'),
+            'homopolymer': _int_param('homopolymer', 3, 2, 12),
+            'group_by_segment': ctx.p.get('group_by_segment', '1'),
+            'top_n': _int_param('top_n', 20, 1, 200),
+            'threads': ctx.threads or 0,
+        }
+        try:
+            summary, _report = cnd.run_chain(targets, params, ctx.run_dir,
+                                             log, prog, cancel)
+        except cnd.CrisprDesignError as e:
+            raise RuntimeError(str(e))
         return summary
     return job
 

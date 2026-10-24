@@ -433,7 +433,12 @@ async function hydrateKvLibSelects(pref) {
 // 各阶段专属参数（渲染进对应卡片；label 为 i18n 键 pp.<key>）
 const STAGE_PARAMS = {
   subsample: [
+    { id: 'subsample_mode', label: 'pp.subMode', type: 'select', def: 'prefix',
+      opts: [['prefix', 'prefix（前 N 对，快速冒烟）'],
+             ['random', 'random（随机 N 对，等概率·seed 可复现）'],
+             ['proportion', 'proportion（按比例随机，条数精确）']] },
     { id: 'subsample', label: 'pp.subPairs', type: 'number', def: 100000 },
+    { id: 'subsample_prop', label: 'pp.subProp', type: 'number', def: 0.5 },
   ],
   fastp: [
     { id: 'fastp_dedup', label: 'pp.fastp_dedup', type: 'chk', def: false },
@@ -571,6 +576,8 @@ function collectParams() {
     confidence: +($('confidence')?.value) || 0,
     chunk_dir: ($('chunk_dir')?.value || '').trim() || null,
     subsample: +($('subsample')?.value) || undefined,
+    subsample_mode: $('subsample_mode')?.value || undefined,
+    subsample_prop: +($('subsample_prop')?.value) || undefined,
     db_host: ($('db_host')?.value || '').trim() || null,
     db_virus: ($('db_virus')?.value || '').trim() || null,
     // ②b 鉴定库：''/自选占位未确认 = 默认 kv_index（resolve_kv_lib 解析）

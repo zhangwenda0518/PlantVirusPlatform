@@ -39,7 +39,8 @@ STDLIB |= {'os', 'sys', 're', 'json', 'time', 'shutil', 'glob', 'csv',
            'datetime', 'calendar', 'locale', 'gettext', 'logging'}
 
 # 本地模块（平台自己的包）
-LOCAL = {'Virus_Platform_Core', 'app', 'main', 'dev_tools', 'tests'}
+LOCAL = {'Virus_Platform_Core', 'app', 'main', 'mcp_server',
+         'dev_tools', 'tests'}
 
 
 def _local_submodules():

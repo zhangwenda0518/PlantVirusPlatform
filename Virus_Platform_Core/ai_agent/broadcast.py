@@ -122,8 +122,8 @@ def _stage_disp(stage):
 # ------------------------------------------------------------------
 # 每阶段一句"在做什么/为什么/产出什么"。（zh, en）
 STAGE_NOTES = {
-    'subsample': ('子采样：从原始 FASTQ 取前 N 对 reads 先探路——小数据快速验证参数与库是否合适，确认可行后再跑全量。',
-                  'Subsampling: take the first N read pairs to pilot the run — validate parameters and libraries on small data before the full set.'),
+    'subsample': ('子采样：从原始 FASTQ 抽一小部分 reads 先探路——prefix=取前 N 对（最快，但可能偏向 lane/批次开头）；random=蓄水池等概率随机抽 N 对；proportion=按 subsample_prop 比例随机抽（如 0.5=50%，条数精确）。random/proportion 同 seed 完全可复现，适合代表性抽检；确认可行后再跑全量。',
+                  'Subsampling: pilot on a small slice of the FASTQ — prefix = first N pairs (fastest, but may skew toward the start of the lane/batch); random = reservoir-sampled N pairs with uniform probability; proportion = random draw of subsample_prop (e.g. 0.5 = 50%, exact count). random/proportion are seed-reproducible; run the full set once validated.'),
     'fastp': ('⓪ 质控：fastp 去接头、过滤低质量 reads。⚠ sRNA 测序务必把最短读长设 ≤18，默认 50 会把小 RNA 全部滤掉。产出 clean reads 与质控报告。',
               'Stage ⓪ QC: fastp trims adapters and filters low-quality reads. Keep min length ≤18 for sRNA libraries. Outputs clean reads and a QC report.'),
     'fq2fa': ('⓪b 格式转换：FASTQ→FASTA，供分类引擎提速（分类只读序列本身，不需要质量值）。',

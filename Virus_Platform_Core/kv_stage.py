@@ -28,6 +28,7 @@ import time
 
 from .config import DIRS, PLATFORM_ROOT, get_config
 from .utils import check_path, run_cmd, run_cmd_redirect
+from .io_utils import read_rows as _io_read_rows
 
 STAGE_DIR = '02b_kvsuite'
 SUMMARY = 'summary.json'
@@ -214,20 +215,13 @@ _DTYPES = {'String', 'Int64', 'Int32', 'Float64', 'Float32', 'Boolean',
 
 def _read_tsv_rows(path):
     """读 TSV → (表头 list, 数据行 list)。跳过 polars 误写出的 dtype 行。"""
-    if not os.path.isfile(path):
-        return [], []
-    with open(path, encoding='utf-8', errors='replace') as fh:
-        lines = [ln.rstrip('\n') for ln in fh if ln.strip()]
-    if not lines:
-        return [], []
-    head = lines[0].split('\t')
-    rows = []
-    for ln in lines[1:]:
-        cols = ln.split('\t')
-        if cols and all((c or '').strip() in _DTYPES for c in cols[:3]):
-            continue                      # dtype 行（历史 bug 产物），不算数据
-        rows.append(cols)
-    return head, rows
+    header, rows, _ = _io_read_rows(path, sep='\t', skip_pred=_is_dtype_row)
+    return (header or [], rows)
+
+
+def _is_dtype_row(cols):
+    """polars 误写 dtype 行的判定：前 3 列全是 dtype 字面量（历史 bug 产物）。"""
+    return bool(cols) and all((c or '').strip() in _DTYPES for c in cols[:3])
 
 
 def _col(head, *names):

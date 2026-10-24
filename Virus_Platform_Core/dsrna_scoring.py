@@ -391,6 +391,26 @@ def score_sequence(name, seq, params=None, off_counts=None,
                             params['min_window'], params['max_window'])
     scores = [f['total_score'] for f in feats.values()]
     top_sirnas = sorted(feats.items(), key=lambda kv: -kv[1]['total_score'])[:top]
+    # 效价分布（report 可视化用）：siRNA 沿 guide 5'→3' 编号 i，臂（正义链）
+    # 长 L = n + k - 1，guide 位置 g 对应臂位置 L-g+1，siRNA i 覆盖臂帧
+    # [L-i-k+1, L-i+1]，窗口中心 = L-i-(k-1)/2+1（k=21 → L-i-9，首 siRNA
+    # 即臂 3' 端 [L-20, L] 的中心）。combined 逐点公式与 pick_best_window
+    # 完全一致：(eff*效价 + saf*安全)/100。
+    names_all = _sorted_names(feats)
+    _L = len(names_all) + SIRNA_LEN - 1
+    _prof = sorted(
+        ((n, _L - i - (SIRNA_LEN - 1) // 2 + 1,
+          round((efficiency_priority * feats[n]['total_score']
+                 + safety_priority * feats[n].get('norm_off_target', 0.0))
+                / 100.0, 2))
+         for i, n in enumerate(names_all, 1)),
+        key=lambda t: t[1])
+    profile = {
+        'x': [p[1] for p in _prof],
+        'combined': [p[2] for p in _prof],
+        'total_score': [round(feats[p[0]]['total_score'], 2) for p in _prof],
+        'frame': 'x = 臂(正义链)帧 siRNA 窗口中心 nt；combined 为选窗量',
+    }
     return {
         'name': name,
         'length': len(seq),
@@ -398,6 +418,7 @@ def score_sequence(name, seq, params=None, off_counts=None,
         'median_score': round(float(np.median(scores)), 2) if scores else None,
         'mean_score': round(float(np.mean(scores)), 2) if scores else None,
         'best_window': best,
+        'profile': profile,
         'top_siRNAs': [
             {'name': n, 'score': f['total_score'],
              'antisense': f['antisense_5_3'], 'asymScore': f['asymScore'],

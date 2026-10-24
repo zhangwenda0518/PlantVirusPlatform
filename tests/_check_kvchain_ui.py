@@ -9,7 +9,9 @@
   1. 本卡可见输入 >= 15 个，样品/参考/注释/鉴定库/引擎/阈值/开关/线程数都在；
   2. 本卡有 .tool-out 输出区 + #toolrun-kvchain 容器；
   3. 结果面板容器齐全（徽标/流程各段/汇总目录/鉴定表/过滤表/变异图/演化图/深度图）；
-  4. 「✨ 示例」填的是本卡 #kvc_samples（不再落到另一张卡的 kv_samples）；
+  4. 「✨ 示例」填本卡直接 reads（#kvc_reads_r1/r2 → 内置示例 reads 绝对路径），
+     并清空样品框——不再填样品名 EXAMPLE（那个样品无人创建，点了必报
+     「路径不存在: run\\results\\EXAMPLE」，2026-10-13 用户换测试数据后复现）；
   5. 「⤓ 取该卡参数」把 t-kvsuite 卡当前表单值搬过来；
   6. 未选样品点运行时给明确提示，不静默；
   7. 内联结果链路：用 page.route 桩住 chain_result / kvsuite_result，
@@ -212,11 +214,19 @@ def main() -> int:
             print('\n[3] 示例填入落到本卡')
             ex = sec.locator('.vp-ex-btn', has_text='示例').first
             check(ex.count() > 0, '标题栏有「✨ 示例」按钮')
-            pg.evaluate("document.querySelector('#kvc_samples').value=''")
+            pg.evaluate("document.querySelector('#kvc_samples').value='STALE_S'")
+            pg.evaluate("document.querySelector('#kvc_reads_r1').value=''")
+            pg.evaluate("document.querySelector('#kvc_reads_r2').value=''")
             ex.click()
-            pg.wait_for_timeout(400)
+            pg.wait_for_timeout(800)   # 等异步取 /api/example_paths 绝对路径
             v = pg.eval_on_selector('#kvc_samples', 'e => e.value')
-            check(v == 'EXAMPLE', f'「示例」填入本卡 #kvc_samples（实际 {v!r}）')
+            check(v == '', f'「示例」清空样品框（不依赖 run/results/<样品> 存在）'
+                           f'（实际 {v!r}）')
+            r1 = pg.eval_on_selector('#kvc_reads_r1', 'e => e.value')
+            r2 = pg.eval_on_selector('#kvc_reads_r2', 'e => e.value')
+            check(r1.endswith('example_R1.fastq.gz')
+                  and r2.endswith('example_R2.fastq.gz'),
+                  f'「示例」填本卡直接 reads R1/R2（实际 {r1!r} / {r2!r}）')
 
             print('\n[4] 「取该卡参数」从 t-kvsuite 卡搬运')
             pg.evaluate("document.querySelector('#kv_samples').value='PULLED_A,B'")
@@ -235,6 +245,9 @@ def main() -> int:
             dialogs = []
             pg.on('dialog', lambda d: (dialogs.append(d.message), d.dismiss()))
             pg.evaluate("document.querySelector('#kvc_samples').value=''")
+            # [3] 的示例填充已把直接 reads 填上；「无输入」场景须连 reads 一起清
+            pg.evaluate("document.querySelector('#kvc_reads_r1').value=''")
+            pg.evaluate("document.querySelector('#kvc_reads_r2').value=''")
             sec.locator('button', has_text='一键运行').first.click()
             pg.wait_for_timeout(800)
             check(bool(dialogs) and '样品' in dialogs[0],

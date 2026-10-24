@@ -536,6 +536,11 @@ def _analysis_kwargs(body):
         assembly_input=_val('assembly_input', 'virus'),
         memory_gb=min(int(_val('memory', 64) or 64), _ram_cap_gb),
         subsample=int(_val('subsample', 0) or 0),
+        # 子采样模式（prefix/random/proportion）+ 比例 + 种子（见
+        # pipeline.subsample_fastq；proportion 需配 subsample_prop ∈ (0,1]）
+        subsample_mode=_val('subsample_mode', 'prefix'),
+        subsample_seed=int(_val('subsample_seed', 42) or 42),
+        subsample_prop=float(_val('subsample_prop', 0) or 0),
         min_contig_len=int(_val('min_contig_len', 200) or 200),
         min_orf_aa=int(_val('min_orf_aa', 100) or 100),
         # ⑥b 层1 命中过滤门槛（百分数口径；空/0 = 不过滤，保持历史结果）
@@ -798,12 +803,20 @@ def api_pipeline_create():
                        f'而「{sample}」已存在；请换一个样品名')
         abort(400, f'样品 {sample} 已存在，请换一个样品名')
     os.makedirs(sd, exist_ok=True)
-    # 可选：创建时立即截取子样本作为管道输入（大样品先小规模验证）
+    # 可选：创建时立即截取子样本作为管道输入（大样品先小规模验证）。
+    # mode：prefix=前 N 对（默认）；random=蓄水池随机 N 对；proportion=按
+    # subsample_prop 比例随机（条数精确，对齐 seqkit sample2 -p）。
     sub = int(body.get('subsample', 0) or 0)
+    sub_mode = str(body.get('subsample_mode') or 'prefix')
+    sub_p = float(body.get('subsample_prop', 0) or 0)
     in1, in2 = body['r1'], body.get('r2')
-    if sub > 0:
+    if sub > 0 or (sub_mode == 'proportion' and 0 < sub_p <= 1):
         from Virus_Platform_Core.pipeline import subsample_fastq
-        in1, in2 = subsample_fastq(in1, in2, os.path.join(sd, '00_prep'), sub)
+        in1, in2 = subsample_fastq(
+            in1, in2, os.path.join(sd, '00_prep'), sub,
+            mode=(sub_mode if sub_mode in ('prefix', 'random', 'proportion')
+                  else 'prefix'),
+            proportion=(sub_p if sub_mode == 'proportion' else None))
     save_sample_input(sd, in1, in2, sample,
                       project=str(body.get('project') or '') or None)
     # note：名字被规范化过时明确回给前端提示（非 ASCII/空格会被折叠成 '_'，

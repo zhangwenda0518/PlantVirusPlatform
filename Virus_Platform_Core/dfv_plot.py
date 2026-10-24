@@ -29,13 +29,15 @@ try:
 except Exception:
     _DFV_IMPORT_OK = False
 
-# 功能类别 → 颜色（与 ⑥b orf_annotation.gff3 的 category 属性对应）
-CATEGORY_COLORS = {
-    '结构蛋白': '#7ec8e3',
-    '聚合酶/复制相关': '#ffb347',
-    '运动蛋白': '#b5e7a0',
-}
-_COLOR_FALLBACK = '#d3d3d3'
+# 功能类别 → 颜色：统一走 sci_palette 真源（与 ⑥b orf_annotation.gff3 的
+# category 属性对应；原 #7ec8e3 系与 genome_diag 的 #e67e22 系并存，
+# 2026-10-12 起合并为一套 Okabe-Ito 口径）
+try:
+    from .sci_palette import (CATEGORY_COLORS, CATEGORY_FALLBACK_LIGHT
+                              as _COLOR_FALLBACK)
+except ImportError:  # 直跑脚本兜底
+    from Virus_Platform_Core.sci_palette import (
+        CATEGORY_COLORS, CATEGORY_FALLBACK_LIGHT as _COLOR_FALLBACK)
 
 
 def dfv_available():

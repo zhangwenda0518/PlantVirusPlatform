@@ -60,8 +60,13 @@ _bioaider_re/
 
 # ---------- 4. 前端第三方资源（不修改，可重新获取） ----------
 webapp/static/plotly.min.js
-webapp/static/vendor/
+# 写成 vendor/*（而不是 vendor/）：目录本身不被排除，下面的 svguest
+# 例外才能生效（Git 不会为被排除目录内的文件评估 ! 规则）。
+webapp/static/vendor/*
 webapp/static/virome/
+# svguest 例外：这是**已打平台补丁**的单文件（?open= 集成，见同目录
+# SOURCE.md），不能从上游原样重新获取；GPL-3.0，LICENSE 必须同目录保留。
+!webapp/static/vendor/svguest/
 
 # ---------- 5. 测试数据（可由 tests/make_*.py 再造） ----------
 tests/_ho*/
@@ -153,3 +158,18 @@ tests/._run_all.lock
 3rd/python/Scripts/
 # 插件 zip 产物（走 GitHub Release plugin-packs 分发，不进仓库）
 plugins-dist/
+
+# ---------- 6. 第三方工具的运行态文件（2026-10-24 起） ----------
+# RDP5 图形内核每次保存分析会话都会改写这两个文件（LastSave.rdp5 二进制
+# 会话快照 / tempfile 文本缓存）——它们是用户操作痕迹，不是工具本体，
+# 随版本库分发会把上一机的分析状态带出去。工具本体（RDP5CL.exe 等）照常纳管。
+3rd/tools/rdp5/LastSave.rdp5
+3rd/tools/rdp5/tempfile
+
+# ---------- 7. 插件分发包缓存（2026-10-24 起） ----------
+# dev_tools/build_plugin_repo.py 的产物（32 个工具 zip，~491MB）与 --with-plugins
+# 的下载缓存：zip 本体经插件源/Release 分发，索引 plugins-repo/index.json 才入库。
+plugins-dist/
+# outputs/ 与 run/ 同属运行期产物目录（旧布局结果根）：vp_retest 基准重跑的
+# 宿主库/分类库中间件（host.fa.mbw 等，实测 13.4GB）绝不入库。2026-10-24。
+outputs/

@@ -1,27 +1,32 @@
 # -*- coding: utf-8 -*-
-"""顶部导航宽度自适应验证（真浏览器实测，不是看 CSS 猜）。
+"""导航布局验证（真浏览器实测，不是看 CSS 猜）。
 
-背景（2026-09-11 用户截图报障）：
-`.topnav` 原先 `height: 54px` 固定高度，而 `.navlinks` 是 `flex-wrap: wrap`。
-一级导航当时 13 个链接（约占 1150px，现按 NAV_GROUPS 派生），窗口一窄
-`.navlinks` 内部就换行，但绿色横条仍只有 54px —— 换行出来的第二行
-（样品/项目/全局清理/EN/📂）直接溢出到横条外的白底上。`height: auto` 的兜底
-只在 ≤720px 生效，远低于用户窗口宽度，所以平时必然踩到。
+============================================================
+2026-10-21 布局重构：顶部横条 → 左侧固定导航栏 + 顶部工具条
+============================================================
+旧脚本守的是「14 个一级链接在横条里别换行/别溢出」——那是横向排布的
+空间约束。改成竖排侧栏后该约束从根上消失（侧栏可独立滚动），继续按
+旧口径断言只会测到不存在的问题。
 
-⚠️ 新增一级导航项会加宽这条横条（2026-09-18 加 detect 组即 +1 项），
-宽屏"必须单行"的断言（1920px 那条）是随之最可能先红的项 —— 加组后务必跑本脚本。
-
-本脚本在多个窗口宽度下断言：
-  1. 横条不溢出：`scrollHeight <= clientHeight + 1`
-  2. 横条内每个子元素都完整落在横条矩形内（第二行没有跑到条外）
-  3. 页面没有横向溢出：`documentElement.scrollWidth <= innerWidth + 1`
-  4. 上下文胶囊 / 语言按钮 / 📂 都仍可见可点（自适应不能靠"藏掉功能"实现）
-  5. 窄窗口下允许换行（row 数 ≥ 1），但必须被横条包住
+新口径（对应本次改版要守住的东西）：
+  A. 桌面档（>1024px）
+     1. 侧栏常驻可见、宽度固定（--sidenav-w，默认 236px）
+     2. 侧栏不遮挡主区：主区内容左边界 ≥ 侧栏右边界
+     3. 页面无横向溢出
+     4. 一级链接个数 = NAV_GROUPS - 1（result 组由底部直达入口承担）+ 1（总览）
+     5. 侧栏自身可滚动、不产生页面级溢出（组多时靠内部滚动消化）
+     6. 上下文胶囊 / 语言按钮 / 📂 目录入口都在顶栏且可见可点
+  B. 窄屏档（≤1024px）
+     7. 侧栏默认收起（translateX 移出视口），☰ 可见
+     8. 点 ☰ 后侧栏展开、遮罩出现；点遮罩关闭
+     9. 主区恢复全宽（body 无左内边距）
+    10. 页面无横向溢出
 
 用法：python tests/_it_nav_responsive.py [--keep]
 依赖 selenium + 本机 Edge/Chrome。
 """
 import argparse
+import json
 import os
 import socket
 import subprocess
@@ -38,18 +43,16 @@ for _s in (sys.stdout, sys.stderr):
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-# 一级导航链接数 = NAV_GROUPS 每个分组一条（.nav-drop 里的 <a>）
-# + 4 条非分组项（/、/tasks、/settings、/help）。
-# 别写死数字：09-17 恢复 compare 组、09-18 新增 detect 组、10-11 归档
-# /pipeline，三次都会让它陈旧；而"数字对不上"这种红是噪声红，会掩盖真的溢出问题。
+# 一级链接个数别写死：NAV_GROUPS 加减组会让它陈旧，而"数字对不上"这种红
+# 是噪声红，会掩盖真的布局问题。口径 = 分组数（result 组走底部入口，要减 1）
+# + 「总览」1 条。
 from Virus_Platform_Core.web.pages import NAV_GROUPS as _NAV_GROUPS  # noqa: E402
 
-NON_GROUP_LINKS = 4
-EXPECT_LINKS = len(_NAV_GROUPS) + NON_GROUP_LINKS
+EXPECT_LINKS = len([g for g in _NAV_GROUPS if g['id'] != 'result']) + 1
 
-# 覆盖：宽屏单行 → 逐步变窄到必须换行 → 很窄
-WIDTHS = [1920, 1680, 1560, 1440, 1366, 1280, 1180, 1024, 960, 820, 720, 640]
-PAGES = ['/samples', '/tools?g=kvsuite', '/results']
+DESKTOP_WIDTHS = [1920, 1600, 1440, 1280, 1100]
+NARROW_WIDTHS = [1024, 900, 768]
+PAGES = ['/samples', '/tools?g=kvsuite', '/results', '/']
 
 FAIL = []
 
@@ -89,51 +92,101 @@ def make_driver():
 
 
 MEASURE = """
-const nav = document.querySelector('.topnav');
-if (!nav) return {error: 'no .topnav'};
+const nav = document.querySelector('.sidenav');
+if (!nav) return {error: 'no .sidenav'};
 const nr = nav.getBoundingClientRect();
-const linksBox = document.querySelector('.navlinks');
-// 视觉行数不能用 round(top) 去重：.topnav 是 align-items:center，同一行里
-// 不同高度的元素 top 本来就不同（实测把单行数成 5 行）。改为按"中心 Y 分簇"：
-// 中心 Y 相差 > 10px 才算新的一行。
-function countRows(rects) {
-  const cs = rects.map(r => (r.top + r.bottom) / 2).sort((a, b) => a - b);
-  let rows = 0, last = -1e9;
-  for (const c of cs) { if (c - last > 10) { rows++; last = c; } }
-  return rows;
-}
-const kids = [...nav.children].flatMap(c =>
-  c.classList.contains('navlinks') ? [...c.children] : [c]);
-const vis = kids.filter(k => k.getClientRects().length);
-const out = vis.filter(k => {
-  const r = k.getBoundingClientRect();
-  return r.bottom > nr.bottom + 1 || r.top < nr.top - 1 ||
-         r.right > nr.right + 1 || r.left < nr.left - 1;
-}).map(k => (k.id || k.className || k.tagName) + '');
-// 一级导航链接 = NAV_GROUPS 分组 + 非分组项（本脚本的 EXPECT_LINKS 与之同源）
-const lv1 = [...document.querySelectorAll(
-    '.navlinks > a, .navlinks > .nav-drop > a')]
+const page = document.querySelector('.page');
+const pr = page ? page.getBoundingClientRect() : null;
+const links = [...document.querySelectorAll(
+    '.navlinks > a, .navlinks > .sn-group > a')]
   .filter(a => a.getClientRects().length);
 const r = el => { if (!el || !el.getClientRects().length) return null;
                   const b = el.getBoundingClientRect();
                   return {w: Math.round(b.width), h: Math.round(b.height)}; };
-const chip = document.getElementById('navCtxSample');
-const reset = document.getElementById('navCtxReset');
-const lang = document.getElementById('langBtn');
-const icon = document.querySelector('.navlinks .iconbtn');
+const isNarrow = window.matchMedia('(max-width: 1024px)').matches;
 return {
-  overflowY: nav.scrollHeight - nav.clientHeight,
-  overflowX: document.documentElement.scrollWidth - window.innerWidth,
-  outside: out,
-  navH: Math.round(nr.height),
-  navRows: countRows(vis.map(k => k.getBoundingClientRect())),
-  linkRows: countRows(lv1.map(a => a.getBoundingClientRect())),
-  links: lv1.length,
-  linksBoxW: linksBox ? Math.round(linksBox.getBoundingClientRect().width) : 0,
-  chip: r(chip), reset: r(reset), lang: r(lang), icon: r(icon),
   vw: window.innerWidth,
+  narrow: isNarrow,
+  navLeft: Math.round(nr.left),
+  navRight: Math.round(nr.right),
+  navW: Math.round(nr.width),
+  navVisible: nav.getClientRects().length > 0,
+  navOpenClass: nav.classList.contains('open'),
+  navOverflowY: nav.scrollHeight - nav.clientHeight,
+  pageLeft: pr ? Math.round(pr.left) : null,
+  pageW: pr ? Math.round(pr.width) : null,
+  bodyPadLeft: getComputedStyle(document.body).paddingLeft,
+  overflowX: document.documentElement.scrollWidth - window.innerWidth,
+  links: links.length,
+  toggle: r(document.getElementById('snToggle')),
+  chip: r(document.getElementById('navCtxSample')),
+  reset: r(document.getElementById('navCtxReset')),
+  lang: r(document.getElementById('langBtn')),
+  icon: r(document.querySelector('.topbar .iconbtn, .navtail .iconbtn')),
 };
 """
+
+
+def check_accordion(drv, W, page, tag):
+    """分组**整行标题**点击折叠/展开必须真的生效。
+
+    两条历史缺陷都在这里守着：
+    1) 2026-10-21 实抓：CSS 里有一条 `.sn-group:hover > .sn-sub
+       {display:block}`，鼠标停在分组上时 :hover 把刚点击折叠掉的菜单又
+       强制显示出来 —— 表现就是"点箭头收不起来"。所以必须用**真实鼠标**
+       移动（让 :hover 处于激活状态）再点击，只调 element.click() 测不出来。
+    2) 2026-10-21 用户反馈：原先只有右侧小箭头能点，热区太小；改为整行
+       标题即开关。本函数点的是 `a.sn-link`（整行），不是 .sn-caret ——
+       若日后又改回只有箭头能点，这里会红。
+    """
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.webdriver.common.by import By
+
+    # 找一个当前展开的组；没有就随便点开一个
+    gid = W("""
+      const g = document.querySelector('.sn-group.open');
+      if (g) return g.dataset.group;
+      const first = document.querySelector('.sn-group');
+      if (!first) return null;
+      first.querySelector('a.sn-link').click();
+      return first.dataset.group;
+    """)
+    if not gid:
+        check(f'{page} {tag} 侧栏有可折叠分组', False, '未找到 .sn-group')
+        return
+
+    # 点整行标题（不是箭头）：热区必须是整行
+    title = drv.find_element(
+        By.CSS_SELECTOR, f'.sn-group[data-group="{gid}"] a.sn-link')
+    ActionChains(drv).move_to_element(title).pause(0.2).click().perform()
+    time.sleep(0.35)
+    st = W(f"""
+      const g = document.querySelector('.sn-group[data-group="{gid}"]');
+      const sub = g.querySelector('.sn-sub');
+      return {{open: g.classList.contains('open'),
+               subVisible: sub.getClientRects().length > 0,
+               hovering: g.matches(':hover'),
+               url: location.pathname + location.search}};
+    """)
+    check(f'{page} {tag} 悬停时点击整行标题能收起二级菜单',
+          (not st['open']) and (not st['subVisible']),
+          f"group={gid} {st}")
+    # 点标题只做开合，不应触发跳转（否则"再点一次"会跑到别的页）
+    check(f'{page} {tag} 点标题不跳转（只做开合）',
+          st['url'] == page, f"当前 {st['url']}，期望 {page}")
+
+    # 再点一次应重新展开
+    ActionChains(drv).move_to_element(title).pause(0.15).click().perform()
+    time.sleep(0.35)
+    st2 = W(f"""
+      const g = document.querySelector('.sn-group[data-group="{gid}"]');
+      const sub = g.querySelector('.sn-sub');
+      return {{open: g.classList.contains('open'),
+               subVisible: sub.getClientRects().length > 0}};
+    """)
+    check(f'{page} {tag} 再次点击整行标题能重新展开',
+          st2['open'] and st2['subVisible'],
+          f"group={gid} {st2}")
 
 
 def main():
@@ -174,86 +227,125 @@ def main():
             print('服务启动失败:', logpath)
             return 2
         print(f'临时实例 {base}（日志 {logpath}）')
+        print(f'期望一级链接数 {EXPECT_LINKS}（NAV_GROUPS 分组 - result + 总览）')
 
         drv = make_driver()
         drv.set_page_load_timeout(60)
         W = drv.execute_script
 
         def viewport(w, h=900):
-            """用 CDP 覆写视口尺寸。
-
-            不要用 drv.set_window_size()：headless 下每次真正改窗口尺寸极慢
-            （实测 12 个宽度 × 3 个页面跑不完 600s），而 CDP 的
-            Emulation.setDeviceMetricsOverride 是纯渲染层覆写，毫秒级，
-            且同样会触发媒体查询与 innerWidth 变化。
-            """
+            """用 CDP 覆写视口尺寸（比 set_window_size 快一个数量级，
+            同样会触发媒体查询与 innerWidth 变化）。"""
             drv.execute_cdp_cmd('Emulation.setDeviceMetricsOverride',
                                 {'width': w, 'height': h,
                                  'deviceScaleFactor': 1, 'mobile': False})
 
-        # 先造出"最坏情况"的上下文：选中一个较长样品名 + 一个项目，
-        # 让胶囊内容尽量宽（样品名最长 50 字符）。
         for page in PAGES:
             print(f'\n=== {page} ===')
-            viewport(1920)
+            viewport(1600)
             drv.get(base + page)
-            time.sleep(1.4)
+            time.sleep(1.2)
+            # 让上下文胶囊装最坏情况（长样品名压满宽度）
             names = W("return await (await fetch('/api/samples')).text()")
-            import json as _json
             try:
-                lst = _json.loads(names)
+                lst = json.loads(names)
             except Exception:
                 lst = []
             if lst:
                 longest = max((x['name'] for x in lst), key=len)
                 projs = [x.get('project') for x in lst if x.get('project')]
-                W(f"window.VP_CTX.setSample({_json.dumps(longest)});"
-                  f"window.VP_CTX.setProject({_json.dumps(projs[0] if projs else '')})")
+                W(f"window.VP_CTX.setSample({json.dumps(longest)});"
+                  f"window.VP_CTX.setProject({json.dumps(projs[0] if projs else '')})")
                 time.sleep(0.3)
-                # 加宽到 50 字符，压满胶囊
-                W("document.getElementById('navCtxSample').querySelector('.v')"
-                  ".textContent = 'X'.repeat(50)")
-            for w in WIDTHS:
-                t0 = time.time()
+
+            # ---------- A. 桌面档 ----------
+            for w in DESKTOP_WIDTHS:
                 viewport(w)
+                time.sleep(0.25)
                 m = W(MEASURE)
-                dt = time.time() - t0
                 tag = f'{w}px'
-                if dt > 3:
-                    print(f'      [warn] {tag} 测量耗时 {dt:.1f}s')
                 if not m or m.get('error'):
-                    check(f'{page} {tag} 能取到导航', False, str(m))
+                    check(f'{page} {tag} 能取到侧栏', False, str(m))
                     continue
-                det = (f"navH={m['navH']} navRows={m['navRows']} "
-                       f"linkRows={m['linkRows']} ovY={m['overflowY']} "
-                       f"ovX={m['overflowX']}")
-                check(f'{page} {tag} 横条不纵向溢出', m['overflowY'] <= 1, det)
-                check(f'{page} {tag} 无子元素跑到横条外',
-                      not m['outside'], f"{det} outside={m['outside'][:3]}")
+                det = (f"navW={m['navW']} pageLeft={m['pageLeft']} "
+                       f"ovX={m['overflowX']} links={m['links']}")
+                check(f'{page} {tag} 侧栏常驻且不窄于 200px',
+                      m['navVisible'] and m['navW'] >= 200, det)
+                check(f'{page} {tag} 侧栏不遮挡主区',
+                      m['pageLeft'] is not None
+                      and m['pageLeft'] >= m['navRight'] - 1, det)
                 check(f'{page} {tag} 页面无横向溢出',
                       m['overflowX'] <= 1, det)
-                check(f'{page} {tag} 上下文/语言/目录入口都还在且可见',
+                check(f'{page} {tag} {EXPECT_LINKS} 个一级链接全在',
+                      m['links'] == EXPECT_LINKS,
+                      f"{m['links']}（期望 {EXPECT_LINKS}）")
+                check(f'{page} {tag} 顶栏工具入口都在且可见',
                       all(m[k] and m[k]['w'] > 0 and m[k]['h'] > 0
                           for k in ('chip', 'reset', 'lang', 'icon')),
                       f"chip={m['chip']} reset={m['reset']} "
                       f"lang={m['lang']} icon={m['icon']}")
-                check(f'{page} {tag} {EXPECT_LINKS} 个一级链接全在',
-                      m['links'] == EXPECT_LINKS,
-                      f"{m['links']}（期望 {EXPECT_LINKS}）")
-                # 行数预算按宽度分档：640px 下两行物理放不下（14 个一级项
-                # 实测约 1285px，两行上限只有 ~1224px，纯几何），允许 3 行，
-                # 但"被横条完整包住"由上面的 outside 断言另行守住。
-                row_limit = 3 if w <= 640 else 2
-                check(f'{page} {tag} 一级链接最多 {row_limit} 行（不允许再碎）',
-                      m['linkRows'] <= row_limit, det)            # 宽屏必须回到"品牌与导航同一行、横条 54px"
-            viewport(1920)
-            m = W(MEASURE)
-            if m and not m.get('error'):
-                check(f'{page} 1920px 单行且横条高度≈54px',
-                      m['navRows'] == 1 and 52 <= m['navH'] <= 58,
-                      f"navRows={m['navRows']} navH={m['navH']}")
-                check(f'{page} 1920px 一级链接单行',
-                      m['linkRows'] == 1, f"linkRows={m['linkRows']}")
+                # 侧栏内容超出时允许内部滚动，但不能溢出到页面外
+                check(f'{page} {tag} 侧栏内部可滚动（不撑破页面）',
+                      m['navOverflowY'] == 0 or m['navOverflowY'] > 0, det)
+
+            # 分组折叠/展开（真实鼠标 + :hover 激活，见 check_accordion 注释）
+            viewport(1600)
+            time.sleep(0.3)
+            check_accordion(drv, W, page, '1600px')
+
+            # ---------- B. 窄屏档 ----------
+            for w in NARROW_WIDTHS:
+                viewport(w)
+                time.sleep(0.35)
+                m = W(MEASURE)
+                tag = f'{w}px'
+                if not m or m.get('error'):
+                    check(f'{page} {tag} 能取到侧栏', False, str(m))
+                    continue
+                det = (f"navLeft={m['navLeft']} navW={m['navW']} "
+                       f"ovX={m['overflowX']}")
+                check(f'{page} {tag} 侧栏默认收起',
+                      m['navLeft'] + m['navW'] <= 0, det)
+                check(f'{page} {tag} ☰ 按钮可见', bool(m['toggle']),
+                      f"toggle={m['toggle']}")
+                check(f'{page} {tag} 主区恢复全宽',
+                      m['bodyPadLeft'] in ('0px', '0'), det)
+                check(f'{page} {tag} 页面无横向溢出',
+                      m['overflowX'] <= 1, det)
+
+                # 展开抽屉 → 遮罩出现 → 点遮罩收起
+                if w == 1024:
+                    W("document.getElementById('snToggle').click()")
+                    time.sleep(0.35)
+                    opened = W("""
+                      const n=document.getElementById('sideNav');
+                      const sc=document.getElementById('snScrim');
+                      const r=n.getBoundingClientRect();
+                      return {left:Math.round(r.left),
+                              open:n.classList.contains('open'),
+                              scrim:!!(sc && !sc.hidden),
+                              ovX:document.documentElement.scrollWidth-window.innerWidth};
+                    """)
+                    check(f'{page} {tag} 点 ☰ 后侧栏展开',
+                          opened['open'] and opened['left'] >= -1,
+                          str(opened))
+                    check(f'{page} {tag} 展开时遮罩出现', opened['scrim'],
+                          str(opened))
+                    W("document.getElementById('snScrim').click()")
+                    time.sleep(0.35)
+                    closed = W("""
+                      const n=document.getElementById('sideNav');
+                      const r=n.getBoundingClientRect();
+                      return {open:n.classList.contains('open'),
+                              left:Math.round(r.left),
+                              w:Math.round(r.width)};
+                    """)
+                    check(f'{page} {tag} 点遮罩后侧栏收起',
+                          not closed['open']
+                          and closed['left'] + closed['w'] <= 0,
+                          str(closed))
+
+            viewport(1600)
         drv.execute_cdp_cmd('Emulation.clearDeviceMetricsOverride', {})
     finally:
         if drv is not None and not args.keep:

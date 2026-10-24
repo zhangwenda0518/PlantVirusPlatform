@@ -1,0 +1,6 @@
+NC_077216.1	gb2gtf	CDS	51	800	.	+	0	gene_id "P0"; transcript_id "P0"; gene_name "P0";
+NC_077216.1	gb2gtf	CDS	175	3431	.	+	0	gene_id "P2-RdRp"; transcript_id "P2-RdRp"; gene_name "P2-RdRp";
+NC_077216.1	gb2gtf	CDS	175	2139	.	+	0	gene_id "P1"; transcript_id "P1"; gene_name "P1";
+NC_077216.1	gb2gtf	CDS	3512	3649	.	+	0	gene_id "P3a"; transcript_id "P3a"; gene_name "P3a";
+NC_077216.1	gb2gtf	CDS	3630	4250	.	+	0	gene_id "P3-CP"; transcript_id "P3-CP"; gene_name "P3-CP";
+NC_077216.1	gb2gtf	CDS	3661	4131	.	+	0	gene_id "P4-MP"; transcript_id "P4-MP"; gene_name "P4-MP";

@@ -2,14 +2,18 @@
 # -*- coding: utf-8 -*-
 
 """
-📥 NCBI datasets CLI 统一封装 v1.0
+📥 NCBI datasets CLI 统一封装 v1.1
 ==================================
-官方 datasets 命令行（download 域）的平台化包装，四种数据类型全接：
+官方 datasets 命令行（download / summary 域）的平台化包装，四种数据类型全接：
 
   genome    按 taxon / accession 下基因组包（--chromosomes 染色体过滤）
   gene      按 gene-id / symbol+taxon / protein accession 下基因包
   taxonomy  按 taxon 下分类报告包
-  virus     按 taxon(+host 宿主过滤) 下病毒基因组 / 蛋白包
+  virus     按 taxon(+host 宿主过滤) 下病毒基因组 / 蛋白包（accession 单条精确）
+
+先查后下：query_records() 走 `datasets summary …` 预览匹配记录
+（归一化成前端表格行），确认后再用 download 系列拉包——基因组查询下载
+页的「🔍 查询」按钮即走这条链路。
 
 平台化差异（与裸用 datasets 的差异）：
   - 工具定位：PATH → 3rd/tools/datasets/datasets.exe；缺失时
@@ -302,20 +306,30 @@ def build_taxonomy_args(taxons):
             ','.join(t.strip() for t in taxons.split(',') if t.strip())]
 
 
-def build_virus_args(taxon=None, protein=None, host=None, include=('genome',)):
+def build_virus_args(taxon=None, protein=None, host=None, include=('genome',),
+                     accession=None):
     """构造 `download virus …` 参数。
 
     taxon + include(genome/protein/annotation/biosample/all/none) →
       `virus genome taxon <t> [--host h] --include …`；
+    accession（如 NC_045512.2，查询结果里挑单条时用）→
+      `virus genome accession <a>`；
     protein（如 S / spike）→ `virus protein <p> [--host h]`。"""
     inc = [x.strip() for x in (include or []) if x.strip()] or ['genome']
+    if accession and not taxon and not protein:
+        args = ['download', 'virus', 'genome', 'accession', accession]
+        if host:
+            args += ['--host', host]
+        args += ['--include', ','.join(inc)]
+        return args
     if protein and not taxon:
         args = ['download', 'virus', 'protein', protein]
         if host:
             args += ['--host', host]
         return args
     if not taxon:
-        raise ValueError('virus 模式需要 --taxon，或 --protein（+可选 --host）')
+        raise ValueError('virus 模式需要 --taxon，或 --protein（+可选 --host），'
+                         '或 --accession')
     args = ['download', 'virus', 'genome', 'taxon', taxon]
     if host:
         args += ['--host', host]
@@ -455,25 +469,26 @@ def download_taxonomy(taxons, out_dir=None, log=None) -> dict:
 
 def download_virus(taxon=None, protein=None, host=None,
                    include=('genome',), name=None, out_dir=None,
-                   as_dataset=True, log=None) -> dict:
-    """病毒包下载（genome / protein；--host 宿主过滤）。
+                   as_dataset=True, accession=None, log=None) -> dict:
+    """病毒包下载（genome / protein；--host 宿主过滤；accession 单条精确）。
 
     as_dataset=True（默认）时按平台鉴定库数据集布局落位：
       databases/virusref_db/<name>/reference.fasta + reference.ref_info.tsv
     —— 建库页「原始数据集」卡自动识别，可直接一键建 kv 索引/kunpeng 病毒库。
     """
     E = _emitters(log)
-    E.header(f"datasets virus: {taxon or protein}"
+    E.header(f"datasets virus: {taxon or protein or accession}"
              + (f" (host={host})" if host else ''))
     if as_dataset and not out_dir:
         if not name:
-            name = _slug(taxon or protein)
+            name = _slug(taxon or protein or accession)
         out_dir = os.path.join(DIRS['virus_src'], name)
     if not out_dir:
-        out_dir = os.path.join('datasets_dl', 'virus_' + _slug(taxon or protein))
+        out_dir = os.path.join('datasets_dl',
+                               'virus_' + _slug(taxon or protein or accession))
     os.makedirs(out_dir, exist_ok=True)
     args = build_virus_args(taxon=taxon, protein=protein, host=host,
-                            include=include)
+                            include=include, accession=accession)
     data_dir = _download_package(args, out_dir, 'virus', log=log)
     reports = collect_reports(data_dir)
     fasta = collect_fasta(data_dir)
@@ -489,7 +504,7 @@ def download_virus(taxon=None, protein=None, host=None,
 
     ref_info_path = ''
     reference_path = ''
-    if reports and taxon:                    # protein-only 包没有病毒报告
+    if reports and (taxon or accession):     # protein-only 包没有病毒报告
         ref_info_path = os.path.join(out_dir, 'reference.ref_info.tsv')
         report_to_ref_info(reports, ref_info_path, log=log)
     if n_seqs:
@@ -520,6 +535,193 @@ def download(mode: str, log=None, **kw) -> dict:
     if mode not in table:
         raise ValueError(f'未知 datasets 模式: {mode}')
     return table[mode](log=log, **kw)
+
+
+# ==========================================
+# summary 查询（先查后下：预览匹配记录，再决定下什么）
+# ==========================================
+# 各 kind 默认预览条数（真实匹配总数用 limit+1 探测：返回了 limit+1 条
+# 即说明被截断；datasets 的 total_count 会跟着 --limit 截断，探不出真总数）
+_SUMMARY_DEFAULT_LIMIT = {'genome': 200, 'virus': 500, 'gene': 200,
+                          'taxonomy': 50}
+_SUMMARY_TIMEOUT = 300
+
+
+def build_summary_args(kind, taxon=None, accession=None, host=None,
+                       gene_id=None, symbol=None, protein_acc=None,
+                       taxons=None, limit=None):
+    """构造 `datasets summary …` 参数（与 build_*_args 同源的查询入口）。
+
+    limit 传 None 时按 kind 用默认预览条数；taxonomy 记录数固定，不传 limit。"""
+    args = ['summary']
+    if kind == 'genome':
+        if not taxon and not accession:
+            raise ValueError('genome 查询需要 taxon 或 accession')
+        args += ['genome', 'taxon' if taxon else 'accession',
+                 taxon or accession]
+    elif kind == 'virus':
+        if not taxon and not accession:
+            raise ValueError('virus 查询需要 taxon 或 accession')
+        args += ['virus', 'genome', 'taxon' if taxon else 'accession',
+                 taxon or accession]
+        if host:
+            args += ['--host', host]
+    elif kind == 'gene':
+        if gene_id:
+            args += ['gene', 'gene-id', str(gene_id)]
+        elif protein_acc:
+            args += ['gene', 'accession', protein_acc]
+        elif symbol and taxon:
+            args += ['gene', 'symbol', symbol, '--taxon', taxon]
+        else:
+            raise ValueError('gene 查询需要 gene-id，或 symbol + taxon，'
+                             '或蛋白 accession')
+    elif kind == 'taxonomy':
+        if not taxons:
+            raise ValueError('taxonomy 查询需要 taxon（逗号分隔多个）')
+        args += ['taxonomy', 'taxon', taxons]
+    else:
+        raise ValueError(f'未知查询类型: {kind}')
+    if limit and kind in ('genome', 'virus'):
+        args += ['--limit', str(int(limit))]
+    return args
+
+
+def _dig(d, *paths):
+    """按多个候选点路径取第一个非空值（summary 输出 snake_case，
+    download 的 data_report 是 camelCase，双风格都接）。"""
+    for path in paths:
+        cur = d
+        for k in path.split('.'):
+            if isinstance(cur, dict):
+                cur = cur.get(k)
+            else:
+                cur = None
+                break
+        if cur not in (None, ''):
+            return str(cur)
+    return ''
+
+
+def _norm_summary_row(kind, r):
+    """单条 summary 记录 → 前端表格直渲染的扁平行（字段随 kind 而异）。"""
+    if kind == 'genome':
+        asm = r.get('assembly_info') or {}
+        org = r.get('organism') or {}
+        return {
+            'accession': _dig(r, 'accession'),
+            'name': _dig(asm, 'assembly_name'),
+            'organism': _dig(org, 'organism_name', 'organismName'),
+            'common': _dig(org, 'common_name', 'commonName'),
+            'taxid': _dig(org, 'tax_id', 'taxId'),
+            'length': _dig(r, 'assembly_stats.total_sequence_length',
+                           'assemblyStats.totalSequenceLength'),
+            'level': _dig(asm, 'assembly_level', 'assemblyLevel'),
+            'source': _dig(r, 'source_database', 'sourceDatabase')
+                      .replace('SOURCE_DATABASE_', ''),
+            'released': _dig(asm, 'release_date', 'releaseDate')[:10],
+            'submitter': _dig(asm, 'submitter'),
+        }
+    if kind == 'virus':
+        return {
+            'accession': _dig(r, 'accession'),
+            'length': _dig(r, 'length'),
+            'virus': _dig(r, 'virus.organism_name', 'virus.organismName'),
+            'virus_taxid': _dig(r, 'virus.tax_id', 'virus.taxId'),
+            'host': _dig(r, 'host.organism_name', 'host.organismName'),
+            'host_taxid': _dig(r, 'host.tax_id', 'host.taxId'),
+            'geo': _dig(r, 'location.geographic_location',
+                        'location.geographicLocation'),
+            'isolate': _dig(r, 'isolate.name'),
+            'collected': _dig(r, 'isolate.collection_date',
+                              'isolate.collectionDate')[:10],
+            'completeness': _dig(r, 'completeness'),
+            'source': _dig(r, 'source_database', 'sourceDatabase'),
+            'released': _dig(r, 'release_date', 'releaseDate')[:10],
+        }
+    if kind == 'gene':
+        g = r.get('gene') or {}
+        chroms = g.get('chromosomes') or []
+        return {
+            'accession': _dig(g, 'gene_id'),
+            'name': _dig(g, 'symbol'),
+            'organism': _dig(g, 'taxname'),
+            'common': _dig(g, 'common_name'),
+            'taxid': _dig(g, 'tax_id'),
+            'desc': _dig(g, 'description'),
+            'chroms': ','.join(map(str, chroms[:4]))
+                      + ('…' if len(chroms) > 4 else ''),
+            'type': _dig(g, 'type'),
+            'n_proteins': _dig(g, 'protein_count'),
+            'n_transcripts': _dig(g, 'transcript_count'),
+        }
+    # taxonomy：嵌套在 taxonomy.* 下
+    t = r.get('taxonomy') or r
+    cls = t.get('classification') or {}
+    rank = ''
+    for rk in ('species', 'genus', 'family', 'order', 'class', 'phylum',
+               'kingdom', 'realm', 'domain'):
+        if isinstance(cls.get(rk), dict):
+            rank = f"{rk}: {cls[rk].get('name')}"
+            break
+    return {
+        'accession': _dig(t, 'tax_id', 'taxid'),
+        'name': _dig(t, 'current_scientific_name.name',
+                     'currentScientificName.name',
+                     'scientific_name'),
+        'rank': _dig(t, 'group_name'),
+        'lineage': rank,
+        'genetic_code': _dig(t, 'genetic_code.transl_table',
+                             'geneticCode.translTable'),
+    }
+
+
+def query_records(kind, taxon=None, accession=None, host=None,
+                  gene_id=None, symbol=None, protein_acc=None, taxons=None,
+                  limit=None, log=None) -> dict:
+    """datasets summary 预览查询（先查后下）。
+
+    返回 {'kind', 'total_count', 'returned', 'truncated', 'rows', 'query'}。
+    rows 已按 kind 归一化（_norm_summary_row），前端表格直接渲染；
+    truncated=True 表示匹配数超出预览上限、只回传了前 limit 条。"""
+    E = _emitters(log)
+    exe = datasets_exe()
+    if not exe:
+        raise RuntimeError(
+            '未找到 NCBI datasets CLI：先执行 python main.py datasets-setup '
+            '（自动从 NCBI 官方下载到 3rd/tools/datasets/），'
+            '或自行安装后确保 datasets 在 PATH')
+    cap = int(limit) if limit else _SUMMARY_DEFAULT_LIMIT.get(kind, 200)
+    args = build_summary_args(kind, taxon=taxon, accession=accession,
+                              host=host, gene_id=gene_id, symbol=symbol,
+                              protein_acc=protein_acc, taxons=taxons,
+                              limit=cap + 1)
+    E.info(f"执行: {' '.join(args)}")
+    try:
+        r = subprocess.run([exe] + args, capture_output=True, text=True,
+                           encoding='utf-8', errors='replace',
+                           timeout=_SUMMARY_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f'datasets summary 查询超时（{_SUMMARY_TIMEOUT}s）：'
+                           '换个更具体的 taxon 再试')
+    if r.returncode != 0:
+        tail = ((r.stderr or r.stdout or '').strip().splitlines() or [''])[-1]
+        raise RuntimeError(f'datasets summary 查询失败（exit={r.returncode}）: '
+                           f'{tail}')
+    try:
+        data = json.loads(r.stdout or '{}')
+    except ValueError:
+        raise RuntimeError('datasets summary 输出不是有效 JSON'
+                           '（CLI 版本过旧？重跑 python main.py '
+                           'datasets-setup 更新）')
+    reports = data.get('reports') or []
+    rows = [_norm_summary_row(kind, x) for x in reports[:cap]]
+    # --limit 时 total_count 跟着截断：取了 cap+1 条、截到 cap 条，
+    # total>len(rows) 即「还有更多没显示」
+    total = int(data.get('total_count') or len(reports))
+    return {'kind': kind, 'total_count': total, 'returned': len(rows),
+            'truncated': total > len(rows), 'rows': rows,
+            'query': ' '.join(args[1:])}
 
 
 # ==========================================
@@ -581,6 +783,8 @@ def main():
 
     v = sub.add_parser('virus', help='病毒包（genome/protein + host 过滤）')
     v.add_argument('--taxon', default=None, help='病毒 taxon（如 sars-cov-2）')
+    v.add_argument('--accession', default=None,
+                   help='病毒核酸 accession（如 NC_045512.2，单条精确下载）')
     v.add_argument('--protein', default=None, help='蛋白名（如 S / spike）')
     v.add_argument('--host', default=None, help='宿主过滤（如 dog / 番茄拉丁名）')
     v.add_argument('--include', default='genome',
@@ -593,7 +797,8 @@ def main():
     v.set_defaults(func=lambda a: download_virus(
         taxon=a.taxon, protein=a.protein, host=a.host,
         include=tuple(x for x in a.include.split(',') if x.strip()),
-        name=a.name, out_dir=a.out, as_dataset=not a.no_dataset))
+        name=a.name, out_dir=a.out, as_dataset=not a.no_dataset,
+        accession=a.accession))
 
     args = parser.parse_args()
     res = args.func(args)

@@ -1,0 +1,12 @@
+{
+  "term": "Lycium barbarum",
+  "source_filter": "TRANSCRIPTOMIC",
+  "detailed": true,
+  "db": "both",
+  "counts": {
+    "sra_runs": 436,
+    "gsa_runs": 0,
+    "total_runs": 436
+  },
+  "fetched_utc": "2026-10-11T21:01:21Z"
+}

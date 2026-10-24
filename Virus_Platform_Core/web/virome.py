@@ -47,4 +47,7 @@ def virome_asset(filename):
     # （pages/prescreen/tools_api/download）统一口径，审计只查一处规则
     from ..utils import check_path
     full = check_path(os.path.join(_VIROME_DIST, filename))
-    return send_from_directory(_VIROME_DIST, os.path.basename(full))
+    # 保留子目录相对路径（static/js/... 等）；basename 会把子路径剥掉导致
+    # 所有嵌套资源 404，SPA 只剩空白壳
+    rel = os.path.relpath(full, _VIROME_DIST).replace(os.sep, '/')
+    return send_from_directory(_VIROME_DIST, rel)

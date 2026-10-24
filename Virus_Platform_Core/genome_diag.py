@@ -14,21 +14,17 @@ import os
 import re
 import html
 
-# 功能类别 → 颜色（与报告图表一致的口径）
-CATEGORY_COLORS = {
-    '聚合酶/复制相关': '#2e86c1',
-    '聚合酶辅因子': '#5dade2',
-    '蛋白酶/加工': '#8e44ad',
-    '结构蛋白': '#e67e22',
-    '运动蛋白': '#27ae60',
-    '宿主互作/致病': '#c0392b',
-    '基因组复制/维持': '#16a085',
-    '转录/翻译调控': '#d4ac0d',
-    '其他功能蛋白': '#7f8c8d',
-    '假想蛋白（功能未定）': '#b2babb',
-}
-DOMAIN_COLOR = '#2471a3'
-DOMAIN_COLOR_ALT = '#7fb3d5'
+# 功能类别 → 颜色：统一走 sci_palette 真源（与报告图表一致；2026-10-12
+# 原自持的 flat-ui 色系并入 Okabe-Ito 口径，消灭同语义不同色）
+try:
+    from .sci_palette import (CATEGORY_COLORS, CATEGORY_FALLBACK,
+                              OKABE, lighten as _pal_lighten)
+except ImportError:  # 直跑脚本兜底
+    from Virus_Platform_Core.sci_palette import (
+        CATEGORY_COLORS, CATEGORY_FALLBACK, OKABE, lighten as _pal_lighten)
+
+DOMAIN_COLOR = OKABE['blue']
+DOMAIN_COLOR_ALT = _pal_lighten(OKABE['blue'], 0.35)
 
 TICK = 500          # 比例尺刻度（nt）
 MAX_WIDTH = 900.0   # 图最大宽（px）
@@ -112,7 +108,7 @@ def render_contig_svg(contig, length, orfs, out_path):
         strand = o.get('strand') or '+'
         x0 = left + (s - 1) * xscale
         bw = max((e - s + 1) * xscale, 4.0)
-        color = CATEGORY_COLORS.get(o.get('category'), '#95a5a6')
+        color = CATEGORY_COLORS.get(o.get('category'), CATEGORY_FALLBACK)
         h = ORF_H
         if strand == '+':
             y = line_y - h

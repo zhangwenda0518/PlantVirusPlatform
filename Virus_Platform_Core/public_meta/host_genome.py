@@ -101,7 +101,14 @@ def _http(domains=('eutils.ncbi.nlm.nih.gov', 'ftp.ncbi.nlm.nih.gov')):
                 resp.raise_for_status()
                 expected = resp.headers.get('Content-Length')
                 got = 0
-                with safe_open(dest, 'wb') as f:
+                # 下载是字节流搬运，必须原样落盘（用 plain open 而非
+                # safe_open：safe_open 对 *.gz 后缀会自动再压缩，NCBI 的
+                # .fna.gz 会被套上第二层 gzip，gunzip 只解一层就得到"内层
+                # gzip 字节当 FASTA"，合并/建库全部静默产出垃圾。
+                # 2026-10-13 Panax notoginseng 实测踩中；Ensembl 文件
+                # "双层 gz"的旧观察其实是同一根因（gunzip_full 注释在案））
+                os.makedirs(os.path.dirname(dest) or '.', exist_ok=True)
+                with open(dest, 'wb') as f:
                     for piece in resp.iter_content(chunk_size=chunk):
                         f.write(piece)
                         got += len(piece)
@@ -207,7 +214,11 @@ def open_fasta(path: str):
 
 
 def collect_fasta_files(directory: str) -> List[str]:
-    """Recursively collect all FASTA/FA/FNA files (plain or .gz) under a directory."""
+    """Recursively collect all FASTA/FA/FNA files (plain or .gz) under a directory.
+
+    明文与其 .gz 并存时只收明文：gunzip 后的 X.fna 与 X.fna.gz 是同一份
+    序列，都收会全量走两遍；而 merge_and_deduplicate 对重名是"改名保留"
+    而非跳过，会把整个基因组复制进结果（2026-10-13 三七 438=219×2 实测）。"""
     files = []
     for root, _, filenames in os.walk(directory):
         for f in filenames:
@@ -219,6 +230,10 @@ def collect_fasta_files(directory: str) -> List[str]:
                     files.append(os.path.join(root, f))
             elif ext in {'.fna', '.fasta', '.fa'}:
                 files.append(os.path.join(root, f))
+    plain = {f for f in files if not f.endswith('.gz')}
+    if plain:
+        files = [f for f in files
+                 if not (f.endswith('.gz') and f[:-3] in plain)]
     return sorted(files)
 
 
@@ -748,6 +763,40 @@ def download_organelle_genome(species: str, organelle: str, out_dir: str,
         return None
 
 
+def list_reference_assemblies(species: str, api_key=None,
+                              max_assemblies: int = 20) -> list:
+    """E-utilities 列出物种的参考组装（与 download_genome_https 同查询条件）。
+
+    返回 [{'uid', 'accession', 'name', 'organism', 'refseq'} ...]，供下载前
+    的「先查后下」闸门用：0 个 → 提示无组装可下；>1 个 → 让用户先选版本，
+    不放行盲下（多个版本合并进同一个宿主库会互相污染）。"""
+    http = _http()
+    term = f'"{species}"[Organism] AND "reference genome"[filter]'
+    r = http.get(ESEARCH_URL,
+                 params=_entrez_params(api_key, db='assembly', term=term,
+                                       retmax=max_assemblies, retmode='json'),
+                 timeout=40)
+    r.raise_for_status()
+    ids = r.json().get('esearchresult', {}).get('idlist', [])
+    if not ids:
+        return []
+    r = http.get(ESUMMARY_URL,
+                 params=_entrez_params(api_key, db='assembly',
+                                       id=','.join(ids), retmode='json'),
+                 timeout=40)
+    r.raise_for_status()
+    docs = r.json().get('result', {})
+    out = []
+    for uid in ids:
+        d = docs.get(uid) or {}
+        out.append({'uid': uid,
+                    'accession': d.get('assemblyaccession') or '',
+                    'name': d.get('assemblyname') or '',
+                    'organism': d.get('organism') or species,
+                    'refseq': bool(d.get('ftppath_refseq'))})
+    return out
+
+
 def download_genome_https(species: str, out_dir: str, api_key=None,
                           max_assemblies: int = 5, log=None):
     """datasets CLI 不可用时的纯 Python 回退：E-utilities 搜 assembly →
@@ -790,18 +839,24 @@ def download_genome_https(species: str, out_dir: str, api_key=None,
         d = docs.get(uid) or {}
         ftp = d.get("ftppath_refseq") or d.get("ftppath_genbank") or ""
         if not ftp:
+            E.warn(f"组装 {uid} 无 FTP 路径（ftppath_refseq/genbank 均空），跳过")
             continue
         # 仅接受 NCBI 官方 FTP 主机（换 HTTPS），_http() 内再做域名校验
         if not ftp.startswith(NCBI_FTP_HOST):
             E.warn(f"跳过非 NCBI 路径: {ftp[:80]}")
             continue
         rel = ftp[len(NCBI_FTP_HOST):]
-        dir_url = NCBI_FTP_HTTPS + rel
+        # 目录 URL 必须带尾斜杠：不带会被 NCBI 301 到带斜杠版本，
+        # 而 _http.get 出于白名单设计不跟随重定向 → 拿到的是重定向残页，
+        # 正则匹配空 → 之前是静默 continue，整趟只报"未下载到任何 FASTA"
+        # （2026-10-13 Panax notoginseng 实测踩中）
+        dir_url = NCBI_FTP_HTTPS + rel.rstrip('/') + '/'
         try:
             lr = http.get(dir_url, timeout=60)
             lr.raise_for_status()
             fnames = re.findall(r'href="([^"]+_genomic\.fna\.gz)"', lr.text)
             if not fnames:
+                E.warn(f"{dir_url} 目录未找到 *_genomic.fna.gz，跳过")
                 continue
             fname = fnames[0]
             furl = dir_url + fname
@@ -840,12 +895,18 @@ def download_genome_https(species: str, out_dir: str, api_key=None,
     for fn in os.listdir(extracted_dir):
         if fn.endswith(".fna.gz"):
             src = os.path.join(extracted_dir, fn)
-            dst_name = fn.replace('.fna.gz', '.fna')
-            dst = os.path.join(extracted_dir, dst_name)
+            dst = src[:-3]
             if os.path.isfile(dst):
                 continue
-            with gzip.open(src, "rb") as fi, safe_open(dst, 'wb') as fo:
-                fo.write(fi.read())
+            # gunzip_full 逐层解到明文：download() 曾把 .gz 二次压缩
+            # （safe_open 自动压 .gz 后缀，2026-10-13 已修根因），存量
+            # 双层文件与 Ensembl 侧的历史双层发布都能正确解开
+            out = gunzip_full(src, log=log)
+            # 双层时 gunzip_full 落名 <base>.unz，collect_fasta_files
+            # 只认 .fna/.fa/.fasta 后缀 → 归位回 <base>
+            if os.path.abspath(out) != os.path.abspath(dst) \
+                    and os.path.isfile(out):
+                os.replace(out, dst)
     E.ok(f"HTTPS 回退完成: {n_downloaded} 个组装 → {extracted_dir}")
     return extracted_dir
 

@@ -1,0 +1,4 @@
+region	latitude	longitude	source
+Americas	10.0	-80.0	builtin
+Asia	34.0	100.0	builtin
+Europe	50.0	10.0	builtin

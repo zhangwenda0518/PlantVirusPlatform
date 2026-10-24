@@ -32,16 +32,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# 出版级全局样式（同原管线）：可编辑字体 + 无衬线 + 白底
-plt.rcParams.update({
-    'pdf.fonttype': 42,
-    'ps.fonttype': 42,
-    'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-    'font.family': 'sans-serif',
-    'axes.unicode_minus': False,
-    'figure.facecolor': 'white',
-    'savefig.facecolor': 'white',
-})
+from .. import sci_palette as sp
+sp.apply_sci_style()   # 出版级全局样式：唯一真源
 
 try:
     import seaborn as sns
@@ -117,10 +109,18 @@ def _add_derived_metrics(df):
 
 
 def _save(fig, out_dir, stem):
-    """PNG + PDF 双格式落盘（同原管线）。"""
-    for ext in ('png', 'pdf'):
-        fig.savefig(os.path.join(out_dir, f'{stem}.{ext}'),
-                    dpi=DPI, bbox_inches='tight')
+    """PNG + SVG + PDF 三格式落盘。
+
+    SVG 是「结果图整理」的输入（svguest 可编辑文本与矢量元素）；
+    某些 artist 不支持 SVG 时跳过该格式，不影响 PNG/PDF 主产物。
+    """
+    for ext in ('png', 'svg', 'pdf'):
+        try:
+            fig.savefig(os.path.join(out_dir, f'{stem}.{ext}'),
+                        dpi=DPI, bbox_inches='tight')
+        except Exception:
+            if ext != 'svg':
+                raise
     plt.close(fig)
 
 
@@ -197,6 +197,26 @@ def fig_freq(df, out_dir, metrics=None):
                 patch.set_alpha(0.6)
         ax.set_title(m, fontweight='bold', fontsize=13)
         ax.set_xscale('log')
+        # 数据常挤在不足 1 个数量级内（如 5.2e4~6.2e4）：默认刻度会密成一串
+        # 互叠的 5.2×10⁴/5.3×10⁴/…（check_figures 体检实抓），只留主刻度又
+        # 会一个数字都没有。窄跨度（<1.5 个数量级）改为首/中/尾 3 个
+        # FixedLocator 数据刻度 + 普通数字格式：可读且绝无重叠。
+        import math as _math
+        import matplotlib.ticker as _mticker
+        _vv = mdf['Value'].dropna()
+        _vv = _vv[_vv > 0]
+        if not _vv.empty and (_math.log10(_vv.max())
+                              - _math.log10(_vv.min())) < 1.5:
+            _lo, _hi = float(_vv.min()), float(_vv.max())
+            _mid = 10 ** (_math.log10(_lo) / 2 + _math.log10(_hi) / 2)
+            # 中位刻度取 2 位有效数字（333,333 这种原始值不体面），并夹在区间内
+            _mid = max(_lo, min(_hi, round(_mid, 2 - 1
+                                          - int(_math.floor(_math.log10(abs(_mid)))))))
+            _ticks = [_lo, _mid, _hi]
+            ax.xaxis.set_major_locator(_mticker.FixedLocator(_ticks))
+            ax.xaxis.set_major_formatter(
+                _mticker.FuncFormatter(lambda v, p: f'{v:,.0f}'))
+        ax.xaxis.set_minor_formatter(_mticker.NullFormatter())
         if HAS_SEABORN:
             sns.despine(ax=ax)
 
@@ -333,12 +353,15 @@ def generate_figures(filtered_tsv, out_dir, logger=None):
     """按参考管线 freq / coabundance 两模块出图（绘图对象 = 通过过滤的
     结果），返回 PNG 文件名列表（含既有缓存）。
 
-    幂等：全部 PNG 已在（此前生成过）直接返回；共丰度图在 <2 样品或
-    <2 个多样品病毒时按原管线语义跳过。
+    幂等：全部 PNG + SVG 已在（此前生成过）直接返回；共丰度图在 <2 样品
+    或 <2 个多样品病毒时按原管线语义跳过。SVG 一并作为幂等条件，旧运行
+    首次访问时会补生成一份可编辑矢量图。
     """
     out_dir = Path(out_dir)
     have = {p.name for p in out_dir.glob('*.png')}
-    if FREQ_PNG in have and set(COAB_PNGS) <= have:
+    have_svg = {p.name for p in out_dir.glob('*.svg')}
+    need_svg = {f'{n[:-4]}.svg' for n in (FREQ_PNG, *COAB_PNGS)}
+    if FREQ_PNG in have and set(COAB_PNGS) <= have and need_svg <= have_svg:
         return sorted(have)
     if not os.path.isfile(str(filtered_tsv)):
         return sorted(have)

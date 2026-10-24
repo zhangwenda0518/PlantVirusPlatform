@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8">
+<title>miRNA targets (PAmiRDB style)</title>
+<style>body{font:14px/1.5 "Segoe UI",sans-serif;margin:24px;color:#222}
+table{border-collapse:collapse;width:100%}
+th,td{padding:9px 12px;border-bottom:1px solid #eee;text-align:left}
+th{font-size:11px;letter-spacing:.08em;color:#666;cursor:pointer;user-select:none}
+th:hover{color:#111} td.n{text-align:right;font-variant-numeric:tabular-nums}
+td.s{color:#1c7c4c;font-weight:600} td.g{color:#c96a1b}
+.b{padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600}
+.v{border:1px solid #1c7c4c;color:#1c7c4c;background:#fff;border-radius:6px;
+padding:3px 12px;cursor:pointer}
+.d{background:#181c24;color:#dfe6ee;border-radius:10px;padding:16px 20px;margin:8px 0}
+.d pre{font-family:Consolas,monospace;font-size:13px;white-space:pre-wrap}
+h4{margin:0 0 10px;color:#fff}</style>
+<h3>miRNA &harr; viral targets (4 hits) &mdash; click header to sort</h3>
+<table><thead><tr>
+<th data-k="miRNA">MIRNA</th><th data-k="level">CONSENSUS</th>
+<th data-k="energy">ENERGY</th><th data-k="identity">IDENTITY</th>
+<th data-k="mm">MM</th><th data-k="seed">SEED</th>
+<th data-k="algs">ALGORITHM</th><th data-k="gene">TARGET GENE</th><th>DETAIL</th>
+</tr></thead><tbody><tr data-e="-29.5"><td>Rhamphospermum_arvense_miRNA_00033</td><td><span class="b" style="background:#F2F2F2">LOW+</span></td><td class="n">-29.5</td><td class="n">82%</td><td class="n">1</td><td class="n s">7/7</td><td>miRanda+RNAhybrid</td><td class="g">NC_002035</td><td><button class="v" data-i="0">View</button></td></tr><tr data-e="-26.700000762939453"><td>Oryza_sativa-miRN73-5p</td><td><span class="b" style="background:#F2F2F2">LOW+</span></td><td class="n">-26.7</td><td class="n">76%</td><td class="n">3</td><td class="n s">6/7</td><td>miRanda+RNAhybrid</td><td class="g">NC_002034</td><td><button class="v" data-i="1">View</button></td></tr><tr data-e="-23.0"><td>Brachypodium_distachyon_miRNA_00736</td><td><span class="b" style="background:#F2F2F2">LOW+</span></td><td class="n">-23.0</td><td class="n">67%</td><td class="n">3</td><td class="n s">4/7</td><td>miRanda+psRNATarget</td><td class="g">NC_001440</td><td><button class="v" data-i="2">View</button></td></tr><tr data-e="-22.899999618530273"><td>Oryza_sativa-miRN73-5p</td><td><span class="b" style="background:#F2F2F2">LOW</span></td><td class="n">-22.9</td><td class="n">67%</td><td class="n">2</td><td class="n s">5/7</td><td>miRanda</td><td class="g">NC_001440</td><td><button class="v" data-i="3">View</button></td></tr></tbody></table>
+<div class="d" id="d0" hidden><h4>Rhamphospermum_arvense_miRNA_00033 &rarr; NC_002035 @2491-2512</h4>无序列数据</div><div class="d" id="d1" hidden><h4>Oryza_sativa-miRN73-5p &rarr; NC_002034 @822-843</h4>无序列数据</div><div class="d" id="d2" hidden><h4>Brachypodium_distachyon_miRNA_00736 &rarr; NC_001440 @1936-1955</h4>无序列数据</div><div class="d" id="d3" hidden><h4>Oryza_sativa-miRN73-5p &rarr; NC_001440 @1692-1712</h4>无序列数据</div>
+<script>
+const tb=document.querySelector("tbody");let dir=1,col="";
+document.querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{
+ const k=th.dataset.k;dir=(col===k)?-dir:1;col=k;
+ const num=(k==="energy"||k==="identity"||k==="mm");
+ [...tb.rows].sort((a,b)=>{const x=parseFloat(a.dataset.e),y=parseFloat(b.dataset.e);
+  if(num)return (x-y)*dir;
+  return a.cells[k==="miRNA"?0:1].textContent.localeCompare(
+   b.cells[k==="miRNA"?0:1].textContent)*dir;})
+ .forEach(r=>tb.appendChild(r));});
+document.querySelectorAll(".v").forEach(btn=>btn.onclick=()=>{
+ const d=document.getElementById("d"+btn.dataset.i);d.hidden=!d.hidden;});
+</script>

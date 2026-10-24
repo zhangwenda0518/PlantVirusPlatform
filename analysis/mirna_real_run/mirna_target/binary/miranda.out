@@ -1,0 +1,1782 @@
+
+
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+miranda v3.3a    microRNA Target Scanning Algorithm
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+(c) 2003 Memorial Sloan-Kettering Cancer Center, New York
+
+Authors: Anton Enright, Bino John, Chris Sander and Debora Marks
+(mirnatargets (at) cbio.mskcc.org - reaches all authors)
+
+Software written by: Anton Enright
+Distributed for anyone to use under the GNU Public License (GPL),
+See the files 'COPYING' and 'LICENSE' for details
+
+If you use this software please cite:
+Enright AJ, John B, Gaul U, Tuschl T, Sander C and Marks DS;
+(2003) Genome Biology; 5(1):R1.
+
+   miranda comes with ABSOLUTELY NO WARRANTY;
+   This is free software, and you are welcome to redistribute it
+   under certain conditions; type `miranda --license' for details.
+
+Current Settings:
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Query Filename: 	D:\����\ֲ�ﲡ������ƽ̨\analysis\mirna_real_run\mirna_target\binary\miranda_q.fa
+Reference Filename:	D:\����\ֲ�ﲡ������ƽ̨\analysis\mirna_real_run\mirna_target\binary\miranda_t.fa
+Gap Open Penalty:	-9.000000
+Gap Extend Penalty:	-4.000000
+Score Threshold:	100.000000
+Energy Threshold:	-15.000000 kcal/mol
+Scaling Parameter:	4.000000
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Read Sequence:ath-miR156a-5p (21 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR156a-5p vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 105.000000  Q:3 to 20  R:347 to 366 Align Len (17) (70.59%) (70.59%)
+
+   Query:    3' acACGAGTGAGAGAAGACAgt 5'
+                  ||| | | | ||| |||  
+   Ref:      5' ggTGCCCTC-CGCTTGTGTga 3'
+
+   Energy:  -17.790001 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_002034	105.00	-17.79	3 20	347 366	17	70.59%	70.59%
+
+
+   Forward:	Score: 103.000000  Q:5 to 20  R:2023 to 2043 Align Len (15) (66.67%) (80.00%)
+
+   Query:    3' acACGAGTGAGAGAAGAcagt 5'
+                  ||  ||:|| :||||    
+   Ref:      5' ggTGAACATTCATTTCTccac 3'
+
+   Energy:  -16.040001 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_002034	103.00	-16.04	5 20	2023 2043	15	66.67%	80.00%
+
+
+   Forward:	Score: 102.000000  Q:2 to 19  R:3075 to 3095 Align Len (17) (70.59%) (70.59%)
+
+   Query:    3' acaCGAGTGAGAGAAGACAGt 5'
+                   | || | |||||| | | 
+   Ref:      5' agcGGTCTCCCTCTTCGGGCg 3'
+
+   Energy:  -16.139999 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_002034	102.00	-16.14	2 19	3075 3095	17	70.59%	70.59%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR156a-5p	NC_002034	310.00	-49.97	105.00	-17.79	1	21	3357	 347 2023 3075
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR156a-5p vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 136.000000  Q:3 to 18  R:2765 to 2788 Align Len (18) (72.22%) (77.78%)
+
+   Query:    3' acacGAGTGAG---AGAAGACAgt 5'
+                    ||| |||   |:||||||  
+   Ref:      5' gcatCTCCCTCCGGTTTTCTGTgg 3'
+
+   Energy:  -15.250000 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_002035	136.00	-15.25	3 18	2765 2788	18	72.22%	77.78%
+
+
+   Forward:	Score: 115.000000  Q:2 to 18  R:1820 to 1839 Align Len (16) (75.00%) (81.25%)
+
+   Query:    3' acacGAGTGAGAGAAGACAGt 5'
+                    |||||| | ||:|| | 
+   Ref:      5' tgcaCTCACT-TATTTTGGCa 3'
+
+   Energy:  -15.010000 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_002035	115.00	-15.01	2 18	1820 1839	16	75.00%	81.25%
+
+
+   Forward:	Score: 107.000000  Q:2 to 12  R:798 to 818 Align Len (10) (80.00%) (90.00%)
+
+   Query:    3' acacgagtgaGAGAAGACAGt 5'
+                          |||| :|||| 
+   Ref:      5' gataatgcgaCTCTGTTGTCg 3'
+
+   Energy:  -17.410000 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_002035	107.00	-17.41	2 12	798 818	10	80.00%	90.00%
+
+
+   Forward:	Score: 101.000000  Q:4 to 20  R:106 to 131 Align Len (21) (66.67%) (71.43%)
+
+   Query:    3' acACGAGTGA---G--AGAAGACagt 5'
+                  | ||||||   |  ||||:||   
+   Ref:      5' caTTCTCACTAGCCAATCTTTTGaac 3'
+
+   Energy:  -15.910000 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_002035	101.00	-15.91	4 20	106 131	21	66.67%	71.43%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR156a-5p	NC_002035	459.00	-63.58	136.00	-17.41	2	21	3050	 2765 1820 798 106
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR156a-5p vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 143.000000  Q:2 to 20  R:1219 to 1239 Align Len (18) (72.22%) (88.89%)
+
+   Query:    3' acACGAGTGAGAGAAGACAGt 5'
+                  ||:|: ||||:|| |||| 
+   Ref:      5' tgTGTTTTCTCTTTTGTGTCg 3'
+
+   Energy:  -24.760000 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_001440	143.00	-24.76	2 20	1219 1239	18	72.22%	88.89%
+
+
+   Forward:	Score: 110.000000  Q:2 to 20  R:1341 to 1364 Align Len (21) (61.90%) (71.43%)
+
+   Query:    3' acACGAGTGAGA---GAAGACAGt 5'
+                  |||| |||:|    | :|||| 
+   Ref:      5' gaTGCTAACTTTAGAGTCTTGTCg 3'
+
+   Energy:  -17.219999 kCal/Mol
+
+Scores for this hit:
+>ath-miR156a-5p	NC_001440	110.00	-17.22	2 20	1341 1364	21	61.90%	71.43%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR156a-5p	NC_001440	253.00	-41.98	143.00	-24.76	3	21	2216	 1219 1341
+Complete
+
+Read Sequence:ath-miR159a (21 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR159a vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 144.000000  Q:2 to 20  R:2704 to 2722 Align Len (18) (66.67%) (88.89%)
+
+   Query:    3' atCTCGAGGGAAGTTAGGTTt 5'
+                  |:|:|:|  ||||||:|| 
+   Ref:      5' atGGGTTTC--TCAATCTAAa 3'
+
+   Energy:  -17.350000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002034	144.00	-17.35	2 20	2704 2722	18	66.67%	88.89%
+
+
+   Forward:	Score: 127.000000  Q:2 to 20  R:2189 to 2211 Align Len (20) (75.00%) (85.00%)
+
+   Query:    3' atCTCGAGGGAAGTT--AGGTTt 5'
+                  | |:||:||||||  ||||| 
+   Ref:      5' acGCGTTCTCTTCAAGCTCCAAc 3'
+
+   Energy:  -18.590000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002034	127.00	-18.59	2 20	2189 2211	20	75.00%	85.00%
+
+
+   Forward:	Score: 122.000000  Q:4 to 20  R:11 to 33 Align Len (18) (72.22%) (77.78%)
+
+   Query:    3' atCTCGAGGG--AAGTTAGGttt 5'
+                  |||| : |  ||||||||   
+   Ref:      5' aaGAGCGTACGGTTCAATCCctg 3'
+
+   Energy:  -17.969999 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002034	122.00	-17.97	4 20	11 33	18	72.22%	77.78%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR159a	NC_002034	393.00	-53.91	144.00	-18.59	4	21	3357	 2704 2189 11
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR159a vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 137.000000  Q:2 to 19  R:1664 to 1686 Align Len (19) (63.16%) (78.95%)
+
+   Query:    3' atcTCGAGGGAA--GTTAGGTTt 5'
+                   | :|| |||  :||||||: 
+   Ref:      5' tgaATTTCACTTGCTAATCCAGg 3'
+
+   Energy:  -15.710000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002035	137.00	-15.71	2 19	1664 1686	19	63.16%	78.95%
+
+
+   Forward:	Score: 114.000000  Q:2 to 19  R:1260 to 1280 Align Len (17) (64.71%) (76.47%)
+
+   Query:    3' atcTCGAGGGAAGTTAGGTTt 5'
+                   | |||:||   |||||: 
+   Ref:      5' ggtAACTCTCTAGCATCCAGt 3'
+
+   Energy:  -16.660000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002035	114.00	-16.66	2 19	1260 1280	17	64.71%	76.47%
+
+
+   Forward:	Score: 111.000000  Q:2 to 20  R:2547 to 2567 Align Len (18) (61.11%) (72.22%)
+
+   Query:    3' atCTCGAGGGAAGTTAGGTTt 5'
+                  |||| | :|  ||||: | 
+   Ref:      5' gaGAGCGCGTTCAAATCTCAg 3'
+
+   Energy:  -17.080000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002035	111.00	-17.08	2 20	2547 2567	18	61.11%	72.22%
+
+
+   Forward:	Score: 105.000000  Q:2 to 20  R:2642 to 2661 Align Len (18) (55.56%) (77.78%)
+
+   Query:    3' atCTCGAGGGAAGTTAGGTTt 5'
+                  |||:| ||   |:||::| 
+   Ref:      5' cgGAGTTACC-CGAGTCTGAg 3'
+
+   Energy:  -17.200001 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002035	105.00	-17.20	2 20	2642 2661	18	55.56%	77.78%
+
+
+   Forward:	Score: 101.000000  Q:3 to 20  R:1233 to 1252 Align Len (17) (70.59%) (82.35%)
+
+   Query:    3' atCTCGAGGGAAGTTAGGTtt 5'
+                  ||| | :||||| |:||  
+   Ref:      5' gaGAGAT-TCTTCATTTCAta 3'
+
+   Energy:  -16.260000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_002035	101.00	-16.26	3 20	1233 1252	17	70.59%	82.35%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR159a	NC_002035	568.00	-82.91	137.00	-17.20	5	21	3050	 1664 1260 2547 2642 1233
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR159a vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 111.000000  Q:2 to 18  R:269 to 288 Align Len (16) (62.50%) (87.50%)
+
+   Query:    3' atctCGAGGGAAGTTAGGTTt 5'
+                    |||  :||||:|||:: 
+   Ref:      5' taatGCT-ATTTCAGTCCGGc 3'
+
+   Energy:  -17.610001 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_001440	111.00	-17.61	2 18	269 288	16	62.50%	87.50%
+
+
+   Forward:	Score: 109.000000  Q:2 to 20  R:1895 to 1914 Align Len (18) (55.56%) (83.33%)
+
+   Query:    3' atCTCGAGGGAAGTTAGGTTt 5'
+                  |||: |:|  ||:||::| 
+   Ref:      5' tgGAGTGCTC-CCAGTCTGAt 3'
+
+   Energy:  -16.400000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_001440	109.00	-16.40	2 20	1895 1914	18	55.56%	83.33%
+
+
+   Forward:	Score: 100.000000  Q:2 to 17  R:321 to 341 Align Len (15) (53.33%) (93.33%)
+
+   Query:    3' atctcGAGGGAAGTTAGGTTt 5'
+                     ||:|:|| |:||::: 
+   Ref:      5' gcttcCTTCTTTAAGTCTGGa 3'
+
+   Energy:  -16.830000 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_001440	100.00	-16.83	2 17	321 341	15	53.33%	93.33%
+
+
+   Forward:	Score: 100.000000  Q:4 to 17  R:1927 to 1947 Align Len (13) (76.92%) (92.31%)
+
+   Query:    3' atctcGAGGGAAGTTAGGttt 5'
+                     |||||| |:|||:   
+   Ref:      5' gaatcCTCCCTCCGATCTctg 3'
+
+   Energy:  -17.110001 kCal/Mol
+
+Scores for this hit:
+>ath-miR159a	NC_001440	100.00	-17.11	4 17	1927 1947	13	76.92%	92.31%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR159a	NC_001440	420.00	-67.95	111.00	-17.61	6	21	2216	 269 1895 321 1927
+Complete
+
+Read Sequence:ath-miR168a-5p (21 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR168a-5p vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 124.000000  Q:2 to 13  R:501 to 521 Align Len (11) (81.82%) (90.91%)
+
+   Query:    3' aagggctggACGTGGTTCGCt 5'
+                         |||:||| ||| 
+   Ref:      5' gcgataagaTGCGCCATGCGg 3'
+
+   Energy:  -24.200001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	124.00	-24.20	2 13	501 521	11	81.82%	90.91%
+
+
+   Forward:	Score: 119.000000  Q:2 to 20  R:2194 to 2214 Align Len (18) (61.11%) (66.67%)
+
+   Query:    3' aaGGGCTGGACGTGGTTCGCt 5'
+                  |:|  |  || |||| || 
+   Ref:      5' ttCTCTTCAAGCTCCAACCGg 3'
+
+   Energy:  -16.990000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	119.00	-16.99	2 20	2194 2214	18	61.11%	66.67%
+
+
+   Forward:	Score: 113.000000  Q:2 to 20  R:582 to 605 Align Len (21) (66.67%) (76.19%)
+
+   Query:    3' aaGGGCT--GGACGT-GGTTCGCt 5'
+                  || ||  :||||| :||| || 
+   Ref:      5' agCCGGATTTCTGCACTCAACCGg 3'
+
+   Energy:  -24.799999 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	113.00	-24.80	2 20	582 605	21	66.67%	76.19%
+
+
+   Forward:	Score: 112.000000  Q:2 to 18  R:2053 to 2074 Align Len (17) (64.71%) (82.35%)
+
+   Query:    3' aaggGCTGGACGT-GGTTCGCt 5'
+                    || ||||:: ||:|| | 
+   Ref:      5' gatgCGTCCTGTGCCCGAGGGt 3'
+
+   Energy:  -19.139999 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	112.00	-19.14	2 18	2053 2074	17	64.71%	82.35%
+
+
+   Forward:	Score: 110.000000  Q:2 to 19  R:972 to 992 Align Len (17) (52.94%) (82.35%)
+
+   Query:    3' aagGGCTGGACGTGGTTCGCt 5'
+                   |: |:: |:|||:|| | 
+   Ref:      5' agaCTTATTCGTACCGAGGGa 3'
+
+   Energy:  -19.170000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	110.00	-19.17	2 19	972 992	17	52.94%	82.35%
+
+
+   Forward:	Score: 109.000000  Q:3 to 20  R:303 to 322 Align Len (17) (64.71%) (82.35%)
+
+   Query:    3' aaGGGCTGGACGTGGTTCGct 5'
+                  |:| |:|| :||| |||  
+   Ref:      5' acCTCCATCT-TACCCAGCag 3'
+
+   Energy:  -15.340000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	109.00	-15.34	3 20	303 322	17	64.71%	82.35%
+
+
+   Forward:	Score: 104.000000  Q:2 to 8  R:1313 to 1333 Align Len (6) (83.33%) (100.00%)
+
+   Query:    3' aagggctggacgtgGTTCGCt 5'
+                              |:|||| 
+   Ref:      5' tccatgcaatctggCGAGCGa 3'
+
+   Energy:  -18.870001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	104.00	-18.87	2 8	1313 1333	6	83.33%	100.00%
+
+
+   Forward:	Score: 103.000000  Q:2 to 20  R:2818 to 2838 Align Len (18) (50.00%) (72.22%)
+
+   Query:    3' aaGGGCTGGACGTGGTTCGCt 5'
+                  ||: ||:  : :|||| | 
+   Ref:      5' ggCCTCACTGATTTCAAGGGc 3'
+
+   Energy:  -16.219999 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	103.00	-16.22	2 20	2818 2838	18	50.00%	72.22%
+
+
+   Forward:	Score: 101.000000  Q:2 to 20  R:1508 to 1530 Align Len (20) (70.00%) (75.00%)
+
+   Query:    3' aaGGGCTG-GAC-GTGGTTCGCt 5'
+                  |||||| :||  |||  ||| 
+   Ref:      5' ttCCCGACTTTGAGACCCCGCGa 3'
+
+   Energy:  -28.389999 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	101.00	-28.39	2 20	1508 1530	20	70.00%	75.00%
+
+
+   Forward:	Score: 100.000000  Q:2 to 15  R:3077 to 3096 Align Len (13) (61.54%) (84.62%)
+
+   Query:    3' aagggctGGACGTGGTTCGCt 5'
+                       ||| | :|::||| 
+   Ref:      5' cggtctcCCT-CTTCGGGCGg 3'
+
+   Energy:  -18.520000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002034	100.00	-18.52	2 15	3077 3096	13	61.54%	84.62%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR168a-5p	NC_002034	1095.00	-201.64	124.00	-28.39	7	21	3357	 501 2194 582 2053 972 303 1313 2818 1508 3077
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR168a-5p vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 126.000000  Q:2 to 20  R:2577 to 2599 Align Len (20) (60.00%) (80.00%)
+
+   Query:    3' aaGGGCTGG--ACGTGGTTCGCt 5'
+                  :|| |||  | :|:||||:| 
+   Ref:      5' ctTCCTACCGTTCTATCAAGTGg 3'
+
+   Energy:  -21.790001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	126.00	-21.79	2 20	2577 2599	20	60.00%	80.00%
+
+
+   Forward:	Score: 124.000000  Q:2 to 18  R:976 to 999 Align Len (19) (63.16%) (78.95%)
+
+   Query:    3' aaggGCTG---GACGTGGTTCGCt 5'
+                    ||||   :| ||:||||:| 
+   Ref:      5' acgaCGACTCTTTTCATCAAGTGt 3'
+
+   Energy:  -21.510000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	124.00	-21.51	2 18	976 999	19	63.16%	78.95%
+
+
+   Forward:	Score: 115.000000  Q:2 to 20  R:1716 to 1733 Align Len (18) (55.56%) (77.78%)
+
+   Query:    3' aaGGGCTGGACGTGGTTCGCt 5'
+                  :||||:    ||:|||:| 
+   Ref:      5' gcTCCGAT---AACTAAGTGg 3'
+
+   Energy:  -21.000000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	115.00	-21.00	2 20	1716 1733	18	55.56%	77.78%
+
+
+   Forward:	Score: 112.000000  Q:3 to 19  R:1630 to 1649 Align Len (16) (62.50%) (93.75%)
+
+   Query:    3' aagGGCTGGACGTGGTTCGct 5'
+                   ::||||||: |:|||:  
+   Ref:      5' agaTTGACCTGT-CTAAGTtt 3'
+
+   Energy:  -19.570000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	112.00	-19.57	3 19	1630 1649	16	62.50%	93.75%
+
+
+   Forward:	Score: 109.000000  Q:2 to 19  R:663 to 684 Align Len (18) (61.11%) (77.78%)
+
+   Query:    3' aagGGCTGG-ACGTGGTTCGCt 5'
+                   ||| || | ::: ||||| 
+   Ref:      5' ccgCCGCCCATTTGTGAAGCGt 3'
+
+   Energy:  -17.530001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	109.00	-17.53	2 19	663 684	18	61.11%	77.78%
+
+
+   Forward:	Score: 105.000000  Q:2 to 18  R:170 to 190 Align Len (16) (68.75%) (81.25%)
+
+   Query:    3' aaggGCTGGACGTGGTTCGCt 5'
+                    |||:||| :| | ||| 
+   Ref:      5' tttgCGATCTGAGCAACGCGa 3'
+
+   Energy:  -22.059999 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	105.00	-22.06	2 18	170 190	16	68.75%	81.25%
+
+
+   Forward:	Score: 103.000000  Q:2 to 16  R:1412 to 1432 Align Len (14) (64.29%) (92.86%)
+
+   Query:    3' aagggcTGGACGTGGTTCGCt 5'
+                      |||||:: ::|||| 
+   Ref:      5' tgtgaaACCTGTGGTGAGCGa 3'
+
+   Energy:  -18.260000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	103.00	-18.26	2 16	1412 1432	14	64.29%	92.86%
+
+
+   Forward:	Score: 103.000000  Q:2 to 17  R:2614 to 2635 Align Len (16) (62.50%) (75.00%)
+
+   Query:    3' aagggCTGGAC-GTGGTTCGCt 5'
+                     | | || |:||| |:| 
+   Ref:      5' acaggGTCATGCCGCCATGTGa 3'
+
+   Energy:  -18.670000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	103.00	-18.67	2 17	2614 2635	16	62.50%	75.00%
+
+
+   Forward:	Score: 102.000000  Q:2 to 15  R:1175 to 1195 Align Len (13) (53.85%) (84.62%)
+
+   Query:    3' aagggctGGACGTGGTTCGCt 5'
+                       || | :|:|:|:| 
+   Ref:      5' tgacgttCCAGAGCTAGGTGa 3'
+
+   Energy:  -16.540001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	102.00	-16.54	2 15	1175 1195	13	53.85%	84.62%
+
+
+   Forward:	Score: 101.000000  Q:2 to 19  R:284 to 306 Align Len (19) (63.16%) (73.68%)
+
+   Query:    3' aagGGCTGGA-CGTGG-TTCGCt 5'
+                   | || ||  |:|: ||||| 
+   Ref:      5' tgaCGGAGCTCCCGCTGAAGCGg 3'
+
+   Energy:  -18.049999 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	101.00	-18.05	2 19	284 306	19	63.16%	73.68%
+
+
+   Forward:	Score: 100.000000  Q:2 to 20  R:628 to 651 Align Len (21) (57.14%) (76.19%)
+
+   Query:    3' aaGGGC-TGG-A-CGTGGTTCGCt 5'
+                  ::|| ||| | |: ||:| || 
+   Ref:      5' ctTTCGAACCGTGGTCCCGAACGt 3'
+
+   Energy:  -17.230000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_002035	100.00	-17.23	2 20	628 651	21	57.14%	76.19%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR168a-5p	NC_002035	1200.00	-212.21	126.00	-22.06	8	21	3050	 2577 976 1716 1630 663 170 1412 2614 1175 284 628
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: ath-miR168a-5p vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 136.000000  Q:3 to 19  R:1720 to 1743 Align Len (19) (73.68%) (78.95%)
+
+   Query:    3' aagGGC-TGGACGT--GGTTCGct 5'
+                   ||| |:||| |  ||||||  
+   Ref:      5' atgCCGCATCTGGAGTCCAAGCca 3'
+
+   Energy:  -20.780001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_001440	136.00	-20.78	3 19	1720 1743	19	73.68%	78.95%
+
+
+   Forward:	Score: 107.000000  Q:3 to 20  R:909 to 930 Align Len (18) (72.22%) (72.22%)
+
+   Query:    3' aaGGGCTGGACGTGG-TTCGct 5'
+                  | || || || || ||||  
+   Ref:      5' tcCGCGTCCCGCTCCGAAGCct 3'
+
+   Energy:  -17.360001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_001440	107.00	-17.36	3 20	909 930	18	72.22%	72.22%
+
+
+   Forward:	Score: 106.000000  Q:2 to 19  R:446 to 466 Align Len (17) (52.94%) (76.47%)
+
+   Query:    3' aagGGCTGGACGTGGTTCGCt 5'
+                   |: | |||  |:::||| 
+   Ref:      5' ttaCTTAGCTGATCTGGGCGa 3'
+
+   Energy:  -17.950001 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_001440	106.00	-17.95	2 19	446 466	17	52.94%	76.47%
+
+
+   Forward:	Score: 105.000000  Q:4 to 20  R:110 to 135 Align Len (21) (61.90%) (66.67%)
+
+   Query:    3' aaGGGCT--GGAC---GTGGTTCgct 5'
+                  |||||  | ||   : |||||   
+   Ref:      5' ttCCCGAGGCATGGCTTTCCAAGgta 3'
+
+   Energy:  -19.590000 kCal/Mol
+
+Scores for this hit:
+>ath-miR168a-5p	NC_001440	105.00	-19.59	4 20	110 135	21	61.90%	66.67%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>ath-miR168a-5p	NC_001440	454.00	-75.68	136.00	-20.78	9	21	2216	 1720 909 446 110
+Complete
+
+Read Sequence:osa-miR408-3p (21 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: osa-miR408-3p vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 134.000000  Q:2 to 19  R:1155 to 1174 Align Len (18) (72.22%) (77.78%)
+
+   Query:    3' cggTC-CCTTCTCCGTCACGTc 5'
+                   || |||| |  ||||||: 
+   Ref:      5' ttgAGTGGAAAA--CAGTGCGg 3'
+
+   Energy:  -19.240000 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_002034	134.00	-19.24	2 19	1155 1174	18	72.22%	77.78%
+
+
+   Forward:	Score: 107.000000  Q:3 to 17  R:787 to 809 Align Len (16) (75.00%) (75.00%)
+
+   Query:    3' cggtcCCTTCT--CCGTCACGtc 5'
+                     ||||||   | |||||  
+   Ref:      5' gtggaGGAAGATCAGGAGTGCtt 3'
+
+   Energy:  -17.340000 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_002034	107.00	-17.34	3 17	787 809	16	75.00%	75.00%
+
+
+   Forward:	Score: 103.000000  Q:2 to 16  R:2513 to 2533 Align Len (14) (57.14%) (78.57%)
+
+   Query:    3' cggtccCTTCTCCGTCACGTc 5'
+                      |::||  |:| ||| 
+   Ref:      5' tgttttGGGGATTCGGAGCAg 3'
+
+   Energy:  -15.820000 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_002034	103.00	-15.82	2 16	2513 2533	14	57.14%	78.57%
+
+
+   Forward:	Score: 100.000000  Q:2 to 18  R:1654 to 1678 Align Len (20) (70.00%) (70.00%)
+
+   Query:    3' cggtCCCTTCT----CCGTCACGTc 5'
+                    |||||||    ||| | ||| 
+   Ref:      5' cgatGGGAAGATTTTGGCTGCGCAg 3'
+
+   Energy:  -22.799999 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_002034	100.00	-22.80	2 18	1654 1678	20	70.00%	70.00%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>osa-miR408-3p	NC_002034	444.00	-75.20	134.00	-22.80	10	21	3357	 1155 787 2513 1654
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: osa-miR408-3p vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 114.000000  Q:2 to 20  R:1801 to 1824 Align Len (21) (66.67%) (71.43%)
+
+   Query:    3' cgGTCCCTTCT---CCGTCACGTc 5'
+                  ||| || ||   |||: |||| 
+   Ref:      5' tcCAGAGACGAACTGGCGATGCAc 3'
+
+   Energy:  -18.400000 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_002035	114.00	-18.40	2 20	1801 1824	21	66.67%	71.43%
+
+
+   Forward:	Score: 101.000000  Q:4 to 19  R:2474 to 2495 Align Len (16) (81.25%) (81.25%)
+
+   Query:    3' cggTCC-CTTCTCCGTCACgtc 5'
+                   ||| ||||| |||| |   
+   Ref:      5' tggAGGCGAAGAAGCAGAGacg 3'
+
+   Energy:  -18.760000 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_002035	101.00	-18.76	4 19	2474 2495	16	81.25%	81.25%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>osa-miR408-3p	NC_002035	215.00	-37.16	114.00	-18.76	11	21	3050	 1801 2474
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: osa-miR408-3p vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 109.000000  Q:2 to 20  R:480 to 499 Align Len (18) (66.67%) (72.22%)
+
+   Query:    3' cgGTCCCTTCTCCGTCACGTc 5'
+                  ||  || | |||| |||: 
+   Ref:      5' ccCATAGATG-GGCAATGCGt 3'
+
+   Energy:  -15.250000 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_001440	109.00	-15.25	2 20	480 499	18	66.67%	72.22%
+
+
+   Forward:	Score: 103.000000  Q:3 to 18  R:569 to 592 Align Len (18) (66.67%) (77.78%)
+
+   Query:    3' cggtCCCTT--C-TCCGTCACGtc 5'
+                    |||||  | | ||:|||:  
+   Ref:      5' agttGGGAATCGTAAGCGGTGTtt 3'
+
+   Energy:  -16.459999 kCal/Mol
+
+Scores for this hit:
+>osa-miR408-3p	NC_001440	103.00	-16.46	3 18	569 592	18	66.67%	77.78%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>osa-miR408-3p	NC_001440	212.00	-31.71	109.00	-16.46	12	21	2216	 480 569
+Complete
+
+Read Sequence:Oryza_sativa-miRN73-5p (21 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Oryza_sativa-miRN73-5p vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 150.000000  Q:2 to 20  R:822 to 843 Align Len (19) (73.68%) (84.21%)
+
+   Query:    3' tcCGGCGG-GCGGTGGCCAACc 5'
+                  | ||:| | ||||:||||| 
+   Ref:      5' aaGACGTCACACCACTGGTTGg 3'
+
+   Energy:  -30.950001 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	150.00	-30.95	2 20	822 843	19	73.68%	84.21%
+
+
+   Forward:	Score: 132.000000  Q:2 to 13  R:2228 to 2248 Align Len (11) (63.64%) (100.00%)
+
+   Query:    3' tccggcgggCGGTGGCCAACc 5'
+                         |:::|:||||| 
+   Ref:      5' gttgacggaGTTGCTGGTTGt 3'
+
+   Energy:  -16.410000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	132.00	-16.41	2 13	2228 2248	11	63.64%	100.00%
+
+
+   Forward:	Score: 130.000000  Q:2 to 19  R:589 to 609 Align Len (17) (70.59%) (76.47%)
+
+   Query:    3' tccGGCGGGCGGTGGCCAACc 5'
+                   |:|| | | ||||| || 
+   Ref:      5' tttCTGCACTCAACCGGCTGc 3'
+
+   Energy:  -17.030001 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	130.00	-17.03	2 19	589 609	17	70.59%	76.47%
+
+
+   Forward:	Score: 126.000000  Q:2 to 20  R:2751 to 2772 Align Len (19) (57.89%) (84.21%)
+
+   Query:    3' tcCGG-CGGGCGGTGGCCAACc 5'
+                  ||: |: :| ||::||||| 
+   Ref:      5' tcGCTAGTGTGACATTGGTTGa 3'
+
+   Energy:  -19.219999 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	126.00	-19.22	2 20	2751 2772	19	57.89%	84.21%
+
+
+   Forward:	Score: 123.000000  Q:2 to 20  R:342 to 362 Align Len (18) (61.11%) (72.22%)
+
+   Query:    3' tcCGGCGGGCGGTGGCCAACc 5'
+                  ||:| :  || ||| ||| 
+   Ref:      5' taGCTGGTGCCCTCCGCTTGt 3'
+
+   Energy:  -20.240000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	123.00	-20.24	2 20	342 362	18	61.11%	72.22%
+
+
+   Forward:	Score: 117.000000  Q:2 to 20  R:1139 to 1158 Align Len (18) (55.56%) (77.78%)
+
+   Query:    3' tcCGGCGGGCGGTGGCCAACc 5'
+                  |:|||  | : ::||||| 
+   Ref:      5' gcGTCGCAGGAT-TTGGTTGa 3'
+
+   Energy:  -18.580000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	117.00	-18.58	2 20	1139 1158	18	55.56%	77.78%
+
+
+   Forward:	Score: 115.000000  Q:2 to 18  R:155 to 174 Align Len (16) (75.00%) (81.25%)
+
+   Query:    3' tccgGCGGGCGGTGGCCAACc 5'
+                    || ||||| |: |||| 
+   Ref:      5' ctcgCGACCGCC-CTCGTTGa 3'
+
+   Energy:  -21.320000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	115.00	-21.32	2 18	155 174	16	75.00%	81.25%
+
+
+   Forward:	Score: 114.000000  Q:2 to 11  R:2629 to 2649 Align Len (9) (77.78%) (88.89%)
+
+   Query:    3' tccggcgggcgGTGGCCAACc 5'
+                           :|||| ||| 
+   Ref:      5' acaagatgttgTACCGCTTGt 3'
+
+   Energy:  -15.050000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	114.00	-15.05	2 11	2629 2649	9	77.78%	88.89%
+
+
+   Forward:	Score: 111.000000  Q:2 to 20  R:270 to 291 Align Len (19) (63.16%) (78.95%)
+
+   Query:    3' tcCGGCGGGCGGTGGCCA-ACc 5'
+                  |:| :|||  |:|||| || 
+   Ref:      5' agGTCATCCGGAATCGGTATGg 3'
+
+   Energy:  -30.530001 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	111.00	-30.53	2 20	270 291	19	63.16%	78.95%
+
+
+   Forward:	Score: 107.000000  Q:2 to 12  R:1442 to 1463 Align Len (11) (63.64%) (90.91%)
+
+   Query:    3' tccggcgggcGGTGGC-CAACc 5'
+                          :::||| |||| 
+   Ref:      5' tcgaagtggtTTGCCGCGTTGa 3'
+
+   Energy:  -18.170000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	107.00	-18.17	2 12	1442 1463	11	63.64%	90.91%
+
+
+   Forward:	Score: 104.000000  Q:3 to 17  R:571 to 591 Align Len (14) (64.29%) (78.57%)
+
+   Query:    3' tccggCGGGCGGTGGCCAAcc 5'
+                     |:| || :|||| |  
+   Ref:      5' cgatgGTCGGCAGCCGGATtt 3'
+
+   Energy:  -18.770000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	104.00	-18.77	3 17	571 591	14	64.29%	78.57%
+
+
+   Forward:	Score: 103.000000  Q:2 to 20  R:1640 to 1660 Align Len (18) (61.11%) (77.78%)
+
+   Query:    3' tcCGGCGGGCGGTGGCCAACc 5'
+                  || | |:|::|||| | | 
+   Ref:      5' acGCAGGCTGTTACCGATGGg 3'
+
+   Energy:  -22.330000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002034	103.00	-22.33	2 20	1640 1660	18	61.11%	77.78%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Oryza_sativa-miRN73-5p	NC_002034	1432.00	-248.60	150.00	-30.95	13	21	3357	 822 2228 589 2751 342 1139 155 2629 270 1442 571 1640
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Oryza_sativa-miRN73-5p vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 137.000000  Q:3 to 19  R:2760 to 2782 Align Len (18) (72.22%) (77.78%)
+
+   Query:    3' tccGGCG--GGCGGTGGCCAAcc 5'
+                   ||||  |: || ||||||  
+   Ref:      5' cttCCGCATCTCCCTCCGGTTtt 3'
+
+   Energy:  -21.580000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002035	137.00	-21.58	3 19	2760 2782	18	72.22%	77.78%
+
+
+   Forward:	Score: 131.000000  Q:3 to 20  R:1082 to 1102 Align Len (17) (58.82%) (76.47%)
+
+   Query:    3' tcCGGCGGGCGGTGGCCAAcc 5'
+                  | | : :| :|||||||  
+   Ref:      5' agGGCATATGATACCGGTTct 3'
+
+   Energy:  -20.620001 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002035	131.00	-20.62	3 20	1082 1102	17	58.82%	76.47%
+
+
+   Forward:	Score: 125.000000  Q:3 to 19  R:605 to 626 Align Len (17) (58.82%) (76.47%)
+
+   Query:    3' tccGGCG-GGCGGTGGCCAAcc 5'
+                   :|||  :|:  ||||||  
+   Ref:      5' gtcTCGCGATGTACCCGGTTat 3'
+
+   Energy:  -17.620001 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002035	125.00	-17.62	3 19	605 626	17	58.82%	76.47%
+
+
+   Forward:	Score: 124.000000  Q:2 to 19  R:1932 to 1951 Align Len (17) (64.71%) (82.35%)
+
+   Query:    3' tccGGCGGGCGGTGGCCAACc 5'
+                   |:||:: || || |||| 
+   Ref:      5' tcaCTGCTT-CCCCCTGTTGg 3'
+
+   Energy:  -22.150000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002035	124.00	-22.15	2 19	1932 1951	17	64.71%	82.35%
+
+
+   Forward:	Score: 107.000000  Q:4 to 12  R:2707 to 2727 Align Len (8) (75.00%) (100.00%)
+
+   Query:    3' tccggcgggcGGTGGCCAacc 5'
+                          :|:|||||   
+   Ref:      5' acagattggtTCGCCGGTaac 3'
+
+   Energy:  -16.969999 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002035	107.00	-16.97	4 12	2707 2727	8	75.00%	100.00%
+
+
+   Forward:	Score: 100.000000  Q:2 to 19  R:899 to 922 Align Len (20) (60.00%) (80.00%)
+
+   Query:    3' tccGGCG-GGCGG-TGGC-CAACc 5'
+                   |||: |: |: |:|| |||| 
+   Ref:      5' aaaCCGTGCTACTGATCGTGTTGa 3'
+
+   Energy:  -17.879999 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002035	100.00	-17.88	2 19	899 922	20	60.00%	80.00%
+
+
+   Forward:	Score: 100.000000  Q:3 to 8  R:2080 to 2100 Align Len (5) (100.00%) (100.00%)
+
+   Query:    3' tccggcgggcggtgGCCAAcc 5'
+                              |||||  
+   Ref:      5' tgcgcgaggttcagCGGTTag 3'
+
+   Energy:  -18.809999 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_002035	100.00	-18.81	3 8	2080 2100	5	100.00%	100.00%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Oryza_sativa-miRN73-5p	NC_002035	824.00	-135.63	137.00	-22.15	14	21	3050	 2760 1082 605 1932 2707 899 2080
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Oryza_sativa-miRN73-5p vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 131.000000  Q:2 to 20  R:763 to 783 Align Len (18) (61.11%) (83.33%)
+
+   Query:    3' tcCGGCGGGCGGTGGCCAACc 5'
+                  ||:|:|  :|:|| |||| 
+   Ref:      5' caGCTGTCGCTCGCCTGTTGa 3'
+
+   Energy:  -22.910000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_001440	131.00	-22.91	2 20	763 783	18	61.11%	83.33%
+
+
+   Forward:	Score: 130.000000  Q:3 to 20  R:1693 to 1714 Align Len (18) (72.22%) (83.33%)
+
+   Query:    3' tcCGGCG-GGCGGTGGCCAAcc 5'
+                  ||| | ||| :||:||||  
+   Ref:      5' gaGCCTCACCGGTACTGGTTta 3'
+
+   Energy:  -24.330000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_001440	130.00	-24.33	3 20	1693 1714	18	72.22%	83.33%
+
+
+   Forward:	Score: 115.000000  Q:2 to 16  R:1050 to 1071 Align Len (15) (66.67%) (80.00%)
+
+   Query:    3' tccggcGGGCGGTGGC-CAACc 5'
+                      | || ::||| |||| 
+   Ref:      5' ctgtgaCGCGATGCCGTGTTGa 3'
+
+   Energy:  -17.120001 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_001440	115.00	-17.12	2 16	1050 1071	15	66.67%	80.00%
+
+
+   Forward:	Score: 106.000000  Q:4 to 11  R:618 to 638 Align Len (7) (85.71%) (100.00%)
+
+   Query:    3' tccggcgggcgGTGGCCAacc 5'
+                           :||||||   
+   Ref:      5' tacattgggtaTACCGGTacc 3'
+
+   Energy:  -17.889999 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_001440	106.00	-17.89	4 11	618 638	7	85.71%	100.00%
+
+
+   Forward:	Score: 105.000000  Q:2 to 20  R:1642 to 1666 Align Len (22) (59.09%) (72.73%)
+
+   Query:    3' tcCGGCGG-GC---GGTGGCCAACc 5'
+                  ||| || ||   ::|:| |||| 
+   Ref:      5' ctGCCTCCTCGGACTTATCCGTTGc 3'
+
+   Energy:  -17.900000 kCal/Mol
+
+Scores for this hit:
+>Oryza_sativa-miRN73-5p	NC_001440	105.00	-17.90	2 20	1642 1666	22	59.09%	72.73%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Oryza_sativa-miRN73-5p	NC_001440	587.00	-100.15	131.00	-24.33	15	21	2216	 763 1693 1050 618 1642
+Complete
+
+Read Sequence:Theobroma_cacao_miRNA_00667 (22 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Theobroma_cacao_miRNA_00667 vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 148.000000  Q:2 to 21  R:1744 to 1762 Align Len (19) (68.42%) (73.68%)
+
+   Query:    3' caGTACGTTTTCTCGCGGACTt 5'
+                  ||| : |||   ||||||| 
+   Ref:      5' gtCATCTCAAA---CGCCTGAt 3'
+
+   Energy:  -18.049999 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002034	148.00	-18.05	2 21	1744 1762	19	68.42%	73.68%
+
+
+   Forward:	Score: 134.000000  Q:2 to 19  R:3113 to 3131 Align Len (17) (70.59%) (76.47%)
+
+   Query:    3' cagtACGTTTTCTCGCGGACTt 5'
+                    |||||   | ||:|||| 
+   Ref:      5' aatcTGCAA---ACCGTCTGAa 3'
+
+   Energy:  -18.350000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002034	134.00	-18.35	2 19	3113 3131	17	70.59%	76.47%
+
+
+   Forward:	Score: 107.000000  Q:3 to 18  R:496 to 520 Align Len (18) (77.78%) (83.33%)
+
+   Query:    3' cagtaCGTT-TTCT-CGCGG-ACtt 5'
+                     ||:| |||| ||||| ||  
+   Ref:      5' tatccGCGATAAGATGCGCCATGcg 3'
+
+   Energy:  -17.820000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002034	107.00	-17.82	3 18	496 520	18	77.78%	83.33%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Theobroma_cacao_miRNA_00667	NC_002034	389.00	-54.22	148.00	-18.35	16	22	3357	 1744 3113 496
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Theobroma_cacao_miRNA_00667 vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 128.000000  Q:2 to 18  R:292 to 314 Align Len (17) (64.71%) (88.24%)
+
+   Query:    3' cagtaCGTTTTC-TCGCGGACTt 5'
+                     || :||| :|:|:|||| 
+   Ref:      5' ctcccGCTGAAGCGGTGTCTGAt 3'
+
+   Energy:  -18.350000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002035	128.00	-18.35	2 18	292 314	17	64.71%	88.24%
+
+
+   Forward:	Score: 124.000000  Q:2 to 21  R:1851 to 1872 Align Len (19) (57.89%) (73.68%)
+
+   Query:    3' caGTACGTTTTCTCGCGGACTt 5'
+                  ||||   :||  :|||||: 
+   Ref:      5' acCATGGCTGAGTTTGCCTGGt 3'
+
+   Energy:  -18.840000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002035	124.00	-18.84	2 21	1851 1872	19	57.89%	73.68%
+
+
+   Forward:	Score: 116.000000  Q:2 to 21  R:635 to 656 Align Len (19) (52.63%) (68.42%)
+
+   Query:    3' caGTACGTTTTCTCGCGGACTt 5'
+                  |:||     || ||:|||: 
+   Ref:      5' acCGTGGTCCCGAACGTCTGGa 3'
+
+   Energy:  -16.980000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002035	116.00	-16.98	2 21	635 656	19	52.63%	68.42%
+
+
+   Forward:	Score: 113.000000  Q:2 to 18  R:1214 to 1235 Align Len (16) (62.50%) (81.25%)
+
+   Query:    3' cagtaCGTTTTCTCGCGGACTt 5'
+                     |:|||:  |:| |||| 
+   Ref:      5' attgaGTAAAGCTGTGGCTGAg 3'
+
+   Energy:  -16.770000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002035	113.00	-16.77	2 18	1214 1235	16	62.50%	81.25%
+
+
+   Forward:	Score: 106.000000  Q:4 to 21  R:2539 to 2559 Align Len (17) (76.47%) (88.24%)
+
+   Query:    3' caGTACGTTTTCTCGCGGActt 5'
+                  || ||:|:||||||| |   
+   Ref:      5' ccCA-GCGAGAGAGCGCGTtca 3'
+
+   Energy:  -21.480000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002035	106.00	-21.48	4 21	2539 2559	17	76.47%	88.24%
+
+
+   Forward:	Score: 102.000000  Q:2 to 20  R:157 to 182 Align Len (22) (54.55%) (77.27%)
+
+   Query:    3' cagTACGTTTTCT---CGC-GGACTt 5'
+                   |||:::|| :   ||| :|||| 
+   Ref:      5' aggATGTGGAACGTTTGCGATCTGAg 3'
+
+   Energy:  -16.150000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_002035	102.00	-16.15	2 20	157 182	22	54.55%	77.27%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Theobroma_cacao_miRNA_00667	NC_002035	689.00	-108.57	128.00	-21.48	17	22	3050	 292 1851 635 1214 2539 157
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Theobroma_cacao_miRNA_00667 vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 122.000000  Q:3 to 21  R:761 to 781 Align Len (18) (61.11%) (66.67%)
+
+   Query:    3' caGTACGTTTTCTCGCGGACtt 5'
+                  || || :  |  ||||||  
+   Ref:      5' gtCA-GCTGTCGCTCGCCTGtt 3'
+
+   Energy:  -17.090000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_001440	122.00	-17.09	3 21	761 781	18	61.11%	66.67%
+
+
+   Forward:	Score: 121.000000  Q:2 to 21  R:247 to 269 Align Len (21) (71.43%) (76.19%)
+
+   Query:    3' caGTACGTTTTCT-CGCG-GACTt 5'
+                  ||| ||  :|| |||| |||| 
+   Ref:      5' ggCAT-CATTGGATGCGCGCTGAt 3'
+
+   Energy:  -19.540001 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_001440	121.00	-19.54	2 21	247 269	21	71.43%	76.19%
+
+
+   Forward:	Score: 119.000000  Q:2 to 21  R:1816 to 1841 Align Len (23) (65.22%) (73.91%)
+
+   Query:    3' caGTACGTTTTCT----CGCGGACTt 5'
+                  :|| |||||||    ||||: || 
+   Ref:      5' tgTATTCAAAAGACGATGCGCTCGAg 3'
+
+   Energy:  -18.070000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_001440	119.00	-18.07	2 21	1816 1841	23	65.22%	73.91%
+
+
+   Forward:	Score: 112.000000  Q:2 to 21  R:1762 to 1784 Align Len (20) (55.00%) (70.00%)
+
+   Query:    3' caGTACGTTTTCTCGCG-GACTt 5'
+                  | | |:: :  |||| |||| 
+   Ref:      5' atCTTTCGGCGATGCGCGCTGAt 3'
+
+   Energy:  -16.900000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_001440	112.00	-16.90	2 21	1762 1784	20	55.00%	70.00%
+
+
+   Forward:	Score: 112.000000  Q:5 to 21  R:1791 to 1812 Align Len (16) (75.00%) (81.25%)
+
+   Query:    3' caGTACGTTTTCTCGCGGactt 5'
+                  |||| :||||  ||||    
+   Ref:      5' gaCATGAGAAAGTACGCCgtcc 3'
+
+   Energy:  -17.510000 kCal/Mol
+
+Scores for this hit:
+>Theobroma_cacao_miRNA_00667	NC_001440	112.00	-17.51	5 21	1791 1812	16	75.00%	81.25%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Theobroma_cacao_miRNA_00667	NC_001440	586.00	-89.11	122.00	-19.54	18	22	2216	 761 247 1816 1762 1791
+Complete
+
+Read Sequence:Rhamphospermum_arvense_miRNA_00033 (22 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Rhamphospermum_arvense_miRNA_00033 vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 111.000000  Q:4 to 18  R:1231 to 1255 Align Len (17) (70.59%) (76.47%)
+
+   Query:    3' tttgcTTC-CAGCT--TTTGTCtcc 5'
+                     ||| || ||  :|||||   
+   Ref:      5' taagaAAGCGTGGATGGAACAGttc 3'
+
+   Energy:  -15.540000 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002034	111.00	-15.54	4 18	1231 1255	17	70.59%	76.47%
+
+
+   Forward:	Score: 111.000000  Q:2 to 21  R:3332 to 3354 Align Len (20) (55.00%) (80.00%)
+
+   Query:    3' ttTGCTTCCAG-CTTTTGTCTCc 5'
+                  ::|::||||   ||| :||| 
+   Ref:      5' tcGTGGGGGTCTCTAAAAGGAGa 3'
+
+   Energy:  -16.230000 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002034	111.00	-16.23	2 21	3332 3354	20	55.00%	80.00%
+
+
+   Forward:	Score: 103.000000  Q:2 to 21  R:2407 to 2433 Align Len (24) (50.00%) (70.83%)
+
+   Query:    3' ttTGCTTCCAGCTT-----TTGTCTCc 5'
+                  |:||| ||| :|     |::||:| 
+   Ref:      5' taATGAATGTCCGACTGTTAGTAGGGt 3'
+
+   Energy:  -15.440000 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002034	103.00	-15.44	2 21	2407 2433	24	50.00%	70.83%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Rhamphospermum_arvense_miRNA_00033	NC_002034	325.00	-47.21	111.00	-16.23	19	22	3357	 1231 3332 2407
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Rhamphospermum_arvense_miRNA_00033 vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 154.000000  Q:3 to 21  R:2491 to 2514 Align Len (20) (85.00%) (85.00%)
+
+   Query:    3' ttTGCTTCCAG-CT-TTTGTCTcc 5'
+                  |||||||||  | |||||||  
+   Ref:      5' agACGAAGGTCTCACAAACAGAat 3'
+
+   Energy:  -23.660000 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002035	154.00	-23.66	3 21	2491 2514	20	85.00%	85.00%
+
+
+   Forward:	Score: 145.000000  Q:2 to 21  R:2471 to 2493 Align Len (21) (66.67%) (85.71%)
+
+   Query:    3' ttTGCTTCCAGCT--TTTGTCTCc 5'
+                  ::|:||| |||  ||:||||| 
+   Ref:      5' tgGTGGAGG-CGAAGAAGCAGAGa 3'
+
+   Energy:  -23.350000 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002035	145.00	-23.35	2 21	2471 2493	21	66.67%	85.71%
+
+
+   Forward:	Score: 123.000000  Q:2 to 19  R:1108 to 1129 Align Len (18) (72.22%) (77.78%)
+
+   Query:    3' tttgCTT-CCAGCTTTTGTCTCc 5'
+                    ||: |||| | || |||| 
+   Ref:      5' ccggGAGCGGTC-ACAAGAGAGt 3'
+
+   Energy:  -15.660000 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002035	123.00	-15.66	2 19	1108 1129	18	72.22%	77.78%
+
+
+   Forward:	Score: 120.000000  Q:2 to 8  R:240 to 261 Align Len (6) (100.00%) (100.00%)
+
+   Query:    3' tttgcttccagctttTGTCTCc 5'
+                               |||||| 
+   Ref:      5' gtcagcgagagtgtcACAGAGg 3'
+
+   Energy:  -21.200001 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002035	120.00	-21.20	2 8	240 261	6	100.00%	100.00%
+
+
+   Forward:	Score: 120.000000  Q:2 to 19  R:2595 to 2620 Align Len (21) (61.90%) (76.19%)
+
+   Query:    3' tttgCTTCCAG--CTT--TTGTCTCc 5'
+                    || |||:  |||  :||||:| 
+   Ref:      5' agtgGATGGTTCGGAACTGACAGGGt 3'
+
+   Energy:  -20.110001 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_002035	120.00	-20.11	2 19	2595 2620	21	61.90%	76.19%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Rhamphospermum_arvense_miRNA_00033	NC_002035	662.00	-103.98	154.00	-23.66	20	22	3050	 2491 2471 1108 240 2595
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Rhamphospermum_arvense_miRNA_00033 vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 115.000000  Q:4 to 21  R:548 to 573 Align Len (21) (61.90%) (71.43%)
+
+   Query:    3' ttTGCTTCCAG----CTTTTGTCtcc 5'
+                  |:||  |||    |:||||||   
+   Ref:      5' gtATGATTGTCCTATGGAAACAGttg 3'
+
+   Energy:  -16.610001 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_001440	115.00	-16.61	4 21	548 573	21	61.90%	71.43%
+
+
+   Forward:	Score: 108.000000  Q:3 to 21  R:1826 to 1848 Align Len (20) (70.00%) (80.00%)
+
+   Query:    3' ttTGCTTC-C-AGCTTTTGTCTcc 5'
+                  |||| | | ||| |:||:||  
+   Ref:      5' agACGATGCGCTCG-AGACGGAcg 3'
+
+   Energy:  -19.240000 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_001440	108.00	-19.24	3 21	1826 1848	20	70.00%	80.00%
+
+
+   Forward:	Score: 107.000000  Q:4 to 20  R:934 to 955 Align Len (16) (68.75%) (75.00%)
+
+   Query:    3' tttGCTTCCAGCTTTTGTCtcc 5'
+                   || |||| |  |||:|   
+   Ref:      5' gacCGCAGGTGGTTAACGGtct 3'
+
+   Energy:  -16.209999 kCal/Mol
+
+Scores for this hit:
+>Rhamphospermum_arvense_miRNA_00033	NC_001440	107.00	-16.21	4 20	934 955	16	68.75%	75.00%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Rhamphospermum_arvense_miRNA_00033	NC_001440	330.00	-52.06	115.00	-19.24	21	22	2216	 548 1826 934
+Complete
+
+Read Sequence:Brachypodium_distachyon_miRNA_00736 (21 nt)
+Read Sequence:NC_002034 (3357 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Brachypodium_distachyon_miRNA_00736 vs NC_002034
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 120.000000  Q:2 to 8  R:1774 to 1794 Align Len (6) (100.00%) (100.00%)
+
+   Query:    3' tgcggctcgagtcgTCGCTCt 5'
+                              |||||| 
+   Ref:      5' tgtttgtggaagggAGCGAGa 3'
+
+   Energy:  -17.799999 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002034	120.00	-17.80	2 8	1774 1794	6	100.00%	100.00%
+
+
+   Forward:	Score: 117.000000  Q:2 to 19  R:567 to 588 Align Len (18) (66.67%) (83.33%)
+
+   Query:    3' tgcGGCT-CGAGTCGTCGCTCt 5'
+                   :||| | ||:||||| :| 
+   Ref:      5' agtTCGATGGTCGGCAGCCGGa 3'
+
+   Energy:  -23.020000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002034	117.00	-23.02	2 19	567 588	18	66.67%	83.33%
+
+
+   Forward:	Score: 116.000000  Q:2 to 19  R:1508 to 1532 Align Len (21) (61.90%) (71.43%)
+
+   Query:    3' tgcGGCTCGAG-TC---GTCGCTCt 5'
+                   |||| :|: ||   | ||||| 
+   Ref:      5' ttcCCGACTTTGAGACCCCGCGAGg 3'
+
+   Energy:  -18.020000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002034	116.00	-18.02	2 19	1508 1532	21	61.90%	71.43%
+
+
+   Forward:	Score: 106.000000  Q:2 to 16  R:175 to 200 Align Len (19) (73.68%) (73.68%)
+
+   Query:    3' tgcggcTCGAG---TCGTC--GCTCt 5'
+                      |||||   |||||  |||| 
+   Ref:      5' taagacAGCTCATGAGCAGCTCGAGg 3'
+
+   Energy:  -20.230000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002034	106.00	-20.23	2 16	175 200	19	73.68%	73.68%
+
+
+   Forward:	Score: 104.000000  Q:2 to 8  R:1704 to 1724 Align Len (6) (83.33%) (100.00%)
+
+   Query:    3' tgcggctcgagtcgTCGCTCt 5'
+                              ||:||| 
+   Ref:      5' ttgcacaacccgtgAGTGAGg 3'
+
+   Energy:  -15.360000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002034	104.00	-15.36	2 8	1704 1724	6	83.33%	100.00%
+
+
+   Forward:	Score: 101.000000  Q:2 to 19  R:967 to 990 Align Len (20) (55.00%) (70.00%)
+
+   Query:    3' tgcGGCTCGAGT---CGTCGCTCt 5'
+                   || : ||:|   |:| |||| 
+   Ref:      5' ggaCCAGACTTATTCGTACCGAGg 3'
+
+   Energy:  -15.240000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002034	101.00	-15.24	2 19	967 990	20	55.00%	70.00%
+
+
+   Forward:	Score: 100.000000  Q:3 to 19  R:768 to 792 Align Len (20) (60.00%) (75.00%)
+
+   Query:    3' tgcGGCTCGAGT---C-GTCGCTct 5'
+                   |||| ||:|   | |||:|:  
+   Ref:      5' tacCCGAACTTAATTGTCAGTGGag 3'
+
+   Energy:  -18.030001 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002034	100.00	-18.03	3 19	768 792	20	60.00%	75.00%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Brachypodium_distachyon_miRNA_00736	NC_002034	764.00	-127.70	120.00	-23.02	22	21	3357	 1774 567 1508 175 1704 967 768
+Complete
+
+Read Sequence:NC_002035 (3050 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Brachypodium_distachyon_miRNA_00736 vs NC_002035
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 151.000000  Q:2 to 20  R:229 to 249 Align Len (18) (61.11%) (77.78%)
+
+   Query:    3' tgCGGCTCGAGTCGTCGCTCt 5'
+                  ||:| |  :: ||||||| 
+   Ref:      5' ccGCTGTGGATGTCAGCGAGa 3'
+
+   Energy:  -23.900000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	151.00	-23.90	2 20	229 249	18	61.11%	77.78%
+
+
+   Forward:	Score: 140.000000  Q:2 to 9  R:2528 to 2548 Align Len (7) (100.00%) (100.00%)
+
+   Query:    3' tgcggctcgagtcGTCGCTCt 5'
+                             ||||||| 
+   Ref:      5' gtcacaaaagtccCAGCGAGa 3'
+
+   Energy:  -15.970000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	140.00	-15.97	2 9	2528 2548	7	100.00%	100.00%
+
+
+   Forward:	Score: 115.000000  Q:3 to 20  R:2079 to 2098 Align Len (18) (66.67%) (77.78%)
+
+   Query:    3' tgCG-GCTCGAGTCGTCGCTct 5'
+                  || |||| |:  |||||:  
+   Ref:      5' ttGCGCGAGGTT--CAGCGGtt 3'
+
+   Energy:  -22.250000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	115.00	-22.25	3 20	2079 2098	18	66.67%	77.78%
+
+
+   Forward:	Score: 109.000000  Q:2 to 19  R:2772 to 2793 Align Len (18) (55.56%) (83.33%)
+
+   Query:    3' tgcGGCT-CGAGTCGTCGCTCt 5'
+                   |||:  :|| |::|||:| 
+   Ref:      5' cctCCGGTTTTCTGTGGCGGGa 3'
+
+   Energy:  -22.850000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	109.00	-22.85	2 19	2772 2793	18	55.56%	83.33%
+
+
+   Forward:	Score: 107.000000  Q:4 to 14  R:1504 to 1523 Align Len (10) (80.00%) (90.00%)
+
+   Query:    3' tgcggctcGAGTCGTCGCtct 5'
+                        :||| |||||   
+   Ref:      5' caccgttaTTCA-CAGCGcta 3'
+
+   Energy:  -18.400000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	107.00	-18.40	4 14	1504 1523	10	80.00%	90.00%
+
+
+   Forward:	Score: 105.000000  Q:2 to 18  R:170 to 190 Align Len (16) (75.00%) (75.00%)
+
+   Query:    3' tgcgGCTCGAGTCGTCGCTCt 5'
+                    ||| || |||| || | 
+   Ref:      5' tttgCGATCTGAGCAACGCGa 3'
+
+   Energy:  -17.660000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	105.00	-17.66	2 18	170 190	16	75.00%	75.00%
+
+
+   Forward:	Score: 105.000000  Q:2 to 19  R:1092 to 1113 Align Len (18) (61.11%) (72.22%)
+
+   Query:    3' tgcGGCT-CGAGTCGTCGCTCt 5'
+                   |||:  || | || ||:| 
+   Ref:      5' ataCCGGTTCTGAACACCGGGa 3'
+
+   Energy:  -18.889999 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	105.00	-18.89	2 19	1092 1113	18	61.11%	72.22%
+
+
+   Forward:	Score: 105.000000  Q:2 to 19  R:2326 to 2347 Align Len (18) (61.11%) (72.22%)
+
+   Query:    3' tgcGGCTCG-AGTCGTCGCTCt 5'
+                   | || | ||: |||:| | 
+   Ref:      5' attCAGATCGTCGTCAGTGCGa 3'
+
+   Energy:  -20.100000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	105.00	-20.10	2 19	2326 2347	18	61.11%	72.22%
+
+
+   Forward:	Score: 102.000000  Q:3 to 17  R:2669 to 2688 Align Len (14) (64.29%) (85.71%)
+
+   Query:    3' tgcggCTCGAGTCGTCGCTct 5'
+                     ||| |:| |:|||:  
+   Ref:      5' gtttaGAG-TTATCGGCGGaa 3'
+
+   Energy:  -16.410000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	102.00	-16.41	3 17	2669 2688	14	64.29%	85.71%
+
+
+   Forward:	Score: 100.000000  Q:2 to 7  R:2068 to 2088 Align Len (5) (100.00%) (100.00%)
+
+   Query:    3' tgcggctcgagtcgtCGCTCt 5'
+                               ||||| 
+   Ref:      5' ttccagatccattgcGCGAGg 3'
+
+   Energy:  -16.090000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_002035	100.00	-16.09	2 7	2068 2088	5	100.00%	100.00%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Brachypodium_distachyon_miRNA_00736	NC_002035	1139.00	-192.52	151.00	-23.90	23	21	3050	 229 2528 2079 2772 1504 170 1092 2326 2669 2068
+Complete
+
+Read Sequence:NC_001440 (2216 nt)
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+Performing Scan: Brachypodium_distachyon_miRNA_00736 vs NC_001440
+=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+   Forward:	Score: 132.000000  Q:2 to 15  R:842 to 861 Align Len (13) (76.92%) (84.62%)
+
+   Query:    3' tgcggctCGAGTCGTCGCTCt 5'
+                       || | ||||:||| 
+   Ref:      5' tcaaaatGCGC-GCAGTGAGt 3'
+
+   Energy:  -16.219999 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_001440	132.00	-16.22	2 15	842 861	13	76.92%	84.62%
+
+
+   Forward:	Score: 126.000000  Q:2 to 19  R:1935 to 1955 Align Len (17) (70.59%) (88.24%)
+
+   Query:    3' tgcGGCTCGAGTCGTCGCTCt 5'
+                   |||| ||| |::|||:| 
+   Ref:      5' cctCCGATCTCTGTGGCGGGa 3'
+
+   Energy:  -26.209999 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_001440	126.00	-26.21	2 19	1935 1955	17	70.59%	88.24%
+
+
+   Forward:	Score: 119.000000  Q:2 to 17  R:1157 to 1178 Align Len (16) (68.75%) (75.00%)
+
+   Query:    3' tgcggCT-CGAGTCGTCGCTCt 5'
+                     || |||:  | ||||| 
+   Ref:      5' tcatgGATGCTTCTCCGCGAGa 3'
+
+   Energy:  -16.030001 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_001440	119.00	-16.03	2 17	1157 1178	16	68.75%	75.00%
+
+
+   Forward:	Score: 116.000000  Q:2 to 19  R:628 to 647 Align Len (17) (64.71%) (70.59%)
+
+   Query:    3' tgcGGCTCGAGTCGTCGCTCt 5'
+                   ||| |: |  |||| || 
+   Ref:      5' ataCCG-GTACCACAGCTAGc 3'
+
+   Energy:  -15.590000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_001440	116.00	-15.59	2 19	628 647	17	64.71%	70.59%
+
+
+   Forward:	Score: 109.000000  Q:3 to 16  R:151 to 170 Align Len (13) (69.23%) (76.92%)
+
+   Query:    3' tgcggcTCGAGTCGTCGCTct 5'
+                      || ||  |||||:  
+   Ref:      5' ctcaacAG-TCCTCAGCGGct 3'
+
+   Energy:  -16.780001 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_001440	109.00	-16.78	3 16	151 170	13	69.23%	76.92%
+
+
+   Forward:	Score: 105.000000  Q:2 to 20  R:1828 to 1851 Align Len (21) (66.67%) (76.19%)
+
+   Query:    3' tgCGGCTCGAG-TC-GTC-GCTCt 5'
+                  | :| |||| || |:| |||| 
+   Ref:      5' acGATGCGCTCGAGACGGACGAGc 3'
+
+   Energy:  -22.980000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_001440	105.00	-22.98	2 20	1828 1851	21	66.67%	76.19%
+
+
+   Forward:	Score: 100.000000  Q:2 to 19  R:694 to 713 Align Len (17) (58.82%) (70.59%)
+
+   Query:    3' tgcGGCTCGAGTCGTCGCTCt 5'
+                   |: |  || ||||| :| 
+   Ref:      5' acaCTCATATC-GCAGCTGGg 3'
+
+   Energy:  -15.980000 kCal/Mol
+
+Scores for this hit:
+>Brachypodium_distachyon_miRNA_00736	NC_001440	100.00	-15.98	2 19	694 713	17	58.82%	70.59%
+
+Score for this Scan:
+Seq1,Seq2,Tot Score,Tot Energy,Max Score,Max Energy,Strand,Len1,Len2,Positions
+>>Brachypodium_distachyon_miRNA_00736	NC_001440	807.00	-129.79	132.00	-26.21	24	21	2216	 842 1935 1157 628 151 1828 694
+Complete
+
+Scan Complete
+

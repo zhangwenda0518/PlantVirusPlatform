@@ -1127,6 +1127,21 @@ def main(argv: Optional[List[str]] = None) -> int:
                     f"{r['analysed']:,} | {r['top_organism']} |\n")
     UI.info(f"报告   -> {rep}")
 
+    # ---- 自动出图（失败只提示，不阻断预筛结果本身）----
+    try:
+        from .prescreen_plot import plot_prescreen      # 包内
+    except ImportError:
+        try:
+            from prescreen_plot import plot_prescreen   # 独立脚本直跑
+        except Exception:
+            plot_prescreen = None
+    if plot_prescreen is not None:
+        try:
+            figs = plot_prescreen(args.outdir, threshold=args.virus_pct)
+            UI.ok(f"预筛图组 -> {os.path.join(args.outdir, 'figures')}（{len(figs)} 个文件）")
+        except Exception as _e:                          # noqa: BLE001
+            UI.warn(f"预筛图组生成失败（不影响结果表）: {_e}")
+
     return 0
 
 

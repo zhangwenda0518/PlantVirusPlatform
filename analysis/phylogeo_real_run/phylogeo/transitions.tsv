@@ -1,0 +1,5 @@
+parent	child	from	to
+(root)	(node)	Asia	Americas
+(root)	(node)	Americas	Europe
+(root)	SIM_Americas_5|Asia|2018	Americas	Asia
+(root)	SIM_Asia_5|Europe|2009	Asia	Europe

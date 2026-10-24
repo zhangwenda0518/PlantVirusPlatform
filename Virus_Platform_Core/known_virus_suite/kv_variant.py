@@ -409,8 +409,20 @@ class SnpEffRunner:
                 f'{genome_id} 的 GenBank 记录无 CDS/gene 注释'
                 f'（viroid 等非编码病毒），SnpEff 无法建库')
 
-        self._run(['build', '-genbank', '-c', str(self.config), '-noLog', genome_id],
-                  f'build {genome_id}')
+        try:
+            self._run(['build', '-genbank', '-c', str(self.config), '-noLog',
+                       genome_id], f'build {genome_id}')
+        except RuntimeError as e:
+            # 老记录常见：复制酶通读终止（leaky stop）等让 SnpEff 蛋白校验
+            # 报 `'*' : Error` → `Database check failed`（实测 NC_001367 TMV）。
+            # 校验失败不影响注释正确性，降级跳过 CDS/蛋白完整性校验重建一次。
+            if 'Database check failed' not in str(e):
+                raise
+            self.log.warning('  %s: SnpEff 蛋白校验失败（通读终止/异常残基），'
+                             '跳过校验重建', genome_id)
+            self._run(['build', '-genbank', '-noCheckCds', '-noCheckProtein',
+                       '-c', str(self.config), '-noLog', genome_id],
+                      f'build {genome_id} (no check)')
         return target / 'snpEffectPredictor.bin'
 
     def annotate(self, genome_id: str, vcf: Path, out_vcf: Path) -> Path:

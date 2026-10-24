@@ -23,6 +23,8 @@
       <a class="gt-item" data-sec="msa" href="#msa" data-i18n="rs.gMsa">🧬 MSA 查看</a>
       <a class="gt-item" data-sec="tree" href="#tree" data-i18n="rs.gTree">🌳 进化树</a>
       <a class="gt-item" data-sec="seqview" href="#seqview" data-i18n="rs.gSeqview">📄 序列查看器</a>
+      <a class="gt-item" href="/svguest/" target="_blank" rel="noopener"
+         title="内置 svguest：多图合并 / 排版 / 标注，导出 PNG·SVG·PDF（不上传）">🎨 结果图整理</a>
     </div>
   </nav>
 
@@ -480,8 +482,13 @@ async function loadSpecialRuns() {
       const open = openRuns.has(run.name);
       const files = run.files || [];
       const fileHtml = open ? (files.length
-        ? files.map(f =>
-            `<div class="fitem"><a href="/tool_runs/${esc(run.name)}/${esc(f.path)}" download>📄 ${esc(f.path)}</a> <span class="hint">${esc(f.size)}</span></div>`).join('')
+        ? files.map(f => {
+            const segs = String(f.path).split('/').map(encodeURIComponent).join('/');
+            const href = `/tool_runs/${encodeURIComponent(run.name)}/${segs}`;
+            const edit = /\.(svg|png)$/i.test(f.path)
+              ? ' ' + svgEditLink(href, '整理', 'mono') : '';
+            return `<div class="fitem"><a href="${esc(href)}" download>📄 ${esc(f.path)}</a> <span class="hint">${esc(f.size)}</span>${edit}</div>`;
+          }).join('')
         : `<p class="hint">${t('rs.noFile2')}</p>`) : '';
       const isContig = run.name.startsWith('contigs_');
       return `<div style="border-bottom:1px dashed var(--line-100);padding:6px 0">

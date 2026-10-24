@@ -1,0 +1,154 @@
+acc	source	tax_id	org	path	self_count	total_count	pct
+CRR970053	GSA	286181	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	3906	3906	1.4337
+CRR970106	GSA	103697	Potato virus Y	root;Viruses;Potato virus Y	77	77	0.1219
+CRR970106	GSA	52514	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	106	106	0.1678
+CRR970265	GSA	116393	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	8	8	0.0769
+CRR970318	GSA	193889	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	176	176	0.4139
+CRR970318	GSA	334631	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	161	161	0.3786
+CRR970371	GSA	225343	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	38	38	0.2871
+CRR970371	GSA	52376	Viruses (未细分)	root;Viruses;Viruses (未细分)	16	16	0.1209
+CRR970371	GSA	319271	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	38	38	0.2871
+CRR970530	GSA	97188	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	81	81	0.5029
+CRR970530	GSA	255459	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	59	59	0.3663
+CRR970636	GSA	113193	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	25	25	0.1352
+CRR970636	GSA	178681	Viruses (未细分)	root;Viruses;Viruses (未细分)	18	18	0.0973
+CRR970795	GSA	309371	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	334	334	1.5401
+CRR971113	GSA	109344	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	23	23	0.1519
+CRR971643	GSA	13104	Rice stripe virus	root;Viruses;Rice stripe virus	174	174	0.9788
+CRR971643	GSA	71134	Prunus necrotic ringspot virus	root;Viruses;Prunus necrotic ringspot virus	168	168	0.9451
+CRR972491	GSA	236293	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	4	4	0.08
+CRR972491	GSA	256055	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	4	4	0.08
+CRR972491	GSA	259002	Tobacco mosaic virus	root;Viruses;Tobacco mosaic virus	3	3	0.06
+CRR973021	GSA	291363	Prunus necrotic ringspot virus	root;Viruses;Prunus necrotic ringspot virus	118	118	0.195
+CRR973021	GSA	384003	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	100	100	0.1653
+CRR973021	GSA	399486	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	115	115	0.1901
+DRR2700074	NCBI_STAT	36488	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	100	100	0.4194
+DRR2700074	NCBI_STAT	274388	Viruses (未细分)	root;Viruses;Viruses (未细分)	189	189	0.7927
+DRR2700074	NCBI_STAT	151923	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	73	73	0.3062
+DRR2700296	NCBI_STAT	124501	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	33	33	0.2277
+DRR2700296	NCBI_STAT	227242	Potato virus Y	root;Viruses;Potato virus Y	38	38	0.2622
+DRR2700296	NCBI_STAT	269082	Viruses (未细分)	root;Viruses;Viruses (未细分)	24	24	0.1656
+DRR2700629	NCBI_STAT	189413	Prunus necrotic ringspot virus	root;Viruses;Prunus necrotic ringspot virus	54	54	0.2615
+DRR2700740	NCBI_STAT	357845	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	676	676	2.3587
+DRR2700740	NCBI_STAT	153211	Potato virus Y	root;Viruses;Potato virus Y	268	268	0.9351
+DRR2700740	NCBI_STAT	27466	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	703	703	2.4529
+DRR2701184	NCBI_STAT	235952	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	100	100	0.3319
+DRR2701184	NCBI_STAT	250350	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	84	84	0.2788
+DRR2701184	NCBI_STAT	332161	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	36	36	0.1195
+DRR2701517	NCBI_STAT	297910	Potato virus X	root;Viruses;Potato virus X	74	74	1.48
+DRR2701517	NCBI_STAT	257454	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	129	129	2.58
+DRR2701628	NCBI_STAT	387641	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	648	648	1.5131
+DRR2701961	NCBI_STAT	184150	Potato virus Y	root;Viruses;Potato virus Y	36	36	0.1913
+DRR2701961	NCBI_STAT	221091	Potato virus Y	root;Viruses;Potato virus Y	52	52	0.2763
+DRR2702405	NCBI_STAT	292064	Potato virus Y	root;Viruses;Potato virus Y	50	50	0.1665
+DRR2702849	NCBI_STAT	158909	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	149	149	0.3951
+DRR2702849	NCBI_STAT	49741	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	68	68	0.1803
+DRR2702849	NCBI_STAT	183062	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	157	157	0.4163
+DRR2704181	NCBI_STAT	33975	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	21	21	0.1138
+DRR2704403	NCBI_STAT	317177	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	7	7	0.0272
+DRR2704625	NCBI_STAT	77144	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	46	46	0.0935
+DRR2704625	NCBI_STAT	308698	Potato virus Y	root;Viruses;Potato virus Y	26	26	0.0528
+DRR2704625	NCBI_STAT	119630	Potato virus Y	root;Viruses;Potato virus Y	26	26	0.0528
+DRR2704736	NCBI_STAT	398730	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	91	91	0.1284
+DRR2704736	NCBI_STAT	51045	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	93	93	0.1312
+DRR2704736	NCBI_STAT	282935	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	64	64	0.0903
+DRR2704847	NCBI_STAT	334686	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	148	148	0.12
+DRR2704847	NCBI_STAT	175163	Potato virus Y	root;Viruses;Potato virus Y	278	278	0.2255
+DRR2704847	NCBI_STAT	205298	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	325	325	0.2636
+DRR2705291	NCBI_STAT	358859	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	273	273	0.7987
+DRR2705291	NCBI_STAT	77064	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	348	348	1.0181
+DRR2705402	NCBI_STAT	65863	Potato virus X	root;Viruses;Potato virus X	0	0	0.0
+DRR2705402	NCBI_STAT	91887	Viruses (未细分)	root;Viruses;Viruses (未细分)	0	0	0.0
+DRR2705402	NCBI_STAT	192677	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	0	0	0.0
+DRR2705513	NCBI_STAT	388391	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	112	112	0.8338
+DRR2705513	NCBI_STAT	217536	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	123	123	0.9157
+DRR2705735	NCBI_STAT	105336	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	79	79	0.13
+DRR2705735	NCBI_STAT	294472	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	134	134	0.2206
+DRR2706068	NCBI_STAT	390600	Potato virus Y	root;Viruses;Potato virus Y	42	42	0.0678
+ERR2700148	NCBI_STAT	334744	Apple stem pitting virus	root;Viruses;Apple stem pitting virus	22	22	0.2652
+ERR2700259	NCBI_STAT	230495	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	222	222	1.4792
+ERR2700259	NCBI_STAT	320015	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	203	203	1.3526
+ERR2700481	NCBI_STAT	78322	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	36	36	0.1592
+ERR2700481	NCBI_STAT	126997	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	43	43	0.1902
+ERR2700592	NCBI_STAT	64697	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	5	5	0.1
+ERR2700592	NCBI_STAT	52344	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	6	6	0.12
+ERR2701036	NCBI_STAT	84997	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	1	1	0.02
+ERR2701369	NCBI_STAT	249608	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	61	61	0.3953
+ERR2701369	NCBI_STAT	293029	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	59	59	0.3824
+ERR2701369	NCBI_STAT	375016	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	69	69	0.4472
+ERR2701924	NCBI_STAT	250360	Potato virus X	root;Viruses;Potato virus X	9	9	0.0834
+ERR2702035	NCBI_STAT	257505	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	78	78	0.233
+ERR2702035	NCBI_STAT	169425	Potato virus Y	root;Viruses;Potato virus Y	55	55	0.1643
+ERR2702368	NCBI_STAT	396225	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	36	36	0.0633
+ERR2702368	NCBI_STAT	184815	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	59	59	0.1037
+ERR2702368	NCBI_STAT	41219	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	93	93	0.1635
+ERR2702590	NCBI_STAT	129938	Tobacco mosaic virus	root;Viruses;Tobacco mosaic virus	293	293	0.8907
+ERR2702590	NCBI_STAT	12852	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	182	182	0.5532
+ERR2702923	NCBI_STAT	312362	Rice stripe virus	root;Viruses;Rice stripe virus	39	39	0.257
+ERR2702923	NCBI_STAT	56543	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	28	28	0.1845
+ERR2702923	NCBI_STAT	343712	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	90	90	0.5931
+ERR2703145	NCBI_STAT	298307	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	20	20	0.1531
+ERR2703145	NCBI_STAT	29986	Potato virus X	root;Viruses;Potato virus X	4	4	0.0306
+ERR2703256	NCBI_STAT	178217	Potato virus Y	root;Viruses;Potato virus Y	23	23	0.048
+ERR2703256	NCBI_STAT	338069	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	11	11	0.023
+ERR2703367	NCBI_STAT	278112	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	180	180	1.0237
+ERR2703367	NCBI_STAT	119460	Rice stripe virus	root;Viruses;Rice stripe virus	54	54	0.3071
+ERR2703478	NCBI_STAT	17423	Grapevine leafroll-associated virus 3	root;Viruses;Grapevine leafroll-associated virus 3	150	150	0.3161
+ERR2703478	NCBI_STAT	292821	Apple stem pitting virus	root;Viruses;Apple stem pitting virus	346	346	0.7291
+ERR2703922	NCBI_STAT	19237	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	218	218	0.3094
+ERR2704255	NCBI_STAT	216600	Potato virus X	root;Viruses;Potato virus X	83	83	0.0734
+ERR2704255	NCBI_STAT	179479	Rice stripe virus	root;Viruses;Rice stripe virus	40	40	0.0354
+ERR2704366	NCBI_STAT	252856	Apple stem pitting virus	root;Viruses;Apple stem pitting virus	27	27	0.54
+ERR2704366	NCBI_STAT	319517	Apple stem pitting virus	root;Viruses;Apple stem pitting virus	12	12	0.24
+ERR2704699	NCBI_STAT	351291	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	284	284	1.2348
+ERR2704699	NCBI_STAT	183137	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	391	391	1.7
+ERR2704699	NCBI_STAT	343053	Rice stripe virus	root;Viruses;Rice stripe virus	189	189	0.8217
+ERR2704810	NCBI_STAT	352316	Prunus necrotic ringspot virus	root;Viruses;Prunus necrotic ringspot virus	169	169	0.1355
+ERR2705032	NCBI_STAT	301225	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	263	263	0.3063
+ERR2705032	NCBI_STAT	20275	Rice stripe virus	root;Viruses;Rice stripe virus	122	122	0.1421
+ERR2705143	NCBI_STAT	331011	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	7	7	0.14
+ERR2705365	NCBI_STAT	113274	Potato virus Y	root;Viruses;Potato virus Y	11	11	0.0895
+ERR2705365	NCBI_STAT	90102	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	14	14	0.1139
+SRR2700333	NCBI_STAT	203294	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	20	20	0.0525
+SRR2700444	NCBI_STAT	235895	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	25	25	0.0468
+SRR2700444	NCBI_STAT	344079	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	60	60	0.1124
+SRR2700444	NCBI_STAT	290590	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	40	40	0.0749
+SRR2700666	NCBI_STAT	179687	Rice stripe virus	root;Viruses;Rice stripe virus	39	39	0.5233
+SRR2700999	NCBI_STAT	348418	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	6	6	0.0553
+SRR2700999	NCBI_STAT	170902	Tobacco mosaic virus	root;Viruses;Tobacco mosaic virus	4	4	0.0369
+SRR2700999	NCBI_STAT	176094	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	6	6	0.0553
+SRR2701110	NCBI_STAT	134016	Sugarcane mosaic virus	root;Viruses;Sugarcane mosaic virus	7	7	0.14
+SRR2701110	NCBI_STAT	351251	Prunus necrotic ringspot virus	root;Viruses;Prunus necrotic ringspot virus	10	10	0.2
+SRR2701110	NCBI_STAT	26955	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	4	4	0.08
+SRR2701554	NCBI_STAT	225667	Potato virus X	root;Viruses;Potato virus X	37	37	0.4734
+SRR2702220	NCBI_STAT	295003	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	152	152	0.4118
+SRR2702886	NCBI_STAT	145732	Apple stem pitting virus	root;Viruses;Apple stem pitting virus	75	75	0.2466
+SRR2702886	NCBI_STAT	126588	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	57	57	0.1874
+SRR2702997	NCBI_STAT	303265	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	3	3	0.0512
+SRR2702997	NCBI_STAT	120970	Viruses (未细分)	root;Viruses;Viruses (未细分)	5	5	0.0854
+SRR2702997	NCBI_STAT	101687	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	2	2	0.0341
+SRR2703663	NCBI_STAT	217735	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	21	21	0.42
+SRR2703663	NCBI_STAT	114392	Prunus necrotic ringspot virus	root;Viruses;Prunus necrotic ringspot virus	18	18	0.36
+SRR2703774	NCBI_STAT	211637	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	3	3	0.0535
+SRR2703774	NCBI_STAT	295143	Apple stem pitting virus	root;Viruses;Apple stem pitting virus	3	3	0.0535
+SRR2704107	NCBI_STAT	74471	Tomato yellow leaf curl virus	root;Viruses;Tomato yellow leaf curl virus	3	3	0.0506
+SRR2704107	NCBI_STAT	72521	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	7	7	0.118
+SRR2704329	NCBI_STAT	267574	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	13	13	0.2349
+SRR2704329	NCBI_STAT	65595	Potato virus Y	root;Viruses;Potato virus Y	20	20	0.3613
+SRR2704440	NCBI_STAT	380523	Apple stem pitting virus	root;Viruses;Apple stem pitting virus	27	27	0.0938
+SRR2704440	NCBI_STAT	79121	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	42	42	0.1459
+SRR2704773	NCBI_STAT	75402	Turnip mosaic virus	root;Viruses;Turnip mosaic virus	28	28	0.1062
+SRR2704773	NCBI_STAT	141090	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	116	116	0.44
+SRR2705217	NCBI_STAT	154703	Potato virus Y	root;Viruses;Potato virus Y	451	451	0.3496
+SRR2705217	NCBI_STAT	216901	Prunus necrotic ringspot virus	root;Viruses;Prunus necrotic ringspot virus	115	115	0.0892
+SRR2705217	NCBI_STAT	155092	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	356	356	0.276
+SRR2705328	NCBI_STAT	171750	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	1344	1344	0.9709
+SRR2705439	NCBI_STAT	165034	Tobacco mosaic virus	root;Viruses;Tobacco mosaic virus	47	47	0.109
+SRR2705439	NCBI_STAT	59940	Beet necrotic yellow vein virus	root;Viruses;Beet necrotic yellow vein virus	32	32	0.0742
+SRR2705439	NCBI_STAT	85351	Cucumber mosaic virus	root;Viruses;Cucumber mosaic virus	20	20	0.0464
+SRR2705661	NCBI_STAT	316793	Potato virus Y	root;Viruses;Potato virus Y	1212	1212	0.7875
+SRR2705661	NCBI_STAT	352717	Wheat streak mosaic virus	root;Viruses;Wheat streak mosaic virus	1300	1300	0.8447
+SRR2705883	NCBI_STAT	167947	Citrus tristeza virus	root;Viruses;Citrus tristeza virus	227	227	0.3228
+SRR2705994	NCBI_STAT	291645	Rice stripe virus	root;Viruses;Rice stripe virus	18	18	0.1968
+SRR2706216	NCBI_STAT	229570	Potato virus Y	root;Viruses;Potato virus Y	791	791	0.6099
+SRR2706216	NCBI_STAT	373838	Tomato mosaic virus	root;Viruses;Tomato mosaic virus	656	656	0.5058

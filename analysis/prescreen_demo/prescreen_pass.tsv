@@ -1,0 +1,44 @@
+acc	source	cra	status	detail	virus_pct	virus_pct_ident	virus_count	top_virus	top_virus_pct	analysed	identified	identified_pct	unidentified_pct	n_taxa	top_organism	top_organism_pct	pass	fetch_s
+SRR2705328	NCBI_STAT		OK		6.2163	6.2163	4814	Wheat streak mosaic virus	4.9288	138432	77447	55.95	44.05	13	Oryza sativa	53.98	PASS	0.59
+SRR2706216	NCBI_STAT		OK		5.7463	5.7463	2033	Potato virus Y	3.5015	129686	35386	27.29	72.71	6	Solanum lycopersicum	66.81	PASS	1.96
+DRR2701628	NCBI_STAT		OK		4.3262	4.3262	1487	Grapevine leafroll-associated virus 3	3.6472	42827	34383	80.28	19.72	13	Oryza sativa	42.72	PASS	1.69
+CRR970053	GSA	CRA008101	OK		4.2157	4.8377	11485	Turnip mosaic virus	3.6994	272446	237417	87.14	12.86	11	Solanum lycopersicum	64.14	PASS	1.57
+DRR2700740	NCBI_STAT		OK		4.0122	4.0122	782	Turnip mosaic virus	2.5326	28660	19491	68.01	31.99	7	Nicotiana tabacum	32.05	PASS	0.42
+ERR2700259	NCBI_STAT		OK		3.836	3.836	315	Citrus tristeza virus	3.2	15008	8228	54.83	45.17	9	Triticum aestivum	48.26	PASS	1.58
+DRR2701517	NCBI_STAT		OK		3.7567	3.7567	160	Potato virus X	3.1141	5000	4276	85.53	14.47	13	Triticum aestivum	58.72	PASS	1.41
+SRR2705661	NCBI_STAT		OK		2.7538	2.7538	2609	Potato virus Y	2.0604	153904	94763	61.57	38.43	9	Vitis vinifera	43.29	PASS	0.21
+ERR2704699	NCBI_STAT		OK		2.7357	2.7357	413	Beet necrotic yellow vein virus	2.3054	23000	15100	65.66	34.34	11	Solanum lycopersicum	21.16	PASS	0.92
+SRR2703663	NCBI_STAT		OK		2.2897	2.2897	29	Citrus tristeza virus	1.4353	5000	1309	26.18	73.82	3	Triticum aestivum	47.68	PASS	0.91
+ERR2701369	NCBI_STAT		OK		2.2002	2.2002	224	Tomato mosaic virus	1.8644	15430	10205	66.14	33.86	13	Solanum lycopersicum	63.04	PASS	0.44
+DRR2705513	NCBI_STAT		OK		2.1469	2.1469	246	Turnip mosaic virus	1.6831	13432	11501	85.63	14.37	11	Solanum lycopersicum	52.94	PASS	1.2
+ERR2702590	NCBI_STAT		OK		1.9941	1.9941	432	Tobacco mosaic virus	1.0218	32897	21713	66.0	34.0	9	Nicotiana tabacum	66.37	PASS	1.01
+DRR2705291	NCBI_STAT		OK		1.8968	1.8968	382	Grapevine leafroll-associated virus 3	1.0111	34181	20141	58.92	41.08	12	Triticum aestivum	20.05	PASS	0.58
+CRR970795	GSA	CRA008115	OK		1.8212	2.2971	394	Cucumber mosaic virus	2.2903	21687	17194	79.28	20.72	13	Vitis vinifera	30.4	PASS	1.13
+ERR2703367	NCBI_STAT		OK		1.7999	1.7999	268	Tomato mosaic virus	0.9995	17584	14897	84.72	15.28	4	Triticum aestivum	32.08	PASS	1.22
+SRR2702220	NCBI_STAT		OK		1.5406	1.5406	451	Beet necrotic yellow vein virus	1.4188	36914	29320	79.43	20.57	7	Vitis vinifera	34.03	PASS	0.8
+CRR970530	GSA	CRA008110	OK		1.5088	3.3209	242	Tomato yellow leaf curl virus	3.2193	16105	7316	45.43	54.57	4	Oryza sativa	47.85	PASS	0.73
+ERR2703478	NCBI_STAT		OK		1.4902	1.4902	452	Grapevine leafroll-associated virus 3	0.8033	47455	30393	64.05	35.95	7	Solanum lycopersicum	21.49	PASS	0.82
+ERR2702923	NCBI_STAT		OK		1.4015	1.4015	91	Rice stripe virus	0.9403	15175	6504	42.86	57.14	9	Oryza sativa	60.37	PASS	2.0
+SRR2705994	NCBI_STAT		OK		1.3751	1.3751	56	Rice stripe virus	1.2633	9147	4080	44.61	55.39	9	Vitis vinifera	22.99	PASS	1.7
+DRR2701184	NCBI_STAT		OK		1.2563	1.2563	119	Sugarcane mosaic virus	0.6904	30133	9524	31.61	68.39	4	Vitis vinifera	65.13	PASS	1.96
+ERR2704366	NCBI_STAT		OK		1.2527	1.2527	34	Apple stem pitting virus	0.6577	5000	2773	55.47	44.53	12	Solanum lycopersicum	37.12	PASS	1.63
+ERR2705032	NCBI_STAT		OK		1.2157	1.2157	365	Citrus tristeza virus	0.6082	85855	30031	34.98	65.02	6	Nicotiana tabacum	58.73	PASS	0.26
+SRR2704773	NCBI_STAT		OK		1.2083	1.2083	139	Turnip mosaic virus	0.7364	26365	11549	43.81	56.19	5	Oryza sativa	60.8	PASS	1.75
+DRR2704847	NCBI_STAT		OK		1.1923	1.1923	434	Cucumber mosaic virus	1.1236	123298	36405	29.53	70.47	14	Solanum lycopersicum	53.17	PASS	0.4
+SRR2701554	NCBI_STAT		OK		1.1295	1.1295	40	Potato virus X	0.812	7816	3551	45.44	54.56	6	Vitis vinifera	39.17	PASS	1.51
+DRR2700074	NCBI_STAT		OK		1.1114	1.1114	207	Tomato yellow leaf curl virus	0.5912	23842	18711	78.48	21.52	9	Vitis vinifera	51.58	PASS	1.56
+CRR971643	GSA	CRA008131	OK		1.0176	1.3363	180	Rice stripe virus	1.1212	17776	13536	76.15	23.85	14	Solanum lycopersicum	29.43	PASS	1.63
+DRR2702849	NCBI_STAT		OK		0.9596	0.9596	178	Tomato mosaic virus	0.8221	37711	18563	49.23	50.77	14	Triticum aestivum	63.27	PASS	1.53
+SRR2701110	NCBI_STAT		OK		0.9564	0.9564	12	Sugarcane mosaic virus	0.7609	5000	1318	26.37	73.63	4	Nicotiana tabacum	54.04	PASS	0.91
+SRR2704329	NCBI_STAT		OK		0.935	0.935	21	Tomato mosaic virus	0.6178	5535	2294	41.46	58.54	13	Vitis vinifera	43.25	PASS	0.92
+ERR2700481	NCBI_STAT		OK		0.9023	0.9023	128	Grapevine leafroll-associated virus 3	0.4699	22611	14237	62.97	37.03	4	Nicotiana tabacum	36.49	PASS	0.46
+ERR2702035	NCBI_STAT		OK		0.7996	0.7996	149	Wheat streak mosaic virus	0.5216	33474	18685	55.82	44.18	14	Solanum lycopersicum	41.4	PASS	1.3
+ERR2703922	NCBI_STAT		OK		0.7666	0.7666	463	Beet necrotic yellow vein virus	0.5344	70459	60453	85.8	14.2	9	Triticum aestivum	28.14	PASS	1.43
+ERR2705143	NCBI_STAT		OK		0.7528	0.7528	14	Wheat streak mosaic virus	0.4087	5000	1962	39.25	60.75	9	Nicotiana tabacum	28.81	PASS	0.52
+ERR2700148	NCBI_STAT		OK		0.6535	0.6535	30	Apple stem pitting virus	0.4009	8295	4605	55.52	44.48	11	Oryza sativa	53.49	PASS	0.99
+SRR2705883	NCBI_STAT		OK		0.6465	0.6465	268	Citrus tristeza virus	0.4345	70330	41456	58.95	41.05	7	Nicotiana tabacum	24.84	PASS	1.91
+SRR2700666	NCBI_STAT		OK		0.6236	0.6236	40	Rice stripe virus	0.6036	7453	6479	86.94	13.06	12	Solanum lycopersicum	28.23	PASS	0.28
+DRR2700296	NCBI_STAT		OK		0.6002	0.6002	46	Wheat streak mosaic virus	0.3703	14494	7737	53.39	46.61	6	Vitis vinifera	22.92	PASS	0.71
+DRR2704181	NCBI_STAT		OK		0.5781	0.5781	41	Wheat streak mosaic virus	0.3181	18454	7094	38.44	61.56	10	Solanum lycopersicum	62.32	PASS	0.52
+ERR2704810	NCBI_STAT		OK		0.5757	0.5757	244	Prunus necrotic ringspot virus	0.5753	124760	42407	33.99	66.01	11	Solanum lycopersicum	27.7	PASS	0.96
+CRR971113	GSA	CRA008121	OK		0.5064	0.9183	76	Cucumber mosaic virus	0.8277	15141	8350	55.15	44.85	4	Vitis vinifera	33.3	PASS	0.69

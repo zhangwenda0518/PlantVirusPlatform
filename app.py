@@ -103,6 +103,17 @@ if getattr(sys, 'frozen', False) and len(sys.argv) > 2 and sys.argv[1] == '--cli
     _cli.main()
     raise SystemExit(0)
 
+# MCP 控制台的服务器入口：`VirusPlatform.exe --mcp-stdio`（或源码模式
+# `python app.py --mcp-stdio`）→ 进程内跑 mcp_server 的 stdio 服务。
+# 冻结分发没有独立 python 可执行脚本，mcp_console._ensure 在 frozen 下
+# 就是用本入口拉起（mcp_server 模块与 mcp SDK 已随 PyInstaller 入包）。
+# 必须在 Flask / 网页启动之前接管进程：stdout 是 MCP 协议通道，本分支
+# 之后不允许再有任何非协议输出。
+if len(sys.argv) > 1 and sys.argv[1] == '--mcp-stdio':
+    import mcp_server as _mcp_srv
+    _mcp_srv.mcp.run()
+    raise SystemExit(0)
+
 # webapp 目录 / 配置单例 / tool_runs 根统一由 Virus_Platform_Core/web/state.py 提供，
 # 各 blueprint 也从那里取，避免 app ↔ blueprint 循环导入。
 from Virus_Platform_Core.web.state import _WWW  # noqa: E402
@@ -263,6 +274,7 @@ from Virus_Platform_Core.web import (  # noqa: E402
     examples_api as _bp_examples,
     io_api as _bp_io,
     logan as _bp_logan,
+    mcp_console as _bp_mcp,
     meta as _bp_meta,
     pages as _bp_pages,
     prescreen as _bp_prescreen,
@@ -287,6 +299,7 @@ from Virus_Platform_Core.web import (  # noqa: E402
 # 注意：app.py 的 JSON 清洗器原从 web/explorer.py 借 _nan_to_null（每个
 # JSON 响应都走它）——现已内联为本文件顶部的 _nan_to_null，无外部依赖。
 for _bp in (_bp_pages, _bp_ai, _bp_tool_results, _bp_refs, _bp_logan, _bp_io,
+            _bp_mcp,
             _bp_samples, _bp_download, _bp_submit, _bp_meta, _bp_prescreen,
             _bp_settings, _bp_virome, _bp_tools, _bp_tasks, _bp_build,
             _bp_examples, _bp_cds_export):

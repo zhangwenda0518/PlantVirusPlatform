@@ -33,22 +33,49 @@ import matplotlib as mpl
 # ==========================================
 # 0. SCI 期刊全局格式设置与安全回退
 # ==========================================
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
-mpl.rcParams['font.sans-serif'] = ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"]
-mpl.rcParams['font.family'] = "sans-serif"
-mpl.rcParams['axes.spines.right'] = False
-mpl.rcParams['axes.spines.top'] = False
+try:
+    from .. import sci_palette as sp
+except ImportError:  # 直跑脚本兜底
+    import sys as _sys
+    _sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve()
+                             .parents[2]))
+    from Virus_Platform_Core import sci_palette as sp
+sp.apply_sci_style()   # 样式唯一真源（2026-10-12 起不再手抄 rcParams）
 
 NULL_WORDS = ['not_provided', 'nan', 'none', 'unknown', 'missing', '', 'not applicable', 'not collected']
 
-COLORS_DB = {'SRA': '#4C72B0', 'GSA': '#C44E52'}
+# 数据库来源色：Okabe-Ito 真源（原 seaborn-deep #4C72B0/#C44E52）
+COLORS_DB = sp.DB_COLORS
+_GREY = sp.OKABE['grey']
 
 def clean_series(series):
     return series.dropna()[~series.dropna().astype(str).str.strip().str.lower().isin(NULL_WORDS)]
 
 def wrap_labels(labels, width=35):
     return [textwrap.fill(str(label), width=width) for label in labels]
+
+
+def wrap_labels_capped(labels, width=26, max_lines=2, fontsize=10):
+    """行数封顶的标签包装：前 max_lines-1 行取整行，末行按词截断加 …。
+
+    修复点（check_figures 体检实抓）：Top10 机构名折到 3 行会与相邻标签带
+    互叠。注意不能用 shorten(width×max_lines) 预截——按词折行的边界损耗
+    仍可能折出第 3 行（"Innovation Center For Solid" 27 字 > 26 列宽即复现），
+    必须按折行结果强制截断末行才可靠。
+    """
+    out = []
+    for s in labels:
+        s = str(s).strip() or '(unknown)'
+        lines = textwrap.wrap(s, width=width)
+        if len(lines) > max_lines:
+            kept = lines[:max_lines - 1]
+            rest = s[len(' '.join(kept)):].strip()
+            if len(rest) > width - 1:
+                rest = rest[:width - 2].rstrip() + '…'
+            lines = kept + [rest]
+        out.append('\n'.join(lines))
+    need_small = any(l.count('\n') >= max_lines for l in out)
+    return out, (fontsize - 1 if need_small else fontsize)
 
 def _note_empty(ax, msg='No valid data'):
     """面板无可用数据时给出居中占位提示，而不是留一张空坐标轴。"""
@@ -129,7 +156,7 @@ def _pnl_a_temporal(ax, df):
     years = list(year_counts.index)
     vals = list(year_counts.values)
     if len(years) <= 12:
-        ax.bar(range(len(years)), vals, width=0.6, color='#0072B2', zorder=3)
+        ax.bar(range(len(years)), vals, width=0.6, color=sp.OKABE['blue'], zorder=3)
         for i, v in enumerate(vals):
             ax.text(i, v + max(vals) * 0.02, str(v), ha='center', va='bottom',
                     fontsize=13, fontweight='bold', color='#333333', zorder=4)
@@ -138,9 +165,9 @@ def _pnl_a_temporal(ax, df):
         ax.set_ylim(0, max(vals) * 1.15)
     else:
         ax.plot(years, vals, marker='o', linestyle='-', linewidth=3.5,
-                markersize=10, color='#0072B2', markerfacecolor='white',
+                markersize=10, color=sp.OKABE['blue'], markerfacecolor='white',
                 markeredgewidth=2.5, zorder=3)
-        ax.fill_between(years, vals, color='#0072B2', alpha=0.15, zorder=2)
+        ax.fill_between(years, vals, color=sp.OKABE['blue'], alpha=0.15, zorder=2)
         for x, y in zip(years, vals):
             ax.text(x, y + (max(vals) * 0.03), str(y), ha='center', va='bottom',
                     fontsize=13, fontweight='bold', color='#333333')
@@ -153,11 +180,18 @@ def _pnl_b_database(ax, df):
     """B. 数据来源比例环形图。"""
     db_counts = df['Database'].value_counts()
     total = db_counts.sum()
+    if total == 0:
+        # 0 行 CSV / 无有效 Database 值时 pie 抛 "All wedge sizes are zero"
+        # （2026-10-14 与 MMPV 版空表对拍实抓：移植时丢了原版的 total==0 保护）
+        _note_empty(ax, 'No database metadata')
+        ax.set_title('B. Proportion of Data Origin', loc='left',
+                     fontsize=18, fontweight='bold', pad=30)
+        return
     wedges, _ = ax.pie(
         db_counts,
         labels=None,
         startangle=140,
-        colors=[COLORS_DB.get(x, '#555555') for x in db_counts.index],
+        colors=[COLORS_DB.get(x, _GREY) for x in db_counts.index],
         wedgeprops=dict(width=0.55, edgecolor='w', linewidth=3),
         radius=1.0,
     )
@@ -165,7 +199,7 @@ def _pnl_b_database(ax, df):
         # 单一来源：比例文字印在环心（印在圆环上会溢出）
         name = db_counts.index[0]
         ax.text(0, 0, f'{name}\n100%\n(n={total})', ha='center', va='center',
-                fontsize=15, fontweight='bold', color=COLORS_DB.get(name, '#555555'),
+                fontsize=15, fontweight='bold', color=COLORS_DB.get(name, _GREY),
                 linespacing=1.4)
     else:
         ring_center = 1.0 - 0.55 / 2
@@ -192,11 +226,12 @@ def _pnl_c_organizations(ax, df):
     else:
         n = len(org_counts)
         y_pos = range(n)
-        ax.barh(y_pos, org_counts.values, height=0.65, color='#4C72B0')
+        ax.barh(y_pos, org_counts.values, height=0.65, color=sp.OKABE['blue'])
         for i, v in enumerate(org_counts.values):
             ax.text(v + max(org_counts.values)*0.02, i, str(v), va='center', fontsize=11)
         ax.set_yticks(list(y_pos))
-        ax.set_yticklabels(wrap_labels(org_counts.index, 28), fontsize=10, linespacing=1.3)
+        _lbls, _fs = wrap_labels_capped(org_counts.index, width=26, fontsize=10)
+        ax.set_yticklabels(_lbls, fontsize=_fs, linespacing=1.3)
         ax.invert_yaxis()
     top_n = f'Top {len(org_counts)}' if 0 < len(org_counts) < 10 else 'Top 10'
     ax.set_title(f'C. {top_n} Contributing Organizations', loc='left', fontsize=16, fontweight='bold')
@@ -213,11 +248,12 @@ def _pnl_d_tissues(ax, df):
     else:
         n = len(tissue_counts)
         y_pos = range(n)
-        ax.barh(y_pos, tissue_counts.values, height=0.65, color='#4C72B0', edgecolor='white')
+        ax.barh(y_pos, tissue_counts.values, height=0.65, color=sp.OKABE['blue'], edgecolor='white')
         for i, v in enumerate(tissue_counts.values):
             ax.text(v + max(tissue_counts.values)*0.02, i, str(v), va='center', fontsize=11)
         ax.set_yticks(list(y_pos))
-        ax.set_yticklabels(wrap_labels(tissue_counts.index, 30), fontsize=10)
+        _lbls, _fs = wrap_labels_capped(tissue_counts.index, width=30, fontsize=10)
+        ax.set_yticklabels(_lbls, fontsize=_fs)
         ax.invert_yaxis()
     ax.set_title('D. Top Investigated Biological Tissues', loc='left', fontsize=16, fontweight='bold')
     ax.set_xlabel('Number of Runs', fontsize=14)
@@ -233,11 +269,12 @@ def _pnl_e_regions(ax, df):
     else:
         n = len(loc_counts)
         y_pos = range(n)
-        ax.barh(y_pos, loc_counts.values, height=0.65, color='#C44E52')
+        ax.barh(y_pos, loc_counts.values, height=0.65, color=sp.OKABE['vermillion'])
         for i, v in enumerate(loc_counts.values):
             ax.text(v + max(loc_counts.values)*0.02, i, str(v), va='center', fontsize=11)
         ax.set_yticks(list(y_pos))
-        ax.set_yticklabels(wrap_labels(loc_counts.index, 24), fontsize=10)
+        _lbls, _fs = wrap_labels_capped(loc_counts.index, width=24, fontsize=10)
+        ax.set_yticklabels(_lbls, fontsize=_fs)
         ax.invert_yaxis()
     ax.set_title('E. Top Sample Collection Regions', loc='left', fontsize=16, fontweight='bold')
     ax.set_xlabel('Number of Runs', fontsize=14)
@@ -253,11 +290,12 @@ def _pnl_f_stages(ax, df):
     else:
         n = len(stage_counts)
         y_pos = range(n)
-        ax.barh(y_pos, stage_counts.values, height=0.65, color='#55A868', edgecolor='white')
+        ax.barh(y_pos, stage_counts.values, height=0.65, color=sp.OKABE['green'], edgecolor='white')
         for i, v in enumerate(stage_counts.values):
             ax.text(v + max(stage_counts.values)*0.02, i, str(v), va='center', fontsize=11)
         ax.set_yticks(list(y_pos))
-        ax.set_yticklabels(wrap_labels(stage_counts.index, 30), fontsize=10, linespacing=1.2)
+        _lbls, _fs = wrap_labels_capped(stage_counts.index, width=30, fontsize=10)
+        ax.set_yticklabels(_lbls, fontsize=_fs, linespacing=1.2)
         ax.invert_yaxis()
     ax.set_title('F. Top Developmental Stages / Ages', loc='left', fontsize=16, fontweight='bold')
     ax.set_xlabel('Number of Runs', fontsize=14)
@@ -295,8 +333,13 @@ def plot_sci_landscape(csv_path, output_dir="SCI_Figures_Output"):
     # 4. 输出总拼图 (PDF 矢量 + PNG 600dpi, 满足期刊 ≥300dpi 要求)
     out_pdf = os.path.join(output_dir, "Combined_Landscape_Full.pdf")
     out_png = os.path.join(output_dir, "Combined_Landscape_Full.png")
+    out_svg = os.path.join(output_dir, "Combined_Landscape_Full.svg")
     fig.savefig(out_pdf, format='pdf', bbox_inches='tight')
     fig.savefig(out_png, format='png', dpi=600, bbox_inches='tight')
+    try:
+        fig.savefig(out_svg, format='svg', bbox_inches='tight')
+    except Exception:
+        pass
     plt.close(fig)
     print(f"✅ 合并总览图: {out_png}")
 
@@ -307,8 +350,13 @@ def plot_sci_landscape(csv_path, output_dir="SCI_Figures_Output"):
         sfig.tight_layout(pad=1.6)
         spdf = os.path.join(output_dir, f"Panel_{key}.pdf")
         spng = os.path.join(output_dir, f"Panel_{key}.png")
+        ssvg = os.path.join(output_dir, f"Panel_{key}.svg")
         sfig.savefig(spdf, format='pdf', bbox_inches='tight')
         sfig.savefig(spng, format='png', dpi=600, bbox_inches='tight')
+        try:
+            sfig.savefig(ssvg, format='svg', bbox_inches='tight')
+        except Exception:
+            pass
         plt.close(sfig)
         print(f"✅ 独立图: {spng}")
 

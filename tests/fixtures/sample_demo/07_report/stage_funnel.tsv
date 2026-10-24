@@ -1,0 +1,10 @@
+stage_key	stage	value	note	source
+input_reads	输入 reads	7200		00_prep\fastp_report.json
+qc_reads	质控后 reads	7150	Q30 96.8%	00_prep\fastp_report.json
+host_free_reads	去宿主后 reads	7112	宿主占比 1.22%	01_host_removal\stats.json
+viral_reads	病毒 reads	1834	检出物种 2 个	02b_kvsuite\summary.json
+contigs	组装 contigs	24		03_assembly\summary.json
+viral_contigs	病毒 contigs	2		03_assembly\summary.json
+verified	验证判定序列	2	known 2；novel 0	03b_verify\summary.json
+consensus_refs	共识序列	2	变异位点 27	03c_consensus\summary.json
+orf_genes	ORF 基因	14		04_orf\summary.json

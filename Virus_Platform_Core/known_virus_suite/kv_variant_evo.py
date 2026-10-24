@@ -31,11 +31,11 @@ kv_variant_evo.py — 变异分析扩展三模块（分子谱 / 密度分布 / �
   <out>/variant_summary.json          变异段汇总（accession/genome 映射）
 
 输出:
-  <out>/variant_plots/{gid}_evo_spectrum.{png,pdf}     A1+A2+A3（三联）
-  <out>/variant_plots/{gid}_evo_landscape.{png,pdf}    A4
-  <out>/variant_plots/{gid}_evo_density.{png,pdf}      B1+B2
-  <out>/variant_plots/{gid}_evo_popgen.{png,pdf}       C1+C2
-  <out>/variant_plots/{gid}_evo_snpgenie.{png,pdf}    D1+D2
+  <out>/variant_plots/{gid}_evo_spectrum.{png,svg,pdf}     A1+A2+A3（三联）
+  <out>/variant_plots/{gid}_evo_landscape.{png,svg,pdf}    A4
+  <out>/variant_plots/{gid}_evo_density.{png,svg,pdf}      B1+B2
+  <out>/variant_plots/{gid}_evo_popgen.{png,svg,pdf}       C1+C2
+  <out>/variant_plots/{gid}_evo_snpgenie.{png,svg,pdf}    D1+D2
   <out>/variant_evo/{gid}.snpgenie/                    SNPGenie 原始产物
   <out>/variant_evo/{gid}_popgen_window.tsv            滑窗 π/Tajima's D 表
   <out>/variant_evo/evo_manifest.json                  产物清单
@@ -84,6 +84,9 @@ except Exception:  # noqa: BLE001
 MAX_AA_LABELS = 40
 AA_LABEL_AF_CUTOFF = 0.50
 
+# 默认出图格式：PNG 供网页/汇报，SVG 供 svguest 二次排版，PDF 供期刊投稿
+FIG_FORMATS = ('png', 'svg', 'pdf')
+
 
 def _is_nonsynonymous(row: dict) -> bool:
     """判断注释行是否为非同义（改变蛋白序列）。"""
@@ -111,50 +114,15 @@ def _clean_hgvsp(hgvsp: str) -> str:
         return ''
     return s
 
-plt.rcParams.update({
-    'pdf.fonttype': 42,
-    'ps.fonttype': 42,
-    'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-    'font.family': 'sans-serif',
-    'axes.unicode_minus': False,
-    'figure.facecolor': 'white',
-    'savefig.facecolor': 'white',
-    'savefig.dpi': 300,
-    'axes.linewidth': 0.8,
-    'axes.edgecolor': '#333333',
-    'xtick.major.width': 0.8,
-    'ytick.major.width': 0.8,
-})
+from .. import sci_palette as sp
+sp.apply_sci_style()   # 样式唯一真源
 
 LOGGER = logging.getLogger('kv_variant_evo')
 
-OKABE_ITO = {
-    'orange': '#E69F00',
-    'sky': '#56B4E9',
-    'green': '#009E73',
-    'yellow': '#F0E442',
-    'blue': '#0072B2',
-    'vermillion': '#D55E00',
-    'purple': '#CC79A7',
-    'black': '#000000',
-    'grey': '#999999',
-}
-
-# 分子类型 → 配色（与 kv_variant_plot 的 Impact 配色体系并列，不冲突）
-MOL_COLOR = {
-    'Transition': OKABE_ITO['vermillion'],
-    'Transversion': OKABE_ITO['blue'],
-    'Indel': OKABE_ITO['orange'],
-    'Complex': OKABE_ITO['grey'],
-}
+OKABE_ITO = sp.OKABE
+MOL_COLOR = sp.MUTATION_CLASS_COLOR
 MOL_ORDER = ['Transition', 'Transversion', 'Indel', 'Complex']
-
-IMPACT_COLOR = {
-    'HIGH': OKABE_ITO['vermillion'],
-    'MODERATE': OKABE_ITO['orange'],
-    'LOW': OKABE_ITO['sky'],
-    'MODIFIER': OKABE_ITO['grey'],
-}
+IMPACT_COLOR = sp.IMPACT_COLOR
 IMPACT_ORDER = ['HIGH', 'MODERATE', 'LOW', 'MODIFIER']
 
 def _find_platform_root() -> Path:
@@ -198,14 +166,20 @@ def _style_axis(ax, hide_top_right=True):
     ax.tick_params(labelsize=8, length=3)
 
 
-def _save(fig, out_dir: Path, stem: str, formats=('png', 'pdf')) -> list[str]:
+def _save(fig, out_dir: Path, stem: str, formats=FIG_FORMATS) -> list[str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     made = []
     try:
         for ext in formats:
             p = out_dir / f'{stem}.{ext}'
-            fig.savefig(p, format=ext, dpi=300, bbox_inches='tight',
-                        facecolor='white')
+            try:
+                fig.savefig(p, format=ext, dpi=300, bbox_inches='tight',
+                            facecolor='white')
+            except Exception:
+                # SVG 遇到不支持的 artist 时跳过，不阻断 PNG/PDF 主产物
+                if ext != 'svg':
+                    raise
+                continue
             made.append(str(p))
     finally:
         plt.close(fig)
@@ -587,7 +561,7 @@ def _panel_af_violin(ax, variants, accession):
 
 
 def plot_molecular_spectrum(variants, ann_rows, accession, out_dir,
-                            formats=('png', 'pdf')) -> list[str]:
+                            formats=FIG_FORMATS) -> list[str]:
     """模块 A 三联：Ts/Tv + AFS + AF violin。"""
     if not variants:
         return []
@@ -603,7 +577,7 @@ def plot_molecular_spectrum(variants, ann_rows, accession, out_dir,
 
 
 def plot_mutation_landscape(variants, ann_rows, genes, accession, genome_len,
-                            out_dir, formats=('png', 'pdf'),
+                            out_dir, formats=FIG_FORMATS,
                             label_af_cutoff=AA_LABEL_AF_CUTOFF,
                             max_aa_labels=MAX_AA_LABELS) -> list[str]:
     """模块 A4：突变景观。x=位置，y=均值 AF，颜色=分子类型，点大小=该位点变异数。
@@ -768,7 +742,7 @@ def _kde_1d(x, grid, bw):
 
 
 def plot_variant_density(variants, genes, accession, genome_len, out_dir,
-                         formats=('png', 'pdf')) -> list[str]:
+                         formats=FIG_FORMATS) -> list[str]:
     """模块 B：KDE 密度 + rug + 基因轨道；下层面板为滑窗变异计数。"""
     if not variants:
         return []
@@ -1310,7 +1284,7 @@ SNP_CLASS_ORDER = ['Synonymous', 'Nonsynonymous', 'noncoding']
 
 
 def plot_snpgenie_sites(site_rows, codon_rows, genes, accession, genome_len,
-                        out_dir, formats=('png', 'pdf')) -> list[str]:
+                        out_dir, formats=FIG_FORMATS) -> list[str]:
     """模块 D：SNPGenie 逐位点变异类别分布 + 逐密码子 N/S 多态性。
 
     D1  位点沿基因组的标记条（颜色=Synonymous/Nonsynonymous/noncoding），
@@ -1446,7 +1420,7 @@ def plot_snpgenie_sites(site_rows, codon_rows, genes, accession, genome_len,
 
 
 def plot_popgen(variants, genes, accession, genome_len, n_samples, out_dir,
-                prod_rows=None, formats=('png', 'pdf')) -> list[str]:
+                prod_rows=None, formats=FIG_FORMATS) -> list[str]:
 
     """模块 C：SNPGenie 每 ORF 多样性 + 滑窗 π/Tajima's D（可选基因轨道）。"""
     win_rows = compute_popgen_windows(variants, n_samples, genome_len)
@@ -1598,7 +1572,7 @@ def _count_vcf_samples(vcf_path: Path) -> int:
     return 1
 
 
-def run_variant_evo(out_dir, logger=None, formats=('png', 'pdf'),
+def run_variant_evo(out_dir, logger=None, formats=FIG_FORMATS,
                     accession_filter=None, run_snpgenie_stage=True,
                     snpgenie_workdir=None, snpgenie_timeout=900,
                     label_af_cutoff=AA_LABEL_AF_CUTOFF,
@@ -1870,7 +1844,7 @@ if __name__ == '__main__':
     ap.add_argument('--accession', action='append', default=None)
     ap.add_argument('--no-snpgenie', action='store_true')
     ap.add_argument('--snpgenie-workdir', default=None)
-    ap.add_argument('--formats', default='png,pdf')
+    ap.add_argument('--formats', default='png,svg,pdf')
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s [%(levelname)s] %(message)s',

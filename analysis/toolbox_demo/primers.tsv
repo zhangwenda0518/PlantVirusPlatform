@@ -1,0 +1,14 @@
+target	tm_avg	gc_avg	product_size	penalty
+contig0_W0	59.4	47.9	610	1.34
+contig1_W0	60.0	54.8	801	0.45
+contig1_W1	58.7	37.8	884	2.35
+contig2_W0	62.8	40.2	515	1.24
+contig3_W0	62.6	36.0	365	1.5
+contig4_W0	59.2	46.6	807	1.9
+contig4_W1	62.1	54.0	672	2.12
+contig4_W2	61.4	53.4	355	0.42
+contig5_W0	61.8	39.1	837	1.49
+contig6_W0	62.7	38.9	521	0.23
+contig6_W1	62.8	49.4	746	0.7
+contig6_W2	62.0	52.6	622	2.38
+contig7_W0	60.2	45.4	659	2.09

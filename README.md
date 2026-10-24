@@ -261,12 +261,19 @@ VirusPlatform/
 
 旧路径兼容：`tool_runs/`、`results/` 等平台相对路径自动重定向到 `run/` 下；`tools/`、`bin/` → `3rd/`，历史调用无需修改。
 
-## 📤 分发形态（2026-10-11 定案）
+## 📤 分发形态（2026-10-24 更新：三档打包 + 源码双轨）
 
-**不再打包分发**（`VirusPlatform.exe` 安装包路线停用）：本仓库源码即唯一发布形态——克隆、阅读、修改、定制都在源码上完成，也更契合智能体（AI agent）驱动的工作方式。
+**官方分发三档**（`dev_tools/package.py` 一键产出，程序/数据库/示例三分离，产物在仓库上一级 `PVAP/`）：
 
+| 档位 | 产物 | 命令 |
+|---|---|---|
+| ① 平台独立版 | `VirusPlatform/`（exe + 全部工具 + 示例分离包）+ `VirusPlatform-Examples/` | `python dev_tools/package.py --verify` |
+| ② 平台+数据库版 | ① + `VirusPlatform-Database/`（数据集口径；`--with-built-virusdb` 额外带预建 kunpeng plant/ref 分类库，开箱即用） | `python dev_tools/package.py --with-db --with-built-virusdb --verify` |
+| ③ 完整版 | ② + 32 个工具插件包预装进 `plugins/`（离线可卸载/重装/修复） | `python dev_tools/package.py --with-db --with-built-virusdb --with-plugins --verify` |
+
+- 源码包仍随 `--with-source` 提供（叠加进程序目录即可源码运行）；**仓库源码克隆照旧可用**，克隆、阅读、修改、定制都在源码上完成，也更契合智能体（AI agent）驱动的工作方式；
 - 数据库迁移照旧支持：`python main.py db-migrate --to D:\库目录`（robocopy + 字节校验后才切配置），或「设置 → 数据库目录」直接填路径；
-- `dev_tools/package.py` 保留在仓库里，供有自分发需求的用户自行使用，平台官方不再产出安装包。
+- 第三方组件许可索引见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)（`dev_tools/third_party_notices.py` 扫描生成）；第三方工具的运行态文件（如 RDP5 会话快照）不入库、不入包。
 
 ## 📚 文档
 

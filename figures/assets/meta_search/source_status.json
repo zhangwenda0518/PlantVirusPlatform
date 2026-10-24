@@ -1,0 +1,11 @@
+{
+ "query": "Lycium barbarum",
+ "db": "sra",
+ "sources": {
+  "sra": {
+   "status": "ok",
+   "n": 436
+  }
+ },
+ "ts": "2026-10-11T21:01:21Z"
+}

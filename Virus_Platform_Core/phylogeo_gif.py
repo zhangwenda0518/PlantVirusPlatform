@@ -34,8 +34,8 @@ _ARC_SEG = 24
 # 迁移事件分类的走廊主导档配色（与 tools.html CLS_C 同色）
 _CLASS_RGB = {'Direct': '26,127,55', 'Indirect': '185,119,14',
               'Distant': '125,60,152', 'Unresolved': '127,140,141'}
-_CLASS_CN = {'Direct': '近距离', 'Indirect': '中距离', 'Distant': '远距离',
-             'Unresolved': '无坐标'}
+_CLASS_CN = {'Direct': 'Direct', 'Indirect': 'Indirect', 'Distant': 'Distant',
+             'Unresolved': 'No coords'}
 _DEFAULT_RGB = '192,57,43'          # 老 run 没有分类数据时的单色红
 _GEO_CONF = dict(scope='world', projection_type='natural earth',
                  showcountries=True, countrycolor='#d5dbdb',
@@ -290,23 +290,23 @@ def _figure(summary, fr, plan, width, height, max_arcs):
 
     ann = [dict(x=0.01, y=1.06, xref='paper', yref='paper', showarrow=False,
                 align='left', font=dict(size=12),
-                text='时间窗 <b>%s – %s</b>　本窗迁移 <b>%g</b> 次%s'
+                text='Window <b>%s - %s</b>　migrations <b>%g</b>%s'
                      % (fr['lo'], fr['hi'], fr['tot'],
-                        ('（另有 %d 条未画）' % (len(fr['arcs']) - max_arcs)
+                        ('(%d more not drawn)' % (len(fr['arcs']) - max_arcs)
                          if len(fr['arcs']) > max_arcs else '')))]
     if legend:
         ann.append(dict(x=1.0, y=1.06, xref='paper', yref='paper',
                         showarrow=False, align='right', font=dict(size=11),
                         text=legend))
     n_dup = summary.get('n_sample_coords') or 0
-    foot = ('时间轴：%s　分箱 %s 年　共 %d 窗（本 GIF 每 %d 窗取 1 帧）'
+    foot = ('Time axis: %s　bin %s y　%d windows (1 frame per %d)'
             % (_axis_text(plan['axis']), plan['bin_width'], plan['n_bins'],
                plan['step'])
-            + ('　点层 %d 个样本坐标可用' % n_dup if n_dup else ''))
+            + ('　%d sample coords' % n_dup if n_dup else ''))
     if plan['n_arcs_skipped']:
-        foot += '　<b>%d 条迁移两端缺坐标，未画</b>' % plan['n_arcs_skipped']
+        foot += '　<b>%d migrations missing coords, not drawn</b>' % plan['n_arcs_skipped']
     if plan.get('n_rows_offbin'):
-        foot += ('　<b>%d 条迁移的年份窗不在分箱表内（数据异常），未画</b>'
+        foot += ('　<b>%d migrations off-bin, not drawn</b>'
                  % plan['n_rows_offbin'])
     ann.append(dict(x=0.01, y=-0.04, xref='paper', yref='paper',
                     showarrow=False, align='left', font=dict(size=10,
@@ -315,7 +315,21 @@ def _figure(summary, fr, plan, width, height, max_arcs):
 
     fig.update_layout(width=width, height=height, showlegend=False,
                       margin=dict(l=0, r=0, t=34, b=26),
-                      font=dict(size=11), geo=_GEO_CONF, annotations=ann)
+                      font=dict(size=11), geo=dict(_GEO_CONF), annotations=ann)
+    # 自动视野：点/弧坐标跨度远小于全球（单一国家/省域内迁移）时，
+    # 把底图裁到数据范围并留 ~18% 边距；跨洲数据仍用世界视野
+    lons, lats = [], []
+    for tr in fig.data:
+        lo = getattr(tr, "lon", None)
+        la = getattr(tr, "lat", None)
+        if lo is not None and la is not None:
+            lons += [v for v in lo if v is not None]
+            lats += [v for v in la if v is not None]
+    if lons and lats and (max(lons) - min(lons)) < 120             and (max(lats) - min(lats)) < 90:
+        pad_lo = max(3.0, (max(lons) - min(lons)) * 0.18)
+        pad_la = max(3.0, (max(lats) - min(lats)) * 0.18)
+        fig.layout.geo.lonaxis.range = [min(lons) - pad_lo, max(lons) + pad_lo]
+        fig.layout.geo.lataxis.range = [min(lats) - pad_la, max(lats) + pad_la]
     return fig
 
 

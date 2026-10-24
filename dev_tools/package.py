@@ -41,6 +41,7 @@
   python dev_tools/package.py --no-exe             # exe 已建好，只补外部工具/示例/说明
   python dev_tools/package.py --with-source        # 再加源码包（源码+绿色运行时，~900MB）
   python dev_tools/package.py --source-only        # 跳过 exe/示例/数据库，只出源码包
+  python dev_tools/package.py --with-plugins       # 32 个工具插件包预装进产物 plugins/（完整版）
 
 源码包（2026-09-29）：让使用者也能以**源码模式**运行分析——平台源码全树
 + 3rd/python 绿色运行时 + 启动 bat。定位是程序包的「叠加层」：把
@@ -78,6 +79,10 @@ _parser.add_argument('--with-source', action='store_true',
                           '启动 bat（并入程序包目录即可源码运行）')
 _parser.add_argument('--source-only', action='store_true',
                      help='跳过 exe/示例/数据库，仅生成/更新源码包')
+_parser.add_argument('--with-plugins', action='store_true',
+                     help='把 32 个工具插件包预装进产物 plugins/（完整版口径：'
+                          '离线可卸载/重装/修复；zip 优先取本地 plugins-dist/，'
+                          '缺的从插件源下载并按索引 sha256 校验）')
 _args, _ = _parser.parse_known_args()
 
 # 控制台编码兜底：Windows 默认代码页是 GBK，脚本里若出现 GBK 编不出的字符
@@ -318,6 +323,32 @@ if not (_args.db_only or _args.source_only):
             shutil.copy2(_src, _dst)
             print('  +', _rel)
 
+    # t-mirna 候选 miRNA 库（2026-10-24 入包）：web/tools_api._mirna_lib_rows
+    # 缺库直接 abort 500——此前只活在开发机，分发版 miRNA 靶标卡必坏。
+    # ~13MB 随程序包开箱即用（crispr/near_neighbors 是用户自建数据，不入包）。
+    if os.path.isdir(os.path.join('databases', 'mirna_lib')):
+        _dst_ml = os.path.join(APP, 'databases', 'mirna_lib')
+        _rmtree(_dst_ml)
+        shutil.copytree(os.path.join('databases', 'mirna_lib'), _dst_ml,
+                        ignore=shutil.ignore_patterns('__pycache__'))
+        print('  + databases/mirna_lib/（t-mirna 候选 miRNA 库）')
+
+    # mcp_server.py（2026-10-24 入包）：MCP 控制台在冻结模式经
+    # `VirusPlatform.exe --mcp-stdio` 进程内拉起服务器（见 mcp_console._ensure
+    # 与 app.py 顶部拦截）；脚本本体随包再放一份——源码包叠加后可按源码口径
+    # 直跑，且分发说明/故障排查时有据可查。
+    _mcp_src = os.path.join(ROOT, 'mcp_server.py')
+    if os.path.isfile(_mcp_src):
+        shutil.copy2(_mcp_src, os.path.join(APP, 'mcp_server.py'))
+        print('  + mcp_server.py（MCP 控制台服务器脚本）')
+
+    # 第三方组件许可索引（2026-10-24 入包）：与 README 同放程序根，公开
+    # 分发的许可披露随包走（生成器 dev_tools/third_party_notices.py）。
+    _tpn = os.path.join(ROOT, 'THIRD_PARTY_NOTICES.md')
+    if os.path.isfile(_tpn):
+        shutil.copy2(_tpn, os.path.join(APP, 'THIRD_PARTY_NOTICES.md'))
+        print('  + THIRD_PARTY_NOTICES.md（第三方组件许可索引）')
+
     # primer3-py 包副本（2026-09-20）：分发版在非 ASCII 安装路径下跑 primer3，
     # 依赖「ASCII 镜像」机制 —— exe 启动时由 app.py 把程序包自带的
     # primer3_pkg/primer3 镜像到 %ALLUSERSPROFILE%\VirusPlatformPrimer3App
@@ -436,7 +467,11 @@ def _skip_engine_index(dir_path, names):
     """
     import fnmatch as _fn
     skip = {'salmon_k31', 'salmon_k15', 'salmon', 'minibwa', 'logs'}
-    for pat in ('salmon_index*', 'backup_*', '*.log', '*.stale'):
+    # backup_* 与 _backup_* 都要拦：建库页的历史备份目录带前导下划线
+    # （_backup_d17_20261019_*），只写 backup_* 时 7 个目录 ~357MB 会
+    # 全部混进数据库包（2026-10-24 实测）。_bak_* 同口径。
+    for pat in ('salmon_index*', 'backup_*', '_backup_*', '_bak_*',
+                '*.log', '*.stale'):
         skip |= {n for n in names if _fn.fnmatch(n, pat)}
     return skip
 
@@ -576,6 +611,70 @@ else:
     print('  需要数据库包时重跑：python dev_tools/package.py --with-db')
 
 # ------------------------------------------------------------------
+# 4a) 插件预装（--with-plugins：完整版口径，离线可卸载/重装/修复）
+# ------------------------------------------------------------------
+if _args.with_plugins and not (_args.source_only or _args.db_only):
+    print('== 4a/5 插件预装 ==')
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    from Virus_Platform_Core import plugin_manager as _pm
+    import hashlib as _hl
+    with open(os.path.join(ROOT, 'plugins-repo', 'index.json'),
+              encoding='utf-8') as f:
+        _idx = json.load(f)
+    _pdist = os.path.join(ROOT, 'plugins-dist')
+    os.makedirs(_pdist, exist_ok=True)
+    # install_zip 的 root 语义 = **插件目录**（<平台根>/plugins），不是平台根：
+    # 传 APP 会把 32 个插件目录摊在程序根、install_to 还会写到产物外
+    # （2026-10-24 首跑实测）。runtime 侧 resolve_plugins 扫的就是
+    # <APP>/plugins，两边必须同位。
+    _plug_root = os.path.join(APP, 'plugins')
+
+    def _zip_sha(p):
+        h = _hl.sha256()
+        with open(p, 'rb') as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b''):
+                h.update(chunk)
+        return h.hexdigest()
+
+    _ok = _fail = 0
+    for _pl in _idx['plugins']:
+        _zip = os.path.join(_pdist, _pl['file'])
+        if not os.path.isfile(_zip):
+            import urllib.request
+            _last = None
+            for _u in (_pl.get('urls') or [_pl.get('url')]):
+                try:
+                    print(f'  ↓ {_pl["name"]} ← {_u}')
+                    urllib.request.urlretrieve(_u, _zip)
+                    _last = None
+                    break
+                except Exception as e:
+                    _last = e
+            if _last is not None:
+                print(f'  ✘ {_pl["name"]}: 全部地址下载失败（{_last}）')
+                _fail += 1
+                continue
+        # sha256 与索引一致才传给 install_zip 校验；本地重打的包哈希必然
+        # 不同（工具版本比索引新），此时信任本地包（发布机即构建机）
+        _expect = _pl.get('sha256')
+        if _expect and _zip_sha(_zip) != str(_expect).lower():
+            print(f'  △ {_pl["name"]}: 本地包与索引 sha256 不一致（本地重打'
+                  '？），按本地包安装')
+            _expect = None
+        try:
+            _pm.install_zip(_zip, root=_plug_root, expected_sha256=_expect)
+            _ok += 1
+            print(f'  ✔ {_pl["name"]}（{_pl.get("version", "")}）')
+        except Exception as e:
+            print(f'  ✘ {_pl["name"]}: {e}')
+            _fail += 1
+    if _fail:
+        sys.exit(f'插件预装失败 {_fail} 个（见上）——完整版要求 '
+                 f'{len(_idx["plugins"])}/{len(_idx["plugins"])} 全装')
+    print(f'  —— 插件预装完成：{_ok}/{len(_idx["plugins"])} 个 → plugins/')
+
+# ------------------------------------------------------------------
 # 4b) 源码包（叠加层：并入程序包目录即可源码模式运行）
 # ------------------------------------------------------------------
 if _args.source_only:
@@ -607,7 +706,8 @@ if _args.with_source:
         shutil.copy2(os.path.join(ROOT, rel), dst)
         print(f'  + {rel}  {_fmt(os.path.getsize(dst))}  {note}')
 
-    for _f in ('app.py', 'main.py', 'requirements.txt', 'requirements.lock'):
+    for _f in ('app.py', 'main.py', 'mcp_server.py',
+               'requirements.txt', 'requirements.lock'):
         _src_file(_f, '入口 / 依赖清单')
     for _d in ('Virus_Platform_Core', 'webapp', 'scripts', 'dev_tools'):
         _src_tree(_d, '平台源码 / 前端 / 辅助脚本')
@@ -667,40 +767,54 @@ if _args.with_source:
 # ------------------------------------------------------------------
 print('== 5/5 说明与汇总 ==')
 if SPLIT and os.path.isdir(APP):
+    # 用行列表拼说明文本：隐式字符串拼接里混入 `'=' * 60` 这类**表达式**
+    # 会被 Python 解析成对前一整个字面量的重复（2026-10-24 前：首行
+    # 「植物病毒分析平台 · 分发说明…」重复了 60 遍写进产物说明）。
+    _notes = [
+        '植物病毒分析平台 · 分发说明（程序 / 数据库 / 示例 三分离）',
+        '=' * 60,
+        '',
+        '① VirusPlatform\\            程序本体：双击 VirusPlatform.exe 启动',
+        '   - 内含 exe + webapp 前端 + bin/ tools/ 外部工具 + mcp_server.py',
+        '     （MCP 控制台在 exe 内经 --mcp-stdio 进程内拉起，开箱可用）',
+    ]
+    if _args.with_plugins and os.path.isdir(os.path.join(APP, 'plugins')):
+        _notes += [
+            '   - plugins/ 已预装全部工具插件包（完整版）：可在'
+            '「设置 → 插件管理」',
+            '     查看版本、按需卸载/重装；重装需联网（国内镜像优先）',
+        ]
+    _notes += [
+        '   - 不含数据库，也不含示例数据',
+        '',
+        '② VirusPlatform-Examples\\   示例数据（只读，约 1MB）',
+        '   - 各工具「✨ 示例」按钮与「示例结果」页用到的输入/产物',
+        '   - 与程序同级放置即可被自动识别；也可搬到别处后到',
+        '     「设置 → 示例数据目录」填绝对路径',
+        '',
+        '③ VirusPlatform-Database\\   数据库包（仅 --with-db 时生成）',
+        '   - 原始数据集：病毒参考（FASTA+注释表）、NCBI Taxonomy、',
+        '     RefSeq/RVDB 源 FASTA（若随包）',
+        '   - 第三方直接使用库：注释库（RefSeq 病毒蛋白 / Pfam HMM）、',
+        '     建树参考、类病毒库、SUVTK、宿主概率表、属平均长度表、',
+        '     预置 blastn 库',
+        '   - 派生库不预带、首跑/一键自建：鉴定库引擎索引首次运行自动',
+        '     现建；kunpeng 病毒分类库（plant/ref）到「数据库构建」页',
+        '     「原始数据集」区一键构建（开箱即用需求打包时加',
+        '     --with-built-virusdb）',
+        '   - 不含宿主分类库（按物种而异，见 host-db/，用「数据库构建」页自建）',
+        '   - 对接（零配置优先）：与本程序**同级放置**即被自动识别；',
+        '     也可启动平台 →「设置 → 数据库目录」填该目录，',
+        '     或 python main.py db-migrate --to <目录>',
+        '   - 自备宿主库可放任意位置：构建页「📂 加载已构建宿主库」',
+        '     选中即可，平台自动登记该位置',
+        '',
+        '自检：VirusPlatform.exe --cli selfcheck',
+        '（源码模式：python main.py selfcheck）',
+    ]
     with open(os.path.join(DIST, '程序与数据说明.txt'), 'w',
               encoding='utf-8') as f:
-        f.write(
-            '植物病毒分析平台 · 分发说明（程序 / 数据库 / 示例 三分离）\n'
-            '=' * 60 + '\n'
-            '\n'
-            '① VirusPlatform\\            程序本体：双击 VirusPlatform.exe 启动\n'
-            '   - 内含 exe + webapp 前端 + bin/ tools/ 外部工具\n'
-            '   - 不含数据库，也不含示例数据\n'
-            '\n'
-            '② VirusPlatform-Examples\\   示例数据（只读，约 1MB）\n'
-            '   - 各工具「✨ 示例」按钮与「示例结果」页用到的输入/产物\n'
-            '   - 与程序同级放置即可被自动识别；也可搬到别处后到\n'
-            '     「设置 → 示例数据目录」填绝对路径\n'
-            '\n'
-            '③ VirusPlatform-Database\\   数据库包（仅 --with-db 时生成）\n'
-            '   - 原始数据集：病毒参考（FASTA+注释表）、NCBI Taxonomy、\n'
-            '     RefSeq/RVDB 源 FASTA（若随包）\n'
-            '   - 第三方直接使用库：注释库（RefSeq 病毒蛋白 / Pfam HMM）、\n'
-            '     建树参考、类病毒库、SUVTK、宿主概率表、属平均长度表、\n'
-            '     预置 blastn 库\n'
-            '   - 派生库不预带、首跑/一键自建：鉴定库引擎索引首次运行自动\n'
-            '     现建；kunpeng 病毒分类库（plant/ref）到「数据库构建」页\n'
-            '     「原始数据集」区一键构建（开箱即用需求打包时加\n'
-            '     --with-built-virusdb）\n'
-            '   - 不含宿主分类库（按物种而异，见 host-db/，用「数据库构建」页自建）\n'
-            '   - 对接（零配置优先）：与本程序**同级放置**即被自动识别；\n'
-            '     也可启动平台 →「设置 → 数据库目录」填该目录，\n'
-            '     或 python main.py db-migrate --to <目录>\n'
-            '   - 自备宿主库可放任意位置：构建页「📂 加载已构建宿主库」\n'
-            '     选中即可，平台自动登记该位置\n'
-            '\n'
-            '自检：VirusPlatform.exe --cli selfcheck\n'
-            '（源码模式：python main.py selfcheck）\n')
+        f.write('\n'.join(_notes) + '\n')
     print('  + 打包产物/程序与数据说明.txt')
 
 for d in (APP, EX_DIR, DB_DIR, SRC_DIR):

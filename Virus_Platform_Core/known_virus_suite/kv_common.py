@@ -311,6 +311,10 @@ def load_ref_info(ref_info_tsv, logger=None):
                 'geo': find(['Geo_Location', 'Geo_Location/Year', 'geo']),
                 'gbtitle': find(['GenBank_Title', 'GenBank Title']),
                 'mol1': find(['Molecule_type', 'Molecule_Type']),
+                # ICTV 种名（Species_ICTV）：同 NCBI 种不同条目名的聚合键，
+                # 例如 HSVd 条目 "Citrus gummy bark viroid" 的
+                # Species_ICTV = Hostuviroid impedihumuli（=HSVd 本尊）
+                'ictv': find(['Species_ICTV', 'Ictv_Species', 'ICTV_Species']),
             }
             if idx['acc'] == -1:
                 if logger:
@@ -333,6 +337,7 @@ def load_ref_info(ref_info_tsv, logger=None):
             'species': get('sp') or acc,
             'segment': get('seg'),
             'molecule': get('mol'),
+            'ictv': get('ictv'),
             # 宿主/地理/GenBank 标题：识别表一并提供（此前只导出 4 列，
             # 用户反馈「提取信息不全」——库里 26 列注释大多被丢掉）
             'host': get('host'),

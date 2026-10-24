@@ -46,8 +46,6 @@ BSP 的第 *i* 段覆盖哪个时间区间，取决于该段里**实际发生的
 * 若你手上有 Tracer 导出的 TSV，走 ``table`` 模式 —— 那才是严格口径。
 """
 
-import csv
-import io
 import math
 import os
 import re
@@ -55,6 +53,7 @@ import re
 import numpy as np
 
 from Virus_Platform_Core.utils import check_path, safe_open
+from Virus_Platform_Core.io_utils import read_rows as _io_read_rows
 
 # 日志里 BSP 参数列的两种写法：多段 skyline.popSize1..N / 单段 skyline.popSize
 _POP_RE = re.compile(r'^skyline\.popSize(\d*)$')
@@ -115,21 +114,10 @@ def effective_sample_size(vals):
 
 
 def _read_table_rows(path):
-    """读 TSV/CSV → (表头 list, 行 list)。自动判分隔符，跳过 ``#`` 注释行。"""
-    with io.open(path, encoding='utf-8', errors='replace') as f:
-        lines = [ln.rstrip('\n').rstrip('\r') for ln in f]
-    lines = [ln for ln in lines if ln.strip() and not ln.lstrip().startswith('#')]
-    if not lines:
+    """读 TSV/CSV → (表头 list, 行 list, 分隔符)。跳过 ``#`` 注释行。"""
+    hdr, rows, delim = _io_read_rows(path, skip_comments=True)
+    if hdr is None:
         raise RuntimeError(f'文件里没有数据行：{path}')
-    first = lines[0]
-    delim = '\t' if first.count('\t') >= first.count(',') else ','
-    hdr = [c.strip().strip('"') for c in first.split(delim)]
-    rows = []
-    for ln in lines[1:]:
-        parts = [c.strip().strip('"') for c in ln.split(delim)]
-        if len(parts) < len(hdr):
-            parts += [''] * (len(hdr) - len(parts))
-        rows.append(parts)
     return hdr, rows, delim
 
 
@@ -350,7 +338,7 @@ def write_skyline_table(res, out_path):
     return out_path
 
 
-def render_pdf(res, out_path, direction='forward', color='#00A0E9',
+def render_pdf(res, out_path, direction='forward', color=None,
                secondary_axis=False, xlim=None, title='Bayesian Skyline Plot',
                ylabel='Ne·τ (years)', xlabel='Sampling Year'):
     """matplotlib 出静态图（PDF/PNG，按扩展名）。Agg 后端，不弹窗。
@@ -363,6 +351,10 @@ def render_pdf(res, out_path, direction='forward', color='#00A0E9',
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
+    from Virus_Platform_Core.sci_palette import OKABE
+
+    if color is None:          # 缺省天际线色：Okabe-Ito 蓝（原 #00A0E9 青不属于任何真源色板）
+        color = OKABE['blue']
 
     t = list(res['time'])
     lo, md, up = list(res['lower']), list(res['median']), list(res['upper'])

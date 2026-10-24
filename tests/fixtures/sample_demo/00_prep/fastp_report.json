@@ -1,0 +1,11 @@
+{
+ "summary": {
+  "before_filtering": {
+   "total_reads": 7200
+  },
+  "after_filtering": {
+   "total_reads": 7150
+  }
+ },
+ "q30_rate": 96.8
+}

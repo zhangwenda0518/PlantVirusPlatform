@@ -575,15 +575,11 @@ def _meta_region_lookup(meta_path, col):
 
 
 def _read_table(path):
-    """CSV/TSV 自动嗅探 → list[dict]（表头小写化）。"""
-    text = read_text(path)
-    sample = text[:4096]
-    sep = '\t' if sample.count('\t') > sample.count(',') else ','
-    rdr = csv.DictReader(io.StringIO(text), delimiter=sep)
-    rows = []
-    for r in rdr:
-        rows.append({(k or '').strip().lower(): (v if v is not None else '').strip()
-                     for k, v in r.items() if k is not None})
+    """CSV/TSV 自动嗅探 → list[dict]（表头小写化）。统一走 io_utils 容错读取。"""
+    from Virus_Platform_Core.io_utils import read_dicts  # 懒加载：本模块保持零包依赖
+    if not os.path.isfile(path):
+        raise FileNotFoundError(path)          # 与旧 read_text 行为一致
+    rows = read_dicts(path, lower_header=True)
     if not rows:
         raise ValueError(f'{path} 没有数据行')
     return rows

@@ -48,174 +48,237 @@ body {
 h1, h2, h3 { font-weight: 650; letter-spacing: .01em; }
 a { color: var(--green-700); }
 
-/* ---------------- 顶部导航 ----------------
-   宽度自适应要点（2026-09-11 修）：
-   原先是 `height: 54px` 固定高度 + `.navlinks{flex-wrap:wrap}`。一级导航有
-   13 个链接，窗口一窄（实测 ≲1500px，尤其加了右侧全局上下文条之后）
-   `.navlinks` 内部就换行，可绿色横条仍是 54px —— 第二行直接溢出到条外
-   （用户截图里"样品/项目/全局清理"掉到白底上就是这个原因）。
+/* ==================================================================
+   主导航（2026-10-21 布局重构）
+   顶部 14 项横向链接 → 左侧固定导航栏 + 顶部工具条。
 
-   修法分两层，缺一不可：
-   1) 横条 `min-height` + `height: auto`：内容换行时横条跟着长高，绝不溢出。
-   2) 横条本身 **不换行**（`flex-wrap: nowrap`）+ `.navlinks{flex:1 1 auto;
-      min-width:0}`：让品牌与导航同处一行、由 `.navlinks` 内部消化换行。
-      若这里也用 wrap，宽度不够时会把整个 `.navlinks` 挤到第二行
-      （品牌独占一行、高度直接 72px）——实测踩过。
-   窄到 ≤1180px 时再切成"品牌一行 + 导航整行"，那才是这个宽度下更自然的排布。 */
-.topnav {
-  display: flex; align-items: center; justify-content: space-between;
-  background: linear-gradient(90deg, var(--green-950), var(--green-800) 55%, #14603b);
-  color: #fff; padding: 5px 22px; min-height: 54px;
-  flex-wrap: nowrap; column-gap: 14px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 2px 10px rgba(7, 39, 26, .28);
-  position: sticky; top: 0; z-index: 10;
+   为什么改：旧方案里 14 个一级链接在 ≤1500px 就会把横条撑成两行，
+   `.navlinks` 的换行/溢出是 `tests/_it_nav_responsive.py` 专门守护的
+   历史痛点；竖排后"横向放不下"这个约束从根上消失。
+   参考的是智能育种平台的「左侧分组常驻 + 主区工作台」信息架构。
+
+   布局约定（勿拆）：
+     body            padding-left = 侧栏宽（内容整体右移，侧栏 fixed）
+     .sidenav        fixed 左侧，深绿渐变，可独立滚动
+     .topbar         sticky 顶部工具条，承载上下文胶囊 / 语言 / 目录
+     ≤1024px         侧栏收成抽屉（translateX），body 恢复全宽
+   ================================================================== */
+/* --topbar-h：吸顶顶栏高度。任何需要"让开顶栏"的地方（锚点 scroll-margin、
+   sticky 侧栏 top）都引用它，避免各页各写一个魔数漂移。
+   54px 是 .topbar 的 min-height，与 _nav.html 的结构绑定。 */
+:root { --sidenav-w: 236px; --topbar-h: 54px; }
+
+body { padding-left: var(--sidenav-w); }
+
+.sidenav {
+  position: fixed; top: 0; bottom: 0; left: 0; width: var(--sidenav-w);
+  z-index: 40; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #07271a 0%, #0b3b26 42%, #0f4d2f 100%);
+  color: #c8dfd0; overflow-y: auto; overscroll-behavior: contain;
+  box-shadow: 1px 0 0 rgba(255,255,255,.06) inset, 2px 0 12px rgba(7,39,26,.18);
+  transition: transform .18s ease;
 }
-.brand {
-  font-size: 16.5px; font-weight: 700; letter-spacing: .06em;
-  display: flex; align-items: center; gap: 8px; white-space: nowrap;
-  flex: 0 0 auto;
+.sidenav::-webkit-scrollbar { width: 6px; }
+.sidenav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 3px; }
+
+.sn-head {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  padding: 16px 12px 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
 }
-.brand .leaf { filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
-.navlinks {
-  display: flex; align-items: center; flex-wrap: wrap;
-  row-gap: 2px; justify-content: flex-end;
+.sn-brand {
+  display: flex; align-items: center; gap: 9px;
   flex: 1 1 auto; min-width: 0;
+  color: #fff; text-decoration: none;
 }
-.navlinks a {
-  color: #c8dfd0; text-decoration: none; margin-left: 4px;
-  font-size: 13.5px; padding: 6px 11px; border-radius: 7px;
-  border-bottom: none; transition: all .14s;
+/* 关闭钮：默认隐藏（桌面档侧栏常驻，无需关闭），窄屏抽屉展开时出现 */
+.sn-close {
+  display: none; flex: none; width: 26px; height: 26px;
+  border: 1px solid rgba(255,255,255,.20); border-radius: 6px;
+  background: rgba(255,255,255,.08); color: #cfe6d8;
+  font-size: 12px; line-height: 1; cursor: pointer;
 }
-.navlinks a:hover { color: #fff; background: rgba(255,255,255,.10); }
-.navlinks a.active {
+.sn-close:hover { background: rgba(255,255,255,.20); color: #fff; }
+.sn-brand-leaf { font-size: 19px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+.sn-brand-txt {
+  font-size: 14.5px; font-weight: 700; letter-spacing: .05em;
+  line-height: 1.35;
+}
+
+/* 一级链接列：竖排，不再有换行/溢出问题 */
+.navlinks.sn-links {
+  display: flex; flex-direction: column; align-items: stretch;
+  flex: 1 1 auto; min-height: 0; padding: 8px 8px 4px;
+  flex-wrap: nowrap; row-gap: 0; justify-content: flex-start;
+}
+.navlinks a, .sn-foot .sn-link {
+  display: block; margin: 0; padding: 8px 11px; border-radius: 7px;
+  color: #c8dfd0; text-decoration: none; font-size: 13.5px;
+  border-bottom: none; transition: background .14s, color .14s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.navlinks a:hover, .sn-foot .sn-link:hover { color: #fff; background: rgba(255,255,255,.10); }
+.navlinks a.active, .sn-foot .sn-link.active {
   color: #fff; background: rgba(255,255,255,.14);
-  box-shadow: inset 0 -2px 0 #7dd3a8;
+  box-shadow: inset 3px 0 0 #7dd3a8;
 }
-.navlinks .iconbtn {
-  margin-left: 6px; font-size: 15px; padding: 5px 9px;
+
+/* 分组：整行标题即开关（点一次展开、再点收起），右侧箭头只是视觉指示。
+   2026-10-21 用户反馈：原先只有箭头能点，热区太小 —— 改为整行可点，
+   箭头随之降级为纯装饰（aria-hidden，不参与命中判定）。
+
+   箭头定位：不能用 `top:50%`。分组盒子 = 标题行 + 展开的二级菜单，高度随
+   开合变化，50% 会跑到整个分组的垂直中央（实测偏出 104px、压到下一个分组
+   上）。这里改为相对分组顶部按标题行半高对齐 —— 标题行高度由
+   `padding:8px 11px` + `line-height:1.6 × 13.5px` ≈ 38px 决定，取 19px。
+   箭头也不能挪进 <a> 内：applyI18n 用 innerHTML 覆盖 [data-i18n]，
+   切语言时会把箭头整段抹掉。 */
+.sn-group { position: relative; display: block; }
+.sn-group > .sn-link {
+  padding-right: 34px;              /* 给箭头留位，文字不压到它 */
+  cursor: pointer;                  /* 标题已不是跳转链接，是开关 */
 }
+.sn-caret {
+  position: absolute; top: 14px; right: 10px;
+  color: #9dc4ae; font-size: 11px; line-height: 1;
+  pointer-events: none;             /* 点击穿透到整行标题 */
+  transition: transform .16s, color .14s;
+}
+.sn-group:hover > .sn-caret { color: #fff; }
+.sn-group.open > .sn-caret { transform: rotate(90deg); }
+
+/* 二级入口：默认折叠，展开后内联在组下方（缩进 + 左侧细线）。
+   展开态**只由点击决定**（.open 类）——这里曾经还有一条
+   `.sn-group:hover > .sn-sub{display:block}`，结果鼠标停在分组上时
+   :hover 把刚点击折叠掉的菜单又强制显示出来，点击收不起来。 */
+.sn-sub {
+  display: none; padding: 2px 0 6px 10px; margin: 0 0 2px 13px;
+  border-left: 1px solid rgba(255,255,255,.14);
+}
+.sn-group.open > .sn-sub { display: block; }
+.sn-sub a {
+  display: block; padding: 5px 9px; margin: 0; border-radius: 6px;
+  color: #a9c9b7; font-size: 12.5px; white-space: normal; line-height: 1.45;
+}
+.sn-sub a:hover { color: #fff; background: rgba(255,255,255,.08); }
+.sn-sub a.active { color: #fff; background: rgba(125,211,168,.18); box-shadow: none; }
+.sn-sub a.sn-subhome {
+  color: #d7ecdf; font-weight: 650; margin-bottom: 2px;
+}
+
+/* 底部固定区：任务中心 / 结果中心 / 设置 / 手册 */
+.sn-foot {
+  flex: none; padding: 8px; margin-top: 6px;
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+.sn-foot .sn-link { position: relative; }
+
 /* 任务中心导航徽章：运行中任务数（app.js 全局轮询驱动） */
 .navbadge {
   display: none; min-width: 16px; height: 16px; border-radius: 8px;
   background: #e5484d; color: #fff; font-size: 10.5px; font-weight: 700;
   line-height: 16px; text-align: center; padding: 0 4px;
-  margin-left: 6px; vertical-align: 1.5px;
+  margin-left: 8px; vertical-align: 1.5px;
 }
-/* 顶部导航悬停弹出二级功能菜单（数据源 = NAV_GROUPS，_nav.html 渲染） */
-.nav-drop { position: relative; display: inline-flex; }
-.nav-drop .nav-menu {
-  display: none; position: absolute; top: 100%; left: 0; min-width: 260px;
-  padding: 6px; z-index: 60;
-  background: var(--surface, #fff); border: 1px solid var(--line-200, #e5eaef);
-  border-radius: 10px; box-shadow: var(--shadow-3, 0 12px 32px rgba(7,39,26,.18));
+
+/* ---------------- 顶部工具条 ---------------- */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 12px;
+  min-height: 54px; padding: 6px 20px;
+  background: var(--surface); border-bottom: 1px solid var(--line-200);
+  box-shadow: 0 1px 3px rgba(23,42,33,.05);
 }
-.nav-drop:hover .nav-menu, .nav-drop:focus-within .nav-menu { display: block; }
-.nav-drop .nav-menu a {
-  display: block; margin: 0; padding: 7px 10px; border-radius: 7px;
-  color: var(--ink-700, #33475b); white-space: nowrap;
+.tb-title {
+  font-size: 14px; font-weight: 650; color: var(--ink-700);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex: 0 1 auto;
 }
-.nav-drop .nav-menu a:hover { background: var(--green-50, #eef4f0); color: var(--green-900, #14532d); }
-.nav-drop .nav-menu a b { display: block; font-size: 12.5px; font-weight: 650; }
-.nav-drop .nav-menu a small {
-  display: block; font-size: 11px; color: var(--ink-400, #8b98a5);
-  line-height: 1.4; margin-top: 1px; white-space: normal;
+.sn-toggle {
+  display: none; flex: none; width: 34px; height: 34px;
+  border: 1px solid var(--line-200); border-radius: 8px;
+  background: var(--surface); color: var(--ink-700);
+  font-size: 16px; line-height: 1; cursor: pointer;
 }
-@media (max-width: 980px) { .nav-drop .nav-menu { left: auto; right: 0; } }
-.langbtn {
-  margin-left: 10px; font-size: 12.5px; font-weight: 600;
-  background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22);
-  color: #eaf6ee; padding: 4px 11px; border-radius: 99px; cursor: pointer;
-  letter-spacing: .04em;
-}
-.langbtn:hover { background: rgba(255,255,255,.24); }
+.sn-toggle:hover { background: var(--gray-100); }
+
+/* 上下文宿主：app.js 把 .navctx 注入到这里，占满中部剩余宽度 */
+.navctx-host { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
 
 /* ---------------- 全局上下文条（当前样品 / 项目）+ 全局清理 ----------------
-   常驻顶部导航，所有模块页共享同一份上下文（app.js injectGlobalCtx 注入）。
+   常驻顶部工具条，所有模块页共享同一份上下文（app.js injectGlobalCtx 注入）。
    两个可点胶囊显示"我在分析谁"，右侧 🧹 是全局清理总闸。
-   宽度预算：这一条约占 340px，是导航变挤的主因，故用弹性宽度 +
-   断点逐步收窄（先隐去「样品」「项目」前缀字，再压数值宽度）。 */
+   旧方案这条在深绿横条上（浅色字），现在改到浅色工具条上，配色随之反转。 */
 .navctx {
-  display: flex; align-items: center; gap: 6px; margin-left: 8px;
-  padding-left: 8px; border-left: 1px solid rgba(255,255,255,.18);
+  display: flex; align-items: center; gap: 6px; margin-left: 4px;
   flex: 0 1 auto; min-width: 0;
 }
 .navctx-chip {
   display: inline-flex; align-items: center; gap: 4px;
-  max-width: 116px; padding: 4px 9px; border-radius: 99px;
+  max-width: 200px; padding: 4px 9px; border-radius: 99px;
   font-size: 12.5px; line-height: 1.5; cursor: pointer;
-  background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.20);
-  color: #eaf6ee; white-space: nowrap; overflow: hidden;
+  background: var(--green-50); border: 1px solid #cfe4d8;
+  color: var(--green-800); white-space: nowrap; overflow: hidden;
   flex: 0 1 auto; min-width: 0;
 }
-.navctx-chip:hover { background: rgba(255,255,255,.24); }
-.navctx-chip .k { opacity: .68; font-size: 11px; flex: none; }
+.navctx-chip:hover { background: var(--green-100); border-color: #a9d3ba; }
+.navctx-chip .k { opacity: .72; font-size: 11px; flex: none; }
 .navctx-chip .v {
   font-weight: 650; overflow: hidden; text-overflow: ellipsis;
 }
-.navctx-chip.is-empty { opacity: .62; }
+.navctx-chip.is-empty { opacity: .72; background: var(--gray-100); border-color: var(--line-200); color: var(--ink-500); }
 .navctx-chip.is-empty .v { font-weight: 500; font-style: italic; }
 .navctx-x {
-  background: none; border: none; color: #cfe6d8; cursor: pointer;
+  background: none; border: none; color: var(--ink-400); cursor: pointer;
   font-size: 13px; padding: 0 1px; line-height: 1; flex: none;
 }
-.navctx-x:hover { color: #fff; }
+.navctx-x:hover { color: var(--ink-900); }
 .navctx-reset {
   font-size: 12.5px; font-weight: 600; cursor: pointer;
   padding: 4px 10px; border-radius: 99px; flex: none;
-  background: rgba(229,72,77,.20); border: 1px solid rgba(255,160,163,.42);
-  color: #ffd9da; white-space: nowrap;
+  background: var(--red-100); border: 1px solid #f0c9c4;
+  color: var(--red-700); white-space: nowrap;
 }
-.navctx-reset:hover { background: rgba(229,72,77,.42); color: #fff; }
+.navctx-reset:hover { background: #fbdedb; }
 
-/* 控制簇：上下文条 + 语言 + 📂 绑成一个不可拆的 flex 项。
-   否则窗口刚好差几十像素时，只有 📂 被挤到第二行（实测 1884px 的症状）。 */
+/* 控制簇：语言 + 📂 绑成一个不可拆的 flex 项 */
 .navtail {
   display: flex; align-items: center; flex-wrap: nowrap;
-  flex: 0 0 auto;
+  flex: 0 0 auto; gap: 2px;
 }
-.navtail .langbtn { margin-left: 8px; }
+.navlinks .iconbtn {
+  font-size: 15px; padding: 5px 9px; color: var(--ink-500); border-radius: 7px;
+}
+.navlinks .iconbtn:hover { background: var(--gray-100); color: var(--ink-900); }
+.langbtn {
+  font-size: 12.5px; font-weight: 600;
+  background: var(--green-50); border: 1px solid #cfe4d8;
+  color: var(--green-800); padding: 4px 11px; border-radius: 99px; cursor: pointer;
+  letter-spacing: .04em;
+}
+.langbtn:hover { background: var(--green-100); }
 
-/* 导航宽度阶梯：先收紧自身、再收上下文条，避免任何宽度下溢出。
-   断点按实测的"刚好放不下"位置取整（13 个一级链接约占 1130px）。 */
-/* 1920 档：14 个一级链接 + 上下文簇在 1920 宽下距换行只差个位数像素
-   （2026-10-11 实测内容 1674px vs 盒宽 1675px），字体度量随浏览器版本
-   略有抖动就会把 navtail 挤下第二行。在最宽档先收 1px 内边距/间距，
-   留出 ~50px 余量，不再骑在临界点上。 */
-@media (max-width: 1980px) {
-  .navlinks a { padding: 6px 10px; margin-left: 3px; }
+/* 抽屉遮罩（仅窄屏出现） */
+.sn-scrim {
+  position: fixed; inset: 0; z-index: 35;
+  background: rgba(7, 20, 14, .45);
 }
-@media (max-width: 1560px) {
-  .navctx-chip { max-width: 104px; }
+
+/* 窄屏：侧栏收成抽屉，主区恢复全宽 */
+@media (max-width: 1024px) {
+  body { padding-left: 0; }
+  .sidenav { transform: translateX(-100%); width: 270px; box-shadow: none; }
+  .sidenav.open { transform: none; box-shadow: 4px 0 24px rgba(7,39,26,.28); }
+  .sn-toggle { display: grid; place-items: center; }
+  .sidenav.open .sn-close { display: grid; place-items: center; }
+  .topbar { padding: 6px 12px; gap: 8px; }
+  .navctx-chip { max-width: 120px; }
   .navctx-chip .k { display: none; }
 }
-@media (max-width: 1360px) {
-  .navlinks a { padding: 6px 8px; margin-left: 3px; font-size: 13px; }
-  .navctx { margin-left: 5px; padding-left: 5px; gap: 4px; }
-  .navctx-chip { max-width: 92px; padding: 4px 8px; }
-  .navctx-reset { padding: 4px 8px; font-size: 12px; }
-  .navtail .langbtn { margin-left: 6px; }
-  .brand { font-size: 15.5px; }
-}
-@media (max-width: 1180px) {
-  /* 这个宽度下"品牌 + 导航"已挤不下：切成品牌一行、导航独占一行的自然排布，
-     比让品牌挂在两行导航左侧更好看，也避免 .navlinks 被压到过窄而碎成多行。 */
-  .topnav { flex-wrap: wrap; row-gap: 2px; }
-  .navlinks { flex-basis: 100%; justify-content: flex-start; }
-  .navtail { margin-left: auto; }
-  .navlinks a { padding: 5px 7px; margin-left: 2px; font-size: 12.5px; }
-  .navctx-chip { max-width: 92px; font-size: 12px; }
-  .langbtn { padding: 4px 8px; }
-}
-@media (max-width: 960px) {
-  .topnav { padding: 5px 12px; }
-  .brand { font-size: 15px; letter-spacing: .02em; }
-  .navlinks a { padding: 5px 7px; font-size: 12.5px; }
-  .navctx-chip { max-width: 78px; }
-}
 @media (max-width: 720px) {
-  .topnav { padding-top: 7px; padding-bottom: 7px; }
-  .navlinks a { padding: 5px 6px; font-size: 12px; }
-  .navctx-chip { max-width: 70px; }
+  .tb-title { display: none; }
+  .navctx-chip { max-width: 96px; font-size: 12px; }
+  .navctx-reset { padding: 4px 8px; font-size: 12px; }
 }
 
 /* 全局样品选择弹窗（复用 kvsuite 选样弹窗的视觉，独立类名避免耦合） */
@@ -238,8 +301,12 @@ a { color: var(--green-700); }
 }
 .gx-empty { padding: 14px; text-align: center; color: var(--ink-400, #8b98a5); }
 
-/* ---------------- 页面骨架 ---------------- */
+/* ---------------- 页面骨架 ----------------
+   2026-10-21：主区左侧已有固定侧栏（body padding-left），.page 的 auto
+   外边距以剩余宽度为基准、两侧仍对称，故 margin 无需改动；只给宽屏放宽
+   上限，让工具页工作台不被挤成窄条。 */
 .page { max-width: 1280px; margin: 26px auto 60px; padding: 0 20px; }
+@media (min-width: 1600px) { .page { max-width: 1440px; } }
 .layout { display: flex; gap: 20px; align-items: flex-start; }
 .layout > .form { flex: 1.25; }
 .layout > .col { flex: 1; }
@@ -697,7 +764,7 @@ html[data-theme="dark"] table.tb tr:hover td, html[data-theme="dark"] table.tabl
 .hero p { margin: 0; opacity: .92; font-size: 13.5px; max-width: 860px; line-height: 1.8; }
 
 /* ---------------- 启动页封面（首页 hero 升级版） ----------------
-   文字封面 + 四张叙事卡（Ⅰ 背景 / Ⅱ 方法 / Ⅲ 流程 / Ⅳ 意义）。
+   文字封面：平台名 + 科研定位句 + 工程口径行。
    文字宽度靠 .cover-txt 的 max-width 控制，不铺满整行，留出呼吸感。 */
 .hero.cover { display: block; padding: 34px 36px 32px; }
 .cover-txt { max-width: 900px; }
@@ -706,32 +773,12 @@ html[data-theme="dark"] table.tb tr:hover td, html[data-theme="dark"] table.tabl
   margin: 0 0 11px; font-size: 16.5px; font-weight: 650; line-height: 1.7;
   letter-spacing: .01em; opacity: 1; color: #eafaf1;
 }
-/* 工程口径一行：与叙事行之间用一条细分隔线断开 */
+/* 工程口径一行：与定位行之间用一条细分隔线断开 */
 .hero .cover-eng {
   margin: 15px 0 0; padding-top: 12px; font-size: 12px; opacity: .84;
   border-top: 1px solid rgba(127, 224, 170, .28);
   color: #cdeedb; letter-spacing: .01em;
 }
-/* 叙事卡：等宽自适应列，四张卡随视口自然折行 */
-.cover-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 13px; margin: 16px 0 4px;
-}
-.cover-card {
-  background: var(--surface); border: 1px solid var(--line-200);
-  border-radius: var(--r-lg); padding: 14px 16px 15px; box-shadow: var(--shadow-1);
-}
-.cover-card .cc-head {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 7px;
-  font-size: 13.5px; font-weight: 700; color: var(--green-900);
-}
-.cover-card .cc-head b {
-  flex: none; width: 22px; height: 22px; border-radius: 50%;
-  display: grid; place-items: center; font-size: 11.5px; font-family: Georgia, serif;
-  background: var(--green-100); color: var(--green-700);
-  border: 1px solid #c4e4d1;
-}
-.cover-card p { margin: 0; font-size: 12.5px; line-height: 1.78; color: var(--ink-700); }
 .sec {
   font-size: 15.5px; color: var(--green-900); margin: 28px 0 13px; font-weight: 700;
   display: flex; align-items: center; gap: 9px;
@@ -741,6 +788,7 @@ html[data-theme="dark"] table.tb tr:hover td, html[data-theme="dark"] table.tabl
   background: linear-gradient(180deg, var(--green-500), var(--green-800));
 }
 .sec::after { content: ''; flex: 1; height: 1px; background: var(--line-200); }
+
 .module-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 15px;
@@ -984,6 +1032,41 @@ html[data-theme="dark"] .dlglist .fitem:hover { background: var(--green-50); }
 html[data-theme="dark"] table.tbl tr:hover td { background: #182129; }
 html[data-theme="dark"] .filelist { background: #101820; border-color: var(--line-100); }
 html[data-theme="dark"] .step > b { color: #fff; }
+/* 侧栏深色主题：侧栏本身就是深绿渐变，深色模式下压更暗、边框更沉，
+   避免与 #10161d 的主画布拉开突兀的亮边。 */
+html[data-theme="dark"] .sidenav {
+  background: linear-gradient(180deg, #05170f 0%, #08251a 45%, #0b3121 100%);
+  box-shadow: 1px 0 0 rgba(255,255,255,.05) inset, 2px 0 14px rgba(0,0,0,.4);
+}
+html[data-theme="dark"] .sn-brand { border-bottom-color: rgba(255,255,255,.08); }
+html[data-theme="dark"] .sn-foot { border-top-color: rgba(255,255,255,.08); }
+html[data-theme="dark"] .topbar {
+  background: #141c24; border-bottom-color: #263241;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+html[data-theme="dark"] .tb-title { color: #aeb9c6; }
+html[data-theme="dark"] .sn-toggle {
+  background: #1b2630; border-color: #263241; color: #aeb9c6;
+}
+html[data-theme="dark"] .sn-toggle:hover { background: #263241; }
+html[data-theme="dark"] .navctx-chip {
+  background: #16281f; border-color: #2a5238; color: #9fd8b6;
+}
+html[data-theme="dark"] .navctx-chip:hover { background: #1d3a2a; border-color: #3a6b4c; }
+html[data-theme="dark"] .navctx-chip.is-empty {
+  background: #1b2630; border-color: #263241; color: #8fa1b3;
+}
+html[data-theme="dark"] .navctx-reset {
+  background: rgba(217,105,95,.16); border-color: rgba(245,160,154,.35); color: #f5a09a;
+}
+html[data-theme="dark"] .navctx-reset:hover { background: rgba(217,105,95,.28); }
+html[data-theme="dark"] .navlinks .iconbtn { color: #8fa1b3; }
+html[data-theme="dark"] .navlinks .iconbtn:hover { background: #263241; color: #d7dee6; }
+html[data-theme="dark"] .langbtn {
+  background: #16281f; border-color: #2a5238; color: #9fd8b6;
+}
+html[data-theme="dark"] .langbtn:hover { background: #1d3a2a; }
+html[data-theme="dark"] .sn-scrim { background: rgba(0,0,0,.6); }
 html[data-theme="dark"] .hero { background: radial-gradient(1000px 300px at 85% -40%, rgba(47,174,98,.18), transparent), linear-gradient(130deg, #071a10 0%, #0c2f1c 55%, #135231 130%); }
 html[data-theme="dark"] .lang-seg button { background: var(--surface); color: var(--ink-500); }
 html[data-theme="dark"] .lang-seg button.on { background: var(--green-600); color: #fff; }
@@ -1347,6 +1430,11 @@ html[data-theme="dark"] .mir-algo-tbl td { border-bottom-color: #1f2a36; }
   box-shadow: var(--shadow-3); transition: transform .15s ease;
 }
 .ai-fab:hover { transform: translateY(-2px) scale(1.04); }
+.ai-fab .ai-logo-img { width: 100%; height: 100%; object-fit: cover;
+                       border-radius: 50%; display: block; }
+.ai-dock-title .ai-logo-img { width: 18px; height: 18px; object-fit: cover;
+                              border-radius: 50%; vertical-align: -3px;
+                              margin-right: 4px; }
 .ai-dock[hidden] { display: none; }   /* display:flex 会压过 hidden 的 UA 样式，须显式还原 */
 .ai-dock {
   position: fixed; right: 26px; bottom: 26px; z-index: 95;

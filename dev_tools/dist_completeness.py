@@ -33,6 +33,8 @@ DEFAULT_PAIRS = [
     ('3rd/R', '3rd/R'),
     ('3rd/open-virome/frontend/build', '3rd/open-virome/frontend/build'),
     ('webapp', '_internal/webapp'),
+    # t-mirna 候选 miRNA 库（2026-10-24 入包；缺库 = miRNA 靶标卡 abort 500）
+    ('databases/mirna_lib', 'databases/mirna_lib'),
     # 非 .py 的包内资源（spec 的 datas 投放，代码本身在 exe 的 PYZ 里）
     ('Virus_Platform_Core/ncbi_submit/templates',
      '_internal/Virus_Platform_Core/ncbi_submit/templates'),
@@ -44,6 +46,10 @@ DEFAULT_PAIRS = [
 # 的 ignore_patterns 同口径；不在本表的项不受影响）。
 PAIR_IGNORE = {
     '3rd/R': {'*.exe', 'doc', 'tests'},
+    # 工具目录里的运行残留日志不入包（插件 zip 打包时就跳过 .log；
+    # 源码侧有人手动跑过工具会留下 pita_out.log 这类文件，比对时忽略）
+    '3rd/tools': {'*.log'},
+    'databases/mirna_lib': {'__pycache__'},
 }
 
 # 开发期手工备份（webapp 下 20+ 个 *.bak_*）从不进分发版：spec._tree 与
