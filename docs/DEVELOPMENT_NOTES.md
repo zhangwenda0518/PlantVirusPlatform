@@ -3581,3 +3581,12 @@ exe 才进分发版（v18 已重打验证；_it_submit 集成测试通过）。
 4. 本轮质检项：compileall 全树 PASS；audit_deps 43 项全覆盖；许可清单
    最新；两个 addon 索引一致且安装/卸载干测通过；GitHub 资产 34 个；
    exe MCP stdio 握手 22 工具；全量 quick 回归见 _release_quick.log。
+
+### 2026-10-25 补⑫：插件源三源齐备 + 镜像/仓库实更新
+
+- plugin_manager.DEFAULT_INDEX_URLS 增加 **Gitee raw 第三兜底**
+  （镜像未更新 / GitHub raw 不可达时仍能取索引）。
+- 自建镜像 39.106.101.94 实传：index.json（34 条）+ ref-db-plugin.zip
+  （712M）+ suvtk-db-plugin.zip（222M）到 docs/plugins/。
+- Git 推送：origin main + tag v1.1.0（含全部 24+ 提交）。
+- Gitee：main 同步 index.json（仅源码镜像，>100MB addon 走镜像/GitHub）。
