@@ -25,8 +25,8 @@
           virus_ref（RefSeq/RVDB 源 FASTA，本机有就随包）
   注释：annot_db/{prot,hmm}
   建树/其他：tree_db、misc_db/{viroids,prob}、genus_lens.tsv
-  可选下载件（不随包，插件管理一键装）：ref-db（RefSeq 通用库 712M）、
-                             suvtk-db（NCBI 提交注释库 222M）
+  可选下载件（不随包，插件管理一键装）：ref-db（RefSeq 通用库 712M）
+
 
 程序启动时按此顺序找示例目录（Virus_Platform_Core/config.py `_detect_examples_root`）：
   platform.json.examples_root → <程序>/examples →
@@ -619,10 +619,13 @@ if _args.with_db or _args.db_only:
     #   Taxid 列齐备）在建库页一键重建；ref 可由 virus_ref/ 下的 RefSeq
     #   源 FASTA 一键重建。需要开箱即用时加 --with-built-virusdb。
     # 2026-10-25 精简口径（逐项有自愈路径）：
-    #   · annot_db/prot 只带 viral_prot.faa.gz——ensure_viral_prot_db 会
-    #     gunzip 出 faa、重建 organism_tax.tsv，_ensure_search_db 再建 dmnd；
-    #   · misc_db/suvtk（212M）整体转可选下载件 suvtk-db（提交 NCBI 本就
-    #     需联网；插件管理/模块自愈一键装，install_to 还原原位）；
+    #   · annot_db/prot 只带 viral_prot.dmnd（2026-10-25 二调：预置库开箱
+    #     零重建，原始序列 faa/faa.gz 不随包——ensure_viral_prot_db 对
+    #     "dmnd+organism_tax 在位"短路就绪；切引擎/库损坏时自动从 RefSeq
+    #     下载重建）；
+    #   · misc_db/suvtk 不随包、不做可选件（2026-10-25 二调：bfvd 三处调用
+    #     点均优雅降级——⑥b 层2/③b BFVD 分支跳过+WARN，RefSeq 蛋白与 Pfam
+    #     两层注释不受影响；自备库经 platform.json databases.bfvd 登记）；
     #   · virusref_db/blast 预置 v4 索引不随包——assembly._rebuild_if_stale
     #     缺失即就地重建（秒级，中文路径可建可用）；
     #   · misc_db/viroids 的 v4 索引同理（acvirus.ensure_blast_db 自建），
@@ -633,9 +636,9 @@ if _args.with_db or _args.db_only:
                              'blast v4 索引首跑自建）',
          ('blast',)),
         ('virus_ref',        '← RefSeq/RVDB 源 FASTA（通用病毒库建库数据集；本机有就随包）'),
-        ('annot_db/prot',    '← 功能注释层1：RefSeq 病毒蛋白 faa.gz（faa/dmnd/tax 索引'
-                             '首用自建）',
-         ('viral_prot.faa', 'viral_prot.dmnd', 'organism_tax.tsv')),
+        ('annot_db/prot',    '← 功能注释层1：RefSeq 病毒蛋白 DIAMOND 预置库（开箱'
+                             '零重建；原始序列不随包）',
+         ('viral_prot.faa', 'viral_prot.faa.gz')),
         ('annot_db/hmm',     '← 功能注释层2：Pfam-A-Viruses（已 hmmpress，最小形态）'),
         ('tree_db',          '← 建树参考 plant / ictv 两套口径'),
         ('misc_db/viroids',  '← 类病毒参考（fasta + 注释；v4 索引首用自建）',
@@ -643,7 +646,8 @@ if _args.with_db or _args.db_only:
         ('misc_db/prob',     '← 宿主概率表'),
         # 2026-10-03 用户裁定：dsRNA 脱靶面板（~1.4GB 物种 RefSeq RNA）不再随
         # 数据库包分发。自备面板放 databases/dsrna/panel/ 即生效；小文件随程序包。
-        # 2026-10-25：misc_db/suvtk（212M）同口径转可选下载件 suvtk-db。
+        # 2026-10-25：misc_db/suvtk（212M）不随包、不做可选件（bfvd 层
+        # 优雅降级；自备库经 platform.json databases.bfvd 登记）。
     )
     if _args.with_built_virusdb:
         # 2026-10-25 定案：随包只带 plant 库（改名为 virus_db，唯一默认病毒
@@ -950,9 +954,9 @@ if SPLIT and os.path.isdir(APP):
         '③ VirusPlatform-Database\\   数据库包（仅 --with-db 时生成）',
         '   - 原始数据集：病毒参考（FASTA+注释表）、NCBI Taxonomy、',
         '     RefSeq/RVDB 源 FASTA（若随包）',
-        '   - 随包：注释库（RefSeq 病毒蛋白 faa.gz / Pfam HMM press 件）、',
+        '   - 随包：注释库（RefSeq 病毒蛋白 DIAMOND 预置库 / Pfam HMM press 件）、',
         '     建树参考、类病毒参考、宿主概率表、属平均长度表；',
-        '     blast/diamond/blastn 派生索引首用自动重建（秒~分钟级）',
+        '     blast/blastn 派生索引首用自建（秒级）；DIAMOND 蛋白库已预置',
         '   - 派生库不预带、首跑/一键自建：鉴定库引擎索引首次运行自动',
         '     现建；kunpeng 病毒分类库（plant/ref）到「数据库构建」页',
         '     「原始数据集」区一键构建（开箱即用需求打包时加',

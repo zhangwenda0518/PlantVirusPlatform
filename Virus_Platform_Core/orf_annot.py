@@ -396,6 +396,20 @@ def ensure_viral_prot_db(logger=None, force=False, local_faa=None,
         raise RuntimeError("未找到 DIAMOND / MMseqs2 / blastp 任何一个搜索引擎")
     engine, exe = eng
 
+    # 2026-10-25 分发口径短路：随包带 dmnd（不带 faa.gz）——引擎侧库与
+    # 物种索引都在位即视为就绪，不触发 faa 还原/下载。faa 仅为重建源：
+    # 切换搜索引擎（mmseqs/blastp）、库损坏或 --force 时才会用到，届时按
+    # 原路径从 RefSeq 下载。blastp 库建在 ASCII 临时目录，无法预置，
+    # 不短路（走下方正常路径）。
+    _engine_db = {'diamond': os.path.join(DB_DIR, 'viral_prot.dmnd'),
+                  'mmseqs': os.path.join(DB_DIR, 'mmseqs_db')}.get(engine)
+    if (not force and not local_faa and _engine_db
+            and os.path.isfile(_engine_db) and os.path.isfile(tax_tsv)):
+        db_files, db_versions = _search_db_trace(_engine_db, engine, faa)
+        return {'faa': faa, 'engine': engine, 'db': _engine_db,
+                'tax_tsv': tax_tsv, 'n_proteins': None,
+                'db_files': db_files, 'db_versions': db_versions}
+
     if local_faa:
         faa = check_path(local_faa, must_exist=True)
     elif not os.path.isfile(faa) or force:

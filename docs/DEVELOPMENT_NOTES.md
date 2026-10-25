@@ -3508,3 +3508,18 @@ prepare_taxonomy 本就"有本地 tar 则纯解压零联网"。
 读取方，收益 24M 不值）；prob/viroids 数据表本体保留。
 DB_TREES 升级为三元组（第三项=该树的 fnmatch ignore 清单）；陈旧清理
 清单扩 suvtk/blast。DB 包四轮轨迹：2.3G→1.6G→1.2G→536M（-77%）。
+
+### 2026-10-25 补⑧：suvtk-db 撤销 + prot 改随包 dmnd（用户二调）
+
+1. **suvtk-db 可选件整体撤销**（索引 34→33、本地 zip/构建脚本删除、
+   GitHub Release 资产删除）。依据：bfvd 三处调用点（⑥b orf_annot 层2、
+   hmm_annot 病毒域层、③b verify 分支）缺库时全部优雅降级（跳过+WARN），
+   RefSeq 蛋白 + Pfam 两层注释不受影响；确需 bfvd 证据层的自备用户可经
+   platform.json databases.bfvd 登记自己的库。
+2. **annot_db/prot 改随包 viral_prot.dmnd（228M）**，原始序列 faa/faa.gz
+   均出包（536M→663M，+127M 换注释开箱零重建）。ensure_viral_prot_db
+   新增就绪短路：dmnd + organism_tax.tsv 在位且非 force/local_faa 时直接
+   返回（不触发 faa 还原/RefSeq 下载）；实测 0.32s 返回、trace 完整。
+   faa 从此只是"重建源"——切引擎（mmseqs/blastp）或库损坏时才需要，
+   届时自动从 RefSeq 下载。调用方仅用 engine/db 键，短路返回安全。
+   DB 包轨迹：2.3G→1.6G→1.2G→536M→663M（dmnd 预置回填）。
