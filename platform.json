@@ -1,6 +1,7 @@
 {
   "threads": 19,
   "plugin_index_url": "",
+  "plugin_source_pref": "auto",
   "tools": {
     "kunpeng": "3rd\\bin\\kun_peng-v0.7.12-x86_64-pc-windows-msvc.exe",
     "spades": "3rd\\tools\\SPAdes-Windows\\bin\\spades.bat",
