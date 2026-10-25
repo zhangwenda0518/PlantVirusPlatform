@@ -94,10 +94,18 @@ _parser.add_argument('--with-plugins', action='store_true',
                           '完整版全量，见下。程序包自带全量 3rd 时预装插件是'
                           '纯冗余：插件只填缺、永不被读）')
 _parser.add_argument('--slim-tools', action='store_true',
-                     help='独立版口径：3rd/tools 剔除 6 个「大件进阶工具」'
+                     help='独立版口径 A：3rd/tools 剔除 6 个「大件进阶工具」'
                           '（srna-target / strawberry-perl / snpeff / jre-snpeff /'
                           ' snpgenie / datasets，约 275MB）——它们有现成插件包，'
                           '用户用到时经「插件管理」在线一键补齐或离线安装')
+_parser.add_argument('--minimal-tools', action='store_true',
+                     help='独立版口径 B（推荐，含 A 的全部剔除）：3rd/tools 只保留'
+                          '主流程最小集（质控/宿主去除/组装/鉴定/比对/建树/定量'
+                          '共识 = fastp, spades, blast, mafft, minimap2, samtools,'
+                          ' bcftools, salmon, fasttree, trimal + bin/ 小件），其余'
+                          '（rdp5 / table2asn / mmseqs / iQtree / raxml-ng / diamond'
+                          ' / pandepth / viral_consensus / lsd2 / dsrnamax 等）'
+                          '全部走插件按需装')
 _args, _ = _parser.parse_known_args()
 
 # --slim-tools 剔除清单 = 插件索引里带 install_to 的六件（它们的权威分发
@@ -113,6 +121,18 @@ try:
 except Exception:                                     # noqa: BLE001
     _SLIM_SKIP = {'srna-target', 'strawberry-perl', 'snpeff',
                   'jre-snpeff', 'snpgenie', 'datasets'}
+
+# --minimal-tools 保留集：⓪~⑩ 默认主流程 + kvsuite（定量/共识/变异）+
+# 建树默认链（mafft→trimal→fasttree）实际调用的工具目录名。
+# 2026-10-24 补全（用户裁定）：diamond/mmseqs（t-verify 候选序列验证 +
+# t-virchain ④段）与 datasets（/refdata NCBI datasets CLI）随包，让
+# 「数据资源」「病毒识别和分类分析」两组在独立版完全开箱即用。
+# 每一项被剔除的工具有一一对应的插件包（plugins-repo/index.json），
+# 缺失时模块运行前依赖自愈 / 「插件管理 → 一键补齐」自动恢复。
+# 主流程新增工具时同步这里（并在插件索引确认有对应包）。
+_MAINLINE_KEEP = {'Blast', 'FastTree', 'SPAdes-Windows', 'bcftools',
+                  'fastp', 'mafft-win', 'minimap2', 'salmon2', 'samtools',
+                  'trimAl', 'diamond', 'mmseqs', 'datasets'}
 
 # 控制台编码兜底：Windows 默认代码页是 GBK，脚本里若出现 GBK 编不出的字符
 # （实测 2026-09-10：'↳' U+21B3 让 print 抛 UnicodeEncodeError，打包跑到一半中断），
@@ -304,14 +324,32 @@ if not (_args.db_only or _args.source_only):
             dst = os.path.join(APP, *d.split('/'))
             _rmtree(dst)
             _ig = shutil.ignore_patterns('.git', '.github')
-            _slim = _args.slim_tools and d.endswith('tools')
-            if _slim:
+            _minimal = _args.minimal_tools and d.endswith('tools')
+            _slim = (not _minimal) and _args.slim_tools and d.endswith('tools')
+            if _minimal or _slim:
+                # ⚠️ ignore 回调对**每一层**目录都会触发：保留/剔除名单只能
+                # 在 tools 顶层比对目录名，深层（工具内部的文件/子目录）
+                # 必须放行——否则 kept 工具会被掏成空壳（2026-10-24 v9 实测：
+                # 10 个保留目录全部变空、selfcheck 反报 fastp/mafft 缺失）。
+                _root = os.path.abspath(d)
+                _skip_names = (_MAINLINE_KEEP if _minimal else _SLIM_SKIP)
+                _keep_mode = _minimal
                 _ig_base = _ig
-                _ig = lambda p, names: _ig_base(p, names) | {
-                    n for n in names if n in _SLIM_SKIP}    # noqa: E731
+
+                def _ig(p, names, _base=_ig_base, _root=_root,
+                        _names=_skip_names, _keep=_keep_mode):
+                    extra = set()
+                    if os.path.abspath(p) == _root:
+                        extra = ({n for n in names if n not in _names}
+                                 if _keep else
+                                 {n for n in names if n in _names})
+                    return _base(p, names) | extra
             shutil.copytree(d, dst, ignore=_ig)
-            if _slim:
-                print(f'  + {d}/（独立版口径：已剔除 '
+            if _minimal:
+                print(f'  + {d}/（独立版口径 B：只留主流程最小集 '
+                      f'{"、".join(sorted(_MAINLINE_KEEP))}——其余走插件按需装）')
+            elif _slim:
+                print(f'  + {d}/（独立版口径 A：已剔除 '
                       f'{"、".join(sorted(_SLIM_SKIP))}——走插件按需装，'
                       '程序减 ~275MB）')
             else:
@@ -817,7 +855,23 @@ if SPLIT and os.path.isdir(APP):
         '   - 内含 exe + webapp 前端 + bin/ tools/ 外部工具 + mcp_server.py',
         '     （MCP 控制台在 exe 内经 --mcp-stdio 进程内拉起，开箱可用）',
     ]
-    if _args.slim_tools:
+    if _args.minimal_tools:
+        _notes += [
+            '   - 独立版口径 B：只内置主流程最小集（质控 fastp / 宿主去除'
+            ' minibwa+blast /',
+            '     组装 spades / 鉴定 kunpeng / 比对 mafft+trimal / 建树'
+            ' fasttree / 定量',
+            '     共识 minimap2+samtools+bcftools+salmon / 候选验证 '
+            'diamond+mmseqs /',
+            '     datasets CLI + bin/ 小件）。重组分析(RDP5)、进化动力学'
+            '(iqtree/raxml/lsd2)、',
+            '     NCBI 提交(table2asn)、pandepth/viral_consensus/dsrnamax '
+            '等专项工具',
+            '     用到时到「设置 → 插件管理」一键在线补齐（国内镜像，逐包 '
+            'sha256',
+            '     校验），或离线导入插件 zip 包；模块运行前缺工具也会自动装。',
+        ]
+    elif _args.slim_tools:
         _notes += [
             '   - 独立版口径：tools/ 已剔除 6 个大件进阶工具'
             '（srna-target / strawberry-perl /',

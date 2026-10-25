@@ -267,8 +267,8 @@ VirusPlatform/
 
 | 档位 | 工具链 | 命令 |
 |---|---|---|
-| ① 平台独立版 | 20 个常用工具内置；6 个大件进阶工具（srna-target / strawberry-perl / snpeff / jre-snpeff / snpgenie / datasets）**走插件按需装**（设置 → 插件管理一键补齐，或离线导入 zip） | `python dev_tools/package.py --slim-tools --verify` |
-| ② 平台+数据库版 | 同 ① + 数据库包（`--with-built-virusdb` 额外带预建 kunpeng plant/ref 分类库，开箱即用） | `python dev_tools/package.py --slim-tools --with-db --with-built-virusdb --verify` |
+| ① 平台独立版 | **主流程 + 验证/数据获取全内置**（质控 fastp / 宿主去除 minibwa+blast / 组装 spades / 鉴定 kunpeng / 比对 mafft+trimal / 建树 fasttree / 定量共识 minimap2+samtools+bcftools+salmon / 候选验证 diamond+mmseqs / datasets CLI + bin 小件）——⓪~⑩ 与「数据资源」「病毒识别和分类分析」两组双击即跑零联网；**重组(RDP5)、进化动力学(iqtree/raxml/lsd2)、NCBI 提交(table2asn) 等专项工具走插件按需装**（一键补齐 / 模块自愈 / 离线 zip） | `python dev_tools/package.py --minimal-tools --verify` |
+| ② 平台+数据库版 | 同 ① + 数据库包（`--with-built-virusdb` 额外带预建 kunpeng plant/ref 分类库，开箱即用） | `python dev_tools/package.py --minimal-tools --with-db --with-built-virusdb --verify` |
 | ③ 完整版 | **26 个工具全量内置**（开箱即用）+ 数据库包 | `python dev_tools/package.py --with-db --with-built-virusdb --verify` |
 
 - 三档共用同一套 exe/_internal，只有 `3rd/tools` 内容不同——两档程序切换用 `--no-exe` 补拷即可，不必重跑 PyInstaller；

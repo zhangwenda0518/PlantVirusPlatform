@@ -3422,3 +3422,26 @@ run 名与日志；回退修复复跑 → 第二项 TimeoutException（=用户�
    frontend/build(25MB 生产构建) > webapp/static/virome(71MB 开发副本)，
    冻结版此前两份都带、71MB 那份永远读不到。spec._tree 排除 static/virome，
    package.py 继续拷 frontend/build（两种运行模式的实际服务源都不变）。
+
+### 2026-10-24 补③：独立版定稿「主流程最小集」（--minimal-tools）
+
+分层轴继续收紧：独立版不再保留 20 个工具，改为**只内置主流程最小集**——
+⓪质控(fastp) ⓪b宿主去除(minibwa+blast) ①组装(spades) ②鉴定(kunpeng)
+⑦比对(mafft+trimal) ⑧建树默认链(fasttree) + kvsuite 定量/共识/变异
+(minimap2/samtools/bcftools/salmon) + bin/ 小件（seqkit/sracha/crabz/aria2c/
+muscle）。⓪~⑩ 双击即跑零联网；rdp5 / table2asn / mmseqs / iQtree /
+raxml-ng / diamond / pandepth / viral_consensus / lsd2 / dsrnamax 等专项
+工具全部走插件按需装（均有现成插件包，缺失时模块自愈自动恢复）。
+
+保留集逐项依据：bcftools/salmon 为 kvsuite 真实依赖（known_virus_suite/
+kv_common/kv_variant、kv_stage 实测引用）；trimal 在 pipeline/phylo 主线。
+`--slim-tools`（口径 A，剔六件）保留兼容，`--minimal-tools`（口径 B）为
+独立版默认推荐；两者都给定时 B 覆盖 A。
+
+### 2026-10-24 补④：主流程保留集补 diamond/mmseqs/datasets（用户裁定）
+
+「病毒识别和分类分析」缺 t-verify（diamond+mmseqs）、「数据资源」缺
+/refdata datasets CLI——用户裁定这三件（合计 ~50MB）随独立版内置，
+两组升到全开箱。_MAINLINE_KEEP 同步；插件轴剩 RDP5CL / table2asn /
+iqtree3 / raxml-ng / lsd2 / pandepth / viral_consensus / dsRNAmax /
+srna-target / strawberry-perl / snpeff / jre-snpeff / snpgenie。
