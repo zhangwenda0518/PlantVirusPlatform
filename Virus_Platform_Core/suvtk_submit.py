@@ -194,28 +194,60 @@ def _suvtk_python():
     return sys.executable
 
 
-def _check_ready(log=None):
-    """环境自检：suvtk python 模块 / mmseqs / table2asn / BFVD。返回错误列表(空=OK)。"""
+_SUVTK_MOD_CACHE = {'ok': None}
+
+
+def suvtk_module_available():
+    """suvtk python 模块是否可用（features/comments 链共用；结果缓存）。
+
+    2026-10-25：suvtk 是开发机 editable 安装（带补丁）的私有模块，分发版
+    没有它——comments 阶段据此跳过（.cmt 是 table2asn 可选的 -w 输入，
+    缺失不影响 .sqn 生成）。
+    """
+    if _SUVTK_MOD_CACHE['ok'] is None:
+        try:
+            r = subprocess.run([_suvtk_python(), '-c', 'import suvtk'],
+                               capture_output=True, timeout=30)
+            _SUVTK_MOD_CACHE['ok'] = (r.returncode == 0)
+        except (OSError, subprocess.TimeoutExpired):
+            _SUVTK_MOD_CACHE['ok'] = False
+    return _SUVTK_MOD_CACHE['ok']
+
+
+def suvtk_chain_ready():
+    """BFVD 功能链（features）是否可用：suvtk 模块 + mmseqs + bfvd 库。
+    web/submit 据此自动回退平台自家 tbl（2026-10-25）。"""
+    mm = os.path.join(_MMSEQS_BIN, 'mmseqs.exe')
+    return (suvtk_module_available()
+            and (os.path.isfile(mm)
+                 or os.path.isfile(os.path.join(_MMSEQS_BIN, 'mmseqs')))
+            and os.path.isfile(os.path.join(suvtk_db_dir(), 'bfvd')))
+
+
+def _check_ready(log=None, use_features=True):
+    """环境自检。返回错误列表(空=OK)。
+
+    2026-10-25 分发口径：table2asn 是 .sqn 的硬依赖（两种 tbl 模式都要）；
+    suvtk 模块 / mmseqs / BFVD 库只服务 features(BFVD) 链——仅当
+    use_features=True 才检查。comments 阶段对 suvtk 模块单独容错（可跳过）。
+    """
     errs = []
-    suvtk_py = _suvtk_python()
-    try:
-        r = subprocess.run([suvtk_py, '-c', 'import suvtk'], capture_output=True,
-                           timeout=30)
-        if r.returncode != 0:
-            errs.append('suvtk 未安装（需 editable 安装并带补丁：'
-                        'pip install -e E:\\BandZip解压\\suvtk_db\\suvtk）')
+    log = _logger(log)
+    t2a = os.path.join(_T2A_BIN, 'table2asn.exe')
+    if not os.path.isfile(t2a):
+        errs.append(f'table2asn 缺失: {t2a}')
+    if use_features:
+        if not suvtk_module_available():
+            errs.append('suvtk 未安装（开发机需 editable 安装带补丁的 suvtk；'
+                        '分发版请改用平台自家 feature table，或让提交链自动回退）')
         else:
-            log = _logger(log)
-            log(f'  suvtk 解释器: {suvtk_py}')
-    except (OSError, subprocess.TimeoutExpired):
-        errs.append(f'suvtk 解释器不可用: {suvtk_py}')
-    if not os.path.isfile(os.path.join(_MMSEQS_BIN, 'mmseqs.exe')) and \
-            not os.path.isfile(os.path.join(_MMSEQS_BIN, 'mmseqs')):
-        errs.append(f'mmseqs 缺失: {_MMSEQS_BIN}')
-    if not os.path.isfile(os.path.join(_T2A_BIN, 'table2asn.exe')):
-        errs.append(f'table2asn 缺失: {_T2A_BIN}\\table2asn.exe')
-    if not os.path.isfile(os.path.join(suvtk_db_dir(), 'bfvd')):
-        errs.append(f'BFVD 库缺失: {suvtk_db_dir()}（需 bfvd 索引族）')
+            log(f'  suvtk 解释器: {_suvtk_python()}')
+        mm = os.path.join(_MMSEQS_BIN, 'mmseqs.exe')
+        if not os.path.isfile(mm) and                 not os.path.isfile(os.path.join(_MMSEQS_BIN, 'mmseqs')):
+            errs.append(f'mmseqs 缺失: {_MMSEQS_BIN}')
+        if not os.path.isfile(os.path.join(suvtk_db_dir(), 'bfvd')):
+            errs.append(f'BFVD 库缺失: {suvtk_db_dir()}（需 bfvd 索引族；'
+                        '或改用平台自家 feature table / 自动回退）')
     return errs
 
 
@@ -509,7 +541,7 @@ def build_sqn(run_dir, *, seq_fasta=None, rows=None, author=None,
     缺省为中性占位并在日志 WARN，提交前须由调用方传真实值覆盖）。
     """
     log = _logger(log)
-    errs = _check_ready(log)
+    errs = _check_ready(log, use_features=use_features)
     if errs:
         raise RuntimeError('环境未就绪:\n' + '\n'.join('- ' + e for e in errs))
 
@@ -625,6 +657,13 @@ def build_sqn(run_dir, *, seq_fasta=None, rows=None, author=None,
     cmt_p = cmt + '.cmt'
     if os.path.isfile(cmt_p) and os.path.getsize(cmt_p) > 0:
         log(f'  sqn.cmt 已存在，复用: {cmt_p}')
+    elif not suvtk_module_available():
+        # 2026-10-25：分发版无 suvtk 模块——comments 是 table2asn 可选的
+        # -w 输入，跳过只少 MIUVIG 结构化注释块，.sqn 照常生成；自备
+        # sqn.cmt 放项目目录后重新生成即复用（上方复用分支）。
+        log('  跳过 suvtk comments（suvtk 模块未装）——.sqn 不含 MIUVIG '
+            '结构化注释块；自备 sqn.cmt 后重新生成即可复用', 'WARN')
+        cmt_p = None
     else:
         _run_suvtk(['comments', '-t', tax_p, '-f', feat_miuvig, '-m', mv_p,
                     '-a', asm_p, '-o', cmt],
@@ -644,8 +683,10 @@ def build_sqn(run_dir, *, seq_fasta=None, rows=None, author=None,
     out_prefix = os.path.join(out_dir, 'sqn')
     rel = lambda p: os.path.relpath(p, out_dir)
     t2a_cmd = [t2a, '-i', rel(sub_fasta), '-o', 'sqn.sqn', '-t', rel(sbt_p),
-               '-f', rel(tbl), '-src-file', rel(src_p), '-w', rel(cmt_p),
+               '-f', rel(tbl), '-src-file', rel(src_p),
                '-j', '[gcode=1]', '-V', 'vb', '-a', 's']
+    if cmt_p:                            # comments 跳过时不含 -w（可选输入）
+        t2a_cmd += ['-w', rel(cmt_p)]
     log('  $ ' + ' '.join(t2a_cmd))
     from .utils import task_register_proc
     _p = subprocess.Popen(t2a_cmd, cwd=out_dir, stdout=subprocess.PIPE,

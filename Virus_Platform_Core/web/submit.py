@@ -409,6 +409,17 @@ def api_submit_table_sqn(name):
 
     # 4) 其余参数
     use_features = bool(body.get('use_features', True))
+    # 2026-10-25 分发口径：suvtk/BFVD 是开发机专属链（suvtk 模块 + mmseqs +
+    # bfvd 库），分发版默认没有——请求 BFVD 链但环境不满足时**自动回退**
+    # 平台自家 feature table（tbl 由平台 ORF 注释生成，.sqn 不含 MIUVIG
+    # 结构化注释块，其余照常）。用户自备 sqn.cmt 放项目目录即可补回。
+    if use_features and not ss.suvtk_chain_ready():
+        try:
+            store.generate_feature_tbl(name)
+        except Exception as e:                       # noqa: BLE001
+            abort(400, f'BFVD 功能链不可用（缺 suvtk 模块/mmseqs/bfvd 库），'
+                       f'且平台 feature table 生成失败: {e}')
+        use_features = False
     # .sqn 及中间文件生成到提交项目目录（submissions/<name>/），与④文件预览/
     # 编辑一致——用户编辑 .sbt/.src/.cmt 后可重新生成 .sqn 并复用编辑。
     out_dir = store.table_dir(name)
@@ -432,11 +443,15 @@ def api_submit_table_sqn(name):
         from Virus_Platform_Core.web.tasks import tm
 
         def job(log, prog, cancel):
-            # 阶段进度按 suvtk 链的日志关键字推进（build_sqn 不回调进度，
-            # 但每一步都会 log 出自己的起始行）。
-            marks = (('features', 0.10, 'suvtk features（BFVD 功能注释）'),
-                     ('comments', 0.62, 'suvtk comments（MIUVIG 注释）'),
-                     ('table2asn', 0.85, 'table2asn 生成 .sqn'))
+            # 阶段进度按日志关键字推进（build_sqn 不回调进度，但每一步都会
+            # log 起始行）。2026-10-25：按实际模式生成 marks——回退平台 tbl
+            # 时没有 suvtk features/comments 阶段，不能拿它们的名字骗进度。
+            if params.get('use_features'):
+                marks = (('features', 0.10, 'suvtk features（BFVD 功能注释）'),
+                         ('comments', 0.62, 'suvtk comments（MIUVIG 注释）'),
+                         ('table2asn', 0.85, 'table2asn 生成 .sqn'))
+            else:
+                marks = (('table2asn', 0.60, 'table2asn 生成 .sqn'),)
             state = {'p': 0.02}
 
             def stage_log(msg):

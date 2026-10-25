@@ -3523,3 +3523,24 @@ DB_TREES 升级为三元组（第三项=该树的 fnmatch ignore 清单）；陈
    faa 从此只是"重建源"——切引擎（mmseqs/blastp）或库损坏时才需要，
    届时自动从 RefSeq 下载。调用方仅用 engine/db 键，短路返回安全。
    DB 包轨迹：2.3G→1.6G→1.2G→536M→663M（dmnd 预置回填）。
+
+### 2026-10-25 补⑨：NCBI 提交链去 suvtk-db 依赖（用户裁定）
+
+问题：`build_sqn` 的 `_check_ready` 无条件要求 suvtk 模块 + mmseqs + BFVD
+库——连「平台自家 feature table」模式都被拦，分发版（无开发机 editable
+suvtk、无 bfvd 库）生成 .sqn 必失败。
+
+解耦三层：
+1. **自检按模式**：`_check_ready(use_features=)`——table2asn 是唯一硬依赖
+   （两种 tbl 模式都要）；suvtk 模块/mmseqs/BFVD 仅 features(BFVD) 链检查。
+   实测：模拟分发态下 use_features=False 零错误、True 精确报 2 项。
+2. **comments 可跳**：`suvtk comments` 产出的 .cmt 只是 table2asn 可选的
+   `-w` 输入——suvtk 模块不可用时跳过并 WARN，.sqn 照常生成（少 MIUVIG
+   结构化注释块）；用户自备 sqn.cmt 放项目目录后重新生成即走复用分支。
+3. **web 自动回退**：请求 BFVD 链但 `suvtk_chain_ready()` 为假时，自动切
+   平台自家 tbl（不存在则现场 `generate_feature_tbl(name)` 生成），异步
+   任务的进度 marks 也按实际模式生成（回退时不再显示 suvtk 阶段名）。
+   新增 `suvtk_module_available()`（带缓存）/ `suvtk_chain_ready()`。
+
+注意：改动在 suvtk_submit.py + web/submit.py（冻结在 PYZ）——必须重打
+exe 才进分发版（v18 已重打验证；_it_submit 集成测试通过）。
