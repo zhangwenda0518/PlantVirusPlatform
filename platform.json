@@ -36,7 +36,7 @@
   },
   "databases": {
     "host": "host-db\\112863_genomes_host_db",
-    "virus": "databases/kunpeng_db/virus_db"
+    "virus": "databases\\kunpeng_db\\virus_db"
   },
   "defaults": {
     "confidence": 0.0,

@@ -253,6 +253,16 @@ a = Analysis(
               # 平台是 Flask 网页 UI + pywebview(edgechromium/winforms)，
               # 零处 import Qt，显式排除两个绑定。
               'PyQt5', 'PyQt5_sip', 'PySide6', 'shiboken6', 'qtpy',
+              # 开发机重型 ML 栈（2026-10-25 发布硬化）：构建机装了
+              # torch/transformers/sklearn/opencv/dask（平台源码零 import，
+              # audit_deps 43 项全绿），PyInstaller 经 hooks-contrib 的
+              # sklearn.array_api_compat.torch 等边把它们卷进 _internal
+              # （实测 +600MB 且冻结自检 ⑥ 误报数百个可选依赖缺失）。
+              # 显式排除，保证构建可复现、体积稳定。
+              'torch', 'torchvision', 'torchaudio', 'transformers',
+              'sklearn', 'cv2', 'dask', 'distributed', 'timm',
+              'sentence_transformers', 'umap', 'regex', 'safetensors',
+              'tokenizers',
               # 开发/测试依赖（requirements-dev.txt）：真浏览器探针用，
               # 平台本体从不 import。显式排除，防止本机装了之后被动入包。
               'playwright',

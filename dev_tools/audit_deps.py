@@ -149,7 +149,12 @@ def iter_py_files():
             # 引用；里面 fill_species_gaps.py 还用着已移除的 polars，扫到会
             # 让自检误报"必需依赖未装 polars"（2026-10-20）。
             'archive_202610',
-            'archive'}
+            'archive',
+            # 冻结分发：_internal 是 PyInstaller 解包出来的 .py/.pyc 副本，
+            # 扫它会把第三方包内部的可选依赖全算成"平台必需依赖"（2026-10-25
+            # 实测：torch/transformers 被卷进产物后误报数百项）。自检 ⑥
+            # 在冻结态应走"不适用"分支。
+            '_internal'}
     for cur, dirs, files in os.walk(ROOT):
         dirs[:] = [d for d in dirs if d not in skip and not d.startswith('.')]
         for fn in files:

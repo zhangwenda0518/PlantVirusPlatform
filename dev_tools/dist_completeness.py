@@ -17,6 +17,8 @@
   python dev_tools/dist_completeness.py
   python dev_tools/dist_completeness.py --pair 3rd/tools=3rd/tools
   python dev_tools/dist_completeness.py --app dist/VirusPlatform
+  python dev_tools/dist_completeness.py --app <PVAP>/VirusPlatform --minimal-tools
+                                   # 独立版口径（3rd/tools 只含主流程集）
 """
 import argparse
 import os
@@ -50,7 +52,34 @@ PAIR_IGNORE = {
     # 源码侧有人手动跑过工具会留下 pita_out.log 这类文件，比对时忽略）
     '3rd/tools': {'*.log'},
     'databases/mirna_lib': {'__pycache__'},
+    # OpenVirome SPA：spec._tree 主动排除 static/virome（71MB 开发副本，
+    # 冻结版实际服务 3rd/open-virome/frontend/build）——比对同口径忽略。
+    'webapp': {'virome'},
 }
+
+# 档位口径（与 package.py 的 --minimal-tools/--slim-tools 同源；改清单时
+# 两处必须同步）：--minimal-tools 只保留主流程集；--slim-tools 剔除六件。
+_MAINLINE_KEEP = {'Blast', 'FastTree', 'SPAdes-Windows', 'bcftools',
+                  'fastp', 'mafft-win', 'minimap2', 'salmon2', 'samtools',
+                  'trimAl', 'diamond', 'mmseqs', 'datasets'}
+_SLIM_SKIP = {'srna-target', 'strawberry-perl', 'snpeff', 'jre-snpeff',
+              'snpgenie', 'datasets'}
+
+
+def _tier_filter(rels_set, mode):
+    """按档位过滤 3rd/tools 的源码侧文件集（只看顶层工具目录名）。"""
+    if not mode:
+        return rels_set
+    keep = mode == 'minimal'
+    out = set()
+    for r in rels_set:
+        top = r.split('/')[0]
+        if keep:
+            if top in _MAINLINE_KEEP:
+                out.add(r)
+        elif top not in _SLIM_SKIP:
+            out.add(r)
+    return out
 
 # 开发期手工备份（webapp 下 20+ 个 *.bak_*）从不进分发版：spec._tree 与
 # 本工具的源码侧遍历都跳过，避免"缺件"误报。
@@ -86,6 +115,10 @@ def main(argv=None):
                     metavar='SRC=DST', help='追加/覆盖比对项（可重复）')
     ap.add_argument('--max-list', type=int, default=12,
                     help='每项最多列出的缺件数')
+    ap.add_argument('--minimal-tools', action='store_true',
+                    help='按独立版口径比对（3rd/tools 只应含主流程集）')
+    ap.add_argument('--slim-tools', action='store_true',
+                    help='按口径 A 比对（3rd/tools 剔除六件大工具）')
     a = ap.parse_args(argv)
 
     try:
@@ -113,6 +146,10 @@ def main(argv=None):
             missing_total += 1
             continue
         A, B = rels(src, extra_ignore=PAIR_IGNORE.get(src_rel, ())), rels(dst)
+        if src_rel == '3rd/tools':
+            A = _tier_filter(
+                A, 'minimal' if a.minimal_tools else
+                ('slim' if a.slim_tools else None))
         miss = sorted(A - B)
         extra = sorted(B - A)
         status = '✔ 无缺件' if not miss else f'✘ 缺 {len(miss)} 个'

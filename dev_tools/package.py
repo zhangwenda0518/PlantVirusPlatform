@@ -1050,6 +1050,20 @@ if _args.verify:
         if r.returncode == 0 and os.path.isdir(_tax_dir):
             _rmtree(_tax_dir)
             print('  （验证用 taxonomy 解压态已清理，分发包内只保留 tar.gz）')
+        # 发布门禁（2026-10-25）：开发机重型 ML 栈（torch/transformers/
+        # sklearn/opencv/dask）曾被 PyInstaller 经 hooks-contrib 顺带卷进
+        # _internal（+600MB，冻结自检 ⑥ 误报数百项）。spec 已 excludes，
+        # 这里再兜底断言一次——构建环境漂移时直接让 --verify 失败。
+        _heavy = ('torch', 'transformers', 'sklearn', 'cv2', 'dask')
+        _internal = os.path.join(APP, '_internal')
+        _leak = [d for d in _heavy
+                 if os.path.isdir(os.path.join(_internal, d))]
+        if _leak:
+            _verify_bad.append(
+                f'产物体积污染：_internal 含 {", ".join(_leak)}'
+                '（spec excludes 失效？）')
+        else:
+            print('  ✔ 产物体积门禁：无重型 ML 栈残留')
     if _verify_bad:
         sys.exit(1)
 print('\n完成。')

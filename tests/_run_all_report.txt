@@ -1,7 +1,205 @@
-批量测试汇总: 1/1 通过，总耗时 22.2s
+批量测试汇总: 100/100 通过，总耗时 1449.1s（--quick 模式）
 
 ======================================================================
-[PASS] tests/_it_align.py  (22.2s)
+[PASS] tests/_it_platform.py  (5.2s)
+----------------------------------------------------------------------
+  ok zip 来源的输入框已摘除（2026-09-18 explorer 不再导出 zip）
+  ok /api/phylodyn/import_export_zip 已摘除（HTTP 404，应为 404）
+  ok 10 张归档卡的前端标记已消失（残留: 无）
+  ok TOOL_REGISTRY 注册了 phylodyn
+  ok 归档工具已从注册表摘除: pdrand
+  ok 归档工具已从注册表摘除: pdrrt
+  ok 归档工具已从注册表摘除: pdtempmig
+  ok 归档工具已从注册表摘除: pdbsp
+  ok 归档工具已从注册表摘除: pdrspp
+  ok 归档工具已从注册表摘除: pdtreetime
+  ok 归档工具已从注册表摘除: pdltt
+  ok 归档工具已从注册表摘除: pdmjrm
+  ok 归档工具已从注册表摘除: pdrename
+  ok 归档工具已从注册表摘除: pdgroup
+  ok 保留工具仍在注册表: pdprep
+  ok 已并入数据准备的卡已摘除: pdspacetime
+  ok 已并入数据准备的卡已摘除: pdsub
+  ok 两张已合并卡的前端标记已消失（残留: 无）
+  ok LIGHT_TOOLS 里没有已下线的工具（实际 ['beastexport', 'convert', 'genoplot', 'mirna', 'primer']）
+  ok 8 张归档卡的 i18n 孤儿键已清（残留: 无）
+  ok 已下线卡的死函数已清（残留: 无）
+  ok geo_subsampler.py 已删（与 kit.subsample_fasta 同口径的重复实现，2026-09-18 收敛）
+  ok import_from_zip 已删（zip 来源 2026-09-18 整条下线）
+PLATFORM CHECKS PASSED
+
+======================================================================
+[PASS] tests/_it_dsrna.py  (2.9s)
+----------------------------------------------------------------------
+  [log] QC arm_1: 扩增子 219 bp · 效价中位 78.8 · 窗内占比 1.0 · 面板 0mm 命中 0
+  臂=目标子串 OK（300 nt）· 引物 3 对 · 扩增子 QC 窗内占比 1.0
+== 8) isolates 覆盖度分支（修复：日志行 TypeError）==
+  [log] dsRNAmax 1.1.15 · D:\桌面\植物病毒分析平台\3rd\tools\dsrnamax\dsRNAmax_det.exe · 支持 -seed（可复现）
+  [log] 目标 2 条，总 1,800 nt
+  [log] 内存守卫：去重 21-mer 1,760 · 预计峰值 ≈0.5 GB / 预算 22.0 GB
+  [prog select 0.05] 开始选窗
+  [prog select 0.35] 选窗 1/1 · 候选 1/1
+  [prog score 0.62] siRNA 效价评分
+  [log] 未启用面板脱靶扫描：未勾选任何脱靶面板——按选择跳过脱靶扫描与安全评分
+  [log] arm_1: best window nt 2-280 · combined 87.8 · 效价 74.8（无脱靶数据，纯效价选窗）
+  [prog primer 0.75] Primer3 设计 T7 引物（限定最优窗）
+  [prog qc 0.88] 成品扩增子 QC（对真实交付分子重打分）
+  [prog qc 0.92] 分离株覆盖度
+  [log] ⚠ arm_1：对分离株池最低 21-mer 覆盖仅 0%，存在逃逸风险
+  [log] ⚠ arm_1_p1：对分离株池最低 21-mer 覆盖仅 0%，存在逃逸风险
+  [log] ⚠ arm_1_p2：对分离株池最低 21-mer 覆盖仅 0%，存在逃逸风险
+  [log] ⚠ arm_1_p3：对分离株池最低 21-mer 覆盖仅 0%，存在逃逸风险
+  [log] QC arm_1: 扩增子 241 bp · 效价中位 74.3 · 窗内占比 1.0
+  isolates 覆盖度结构 OK · 臂源分离株 ['t2'] · overall=1 · panel='' 跳过扫描 OK
+== 9) result.csv 中选臂 + max_mm=0 语义 ==
+  result.csv 含中选臂序列 OK
+  max_mm=0：11 个跨突变窗口=None · 869 个精确窗=0 · mm1 计数 0 OK
+DSRNA_IT_OK
+
+======================================================================
+[PASS] tests/_check_enc_utils.py  (0.1s)
+----------------------------------------------------------------------
+ok str 输入原样返回
+  ok GBK 字节按 GBK 解
+  ok UTF-8 字节按 UTF-8 解
+  ok 不可解字节退 replace
+  ok 纯 GBK 文件被转写
+  ok 转写后内容逐字符一致
+  ok 已是 UTF-8 的文件幂等跳过
+  ok 纯 ASCII 不改写
+  ok 纯 ASCII 字节级不变
+  ok 混编码文件被逐行规范化
+  ok UTF-8 行与 GBK 行均无损保留
+  ok 缺失文件静默 False
+ENC UTILS CHECKS PASSED
+
+======================================================================
+[PASS] tests/_it_msa.py  (0.8s)
+----------------------------------------------------------------------
+ok 变异列 = [5, 6, 11, 12, 17, 18]
+  ok 计数正确
+  ok s1 SNP 行 = 'ACACAC'
+  ok s3 SNP 行 = 'GTGT--'
+  ok 共识 = ['A', 'C', 'G', 'C', 'A', 'C']
+  ok 位点5 多样性 = 0.5
+  ok 位点6 多样性 = 0.25
+  ok 单序列正确抛错
+  ok /api/msa/samples 200
+  ok 样品列表含 itmsa
+  ok /api/msa/data 200
+  ok API 数据正确
+  ok 不存在的组返回 4xx
+  ok 路径注入返回 400
+MSA VIEW TESTS PASSED
+
+======================================================================
+[PASS] tests/_it_concurrency.py  (8.2s)
+----------------------------------------------------------------------
+  OK   存在排队任务（1 个）
+  OK   排队任务对外 status=running（前端取消按钮可用）
+  OK   排队任务 msg 含排队提示: '排队中 · 等待空闲名额'
+
+[2] 排队中取消
+  OK   cancel() 对排队任务返回 True
+  OK   排队任务状态 -> cancelled（实际 cancelled）
+
+[3] 所有任务最终都能完成（名额正确归还，无死锁）
+  OK   完成任务数 4 == 预期 4
+
+[4] light 闸门（上限 4）与 heavy 独立
+  OK   light 并发峰值 4 <= 4
+
+[5] list_all 日志瘦身
+  OK   运行中任务日志 30 行 <= 30
+  OK   任务已完成
+  OK   终态任务日志 5 行 <= 5
+
+[6] _trim_memory 回收
+  OK   order 长度 14 <= 300
+
+==============================================
+ALL PASS
+
+======================================================================
+[PASS] tests/_smoke_phylo.py  (7.8s)
+----------------------------------------------------------------------
+tools: {'mafft': 'D:\\桌面\\植物病毒分析平台\\3rd\\tools\\mafft-win\\mafft.bat', 'trimal': 'D:\\桌面\\植物病毒分析平台\\3rd\\tools\\trimAl\\trimal.exe', 'gblocks': None, 'fasttree': 'D:\\桌面\\植物病毒分析平台\\3rd\\tools\\FastTree\\FastTree.exe', 'raxml-ng': 'D:\\桌面\\植物病毒分析平台\\3rd\\tools\\raxml-ng\\raxml-ng.exe'}
+MAFFT OK, first seq line length: 60
+trimAl: {'applied': True, 'cols_before': 1644, 'cols_after': 1476} -> aln.trim.fasta
+FastTree OK: (variant_3:4.07983,(variant_1:0.78466,variant_4:0.62338)1.000:4.41926,(WT_ref:0. ...
+RAxML-NG OK: ((((variant_4:0.000001,variant_1:0.031158)100:0.184182,WT_ref:0.143229)39:0.0000 ...
+raxml log parse: {'model': 'GTR+FU+G4m', 'logl': -3092.451925}
+3-taxon negative control OK（按预期失败）: 命令失败 (退出码 1): D:\桌面\植物病毒分析平台\3rd\tools\raxml-ng\raxml-ng.exe --all --m
+all-N negative control OK（按预期失败）: 命令失败 (退出码 1536): D:\桌面\植物病毒分析平台\3rd\tools\raxml-ng\raxml-ng.exe --all 
+降级目标 FastTree 对全 N 比对可用: (n1:0.0,n2:0.0,n3:0.0,n4:0.0);
+ ...
+thread cap OK: 19 -> 8 | 2 -> 2
+ALL SMOKE TESTS PASSED
+
+======================================================================
+[PASS] tests/_it_phylo.py  (0.2s)
+----------------------------------------------------------------------
+TMV seed: 6395 bp
+extra refs: ['D:\\桌面\\植物病毒分析平台\\run\\ncbi_refs\\_smoke_tmv\\refs.fa']
+group: unknown | n_refs: 3 | trim: {'applied': True, 'cols_before': 8532, 'cols_after': 4798} | tree: tree.nwk
+combined IDs: ['ctg1', 'ctg2', 'NC_001367', 'NC_002692', 'NC_009497']
+  （合成 fixture：跳过 trimAl 回退断言）
+INTEGRATION TEST PASSED
+
+======================================================================
+[PASS] tests/_it_extract.py  (4.4s)
+----------------------------------------------------------------------
+--- 1. ICTV 每属/每种抽样 ---
+  ok 每属≤5 收窄：101 → 64
+  ok 预览标注抽样口径
+  ok 加每种≤1 进一步收窄：64 → 62
+  ok Potyviridae 每属≤5：290 → 42（max/属 5）
+--- 2. CDS/PEP 提取（PhyloSuite 布局）---
+  ok 示例集合导入
+  ok 提取任务启动
+  ok 提取完成: 
+  ok 3 基因组 × 6 CDS（3/18/18）
+  ok 6 个基因分目录（6）
+  ok extract/genome.fa
+  ok extract/CDS.fa
+  ok extract/PEP.fa
+  ok extract/genes.tsv
+  ok extract/CDS/ 按基因 6 个文件（6）
+  ok extract/PEP/ 按基因 6 个文件（6）
+  ok 按基因文件含 3 个基因组的同源序列（3）
+  ok genes.tsv 6 基因 + 表头（7 行）
+EXTRACT + SAMPLING TESTS PASSED
+
+======================================================================
+[PASS] tests/_it_submit.py  (1.7s)
+----------------------------------------------------------------------
+  ok 产物存在: report
+  ok 打包 13 个文件
+  ok zip 内容含产物: ['assembly.tsv', 'biosample_template.tsv', 'fasta_export_report.json', 'miuvig.tsv', 'report.html', 'sequences.fsa']
+  ok 中枢表不进包
+  ok BioSample 表头: ['sample_name', 'organism', 'collection_date', 'geo_loc_name', 'host', 'isolate', 'isolation_source', 'tissue_type', 'collected_by', 'bioproject']
+  ok BioSample 行数 4, 跳过 1
+  ok /validate 200
+  ok /fasta 导出成功
+  ok FASTA 路径穿越被拒
+  ok import_run 运行名注入被拒
+  ok /contig_runs 200
+  ok copy_table 另存为成功
+  ok 副本内容与源一致
+  ok write_file 预览编辑保存
+  ok write_file 拒绝 .sqn/中枢表/穿越/zip
+  ok BioSample 占位符选项: strict=4+1跳, include=5+0跳
+  ok /copy 200
+  ok /copy 重名被拒
+  ok /create sample=public 200
+  ok public 样例载入 5 行
+  ok /file_save 200
+  ok /file_save .sqn 被拒
+  ok /samples 200
+SUBMIT INTEGRATION TESTS PASSED
+
+======================================================================
+[PASS] tests/_it_align.py  (18.7s)
 ----------------------------------------------------------------------
   ok aln.fasta 落盘
   ok aln.trim.fasta 落盘（automated1）
@@ -27,3 +225,2009 @@
   ok PEP 无关键词被拒: 基因级建树需提供基因/产物关键词（如 coat protein）
   ok 无命中基因报错清晰: 基因 "nonexistent_gene_xyz" 在集合 [it_align_coll] 中命中 0 条记录（需 ≥2 才能建树；换关键词或用全基因组模式）
 ALIGN MODULE INTEGRATION TESTS PASSED
+
+======================================================================
+[PASS] tests/_it_compare.py  (85.6s)
+----------------------------------------------------------------------
+  ok identity.json 可预览
+  ok identity.json n = 6
+--- 5. 快速建树 / 树文件 ---
+  ok NJ 树文件 = nj.nwk
+  ok /api/tool/quicktree_data 返回 Newick
+  ok FastTree 树文件 = tree.nwk
+  ok 树摘要 tool = FastTree
+  ok /api/tree/file 读内置示例树
+  ok 路径穿越被拒
+--- 6. NCBI 在线（可跳过） ---
+  ok Entrez 检索命中 1063 条（预览 10）
+--- 7. GenBank 集合示例（离线全流程） ---
+  ok /api/gb/import 启动: {'task': '08d91c255b88'}
+  ok 导入完成
+  ok 集合列表含 it_compare_coll（3 条记录）
+  ok /api/gb/phylo 启动
+  ok 集合建树完成: 
+  ok 结果中心出现 gb: 伪样品
+  ok 伪样品分组含树文件
+  ok /api/tree/data (gb:) 返回 Newick
+  ok /api/sdt/data (gb:) 200
+COMPARE GROUP INTEGRATION TESTS PASSED
+findfont: Failed to find font weight bold, now using 400.
+findfont: Failed to find font weight bold, now using 400.
+
+======================================================================
+[PASS] tests/_it_synteny.py  (4.9s)
+----------------------------------------------------------------------
+  ok 集合标记 has_phylo = True
+  ok 列表接口携带持久化警告
+  ok 伪样品标签 = 🧬 it_synteny（集合）
+  ok 伪样品分组含树文件列表
+  ok /api/msa/data (gb:) 200
+  ok /api/tree/data (gb:) 返回 Newick
+  ok 树摘要工具 = FastTree
+  ok /api/sdt/data 200
+  ok SDT 矩阵对角线 = 100
+  ok 矩阵对称
+  ok /api/gb/inspect 启动
+  ok 非法 tree_tool 返回 400
+  ok /api/tool/msa_data 返回 SNP 展示数据
+  ok msa_data 运行名注入被拒
+  ok /api/tree/file 读取平台内树文件
+  ok 非树扩展名返回 400
+  ok 路径穿越/非树文件被拒
+  ok 缺省 → 主病毒库
+  ok 内置键名 refvirus → refvirus_db
+  ok 平台相对路径解析
+  ok 未知病毒库被拒: 400 {'error': '病毒库不存在: no_such_db（可用内置库: virus, refvirus, k2viral 或填库目录路径）'}
+  ok 就绪库接受（k2viral 未就绪时 400，就绪时 200 启动任务）
+  ok 测试工作目录已清理（不污染样品列表）
+SYNTENY INTEGRATION TESTS PASSED
+
+======================================================================
+[PASS] tests/_it_dl_delete.py  (0.8s)
+----------------------------------------------------------------------
+--- ① delete_files ---
+  ok delete_files 返回 True
+  ok 目录只剩记录+日志: ['batch.json', 'batch.log']
+  ok 记录保留，文件条目标记 deleted
+  ok 日志写入删除记录
+  ok 列表仍显示该批次
+--- ② delete_record ---
+  ok delete_record 返回 True
+  ok batch.json/batch.log 已删
+  ok 数据文件保留: ['a_R1.fastq.gz', 'a_R2.fastq.gz', 'extra.txt']
+  ok 内存记录移除
+  ok 列表不再显示
+--- ③ delete（全删）---
+  ok delete 返回 True
+  ok 目录整体移除
+  ok 记录移除
+--- ④ API ---
+  ok API delete_files 生效
+  ok API delete_record 生效
+  ok 记录已不存在 → 400
+  ok 无效动作 400
+DL DELETE MODES TESTS PASSED
+
+======================================================================
+[PASS] tests/_it_dl_progress.py  (9.7s)
+----------------------------------------------------------------------
+  [PASS] （10）空批次两种模式都安全
+
+== 解析阶段落盘节流 ==
+  [PASS] （11）全部条目都解析进内存（节流不丢数据）  files=60 runs=60
+  [PASS] （11）解析完成后转入 downloading  status=downloading
+  [PASS] （11）落盘次数从每条约一次降到 ≤8 次  _save 调用 5 次（旧实现会是 ~60 次）
+  [PASS] （11）收尾一定落盘（磁盘上能读回完整批次）
+  [PASS] （11）磁盘批次与内存条目数一致  disk=60 mem=60
+
+== 接口面 ==
+  [PASS] 既有下载路由仍在 /api/dl/create
+  [PASS] 既有下载路由仍在 /api/dl/batches
+  [PASS] 既有下载路由仍在 /api/dl/batch/<bid>
+  [PASS] 既有下载路由仍在 /api/dl/batch/<bid>/<action>
+  [PASS] 既有下载路由仍在 /api/dl/to_pipeline
+  [PASS] retry_convert 复用既有 action 路由（未新增路由）
+
+== 路由层：interrupted 批次续传 ==
+  [PASS] POST retry 对 interrupted 批次受理续传  status=200 {'ok': True, 'retried': 1}
+  [PASS] 续传后批次状态回到 downloading
+  [PASS] 续传确实启动了下载 worker  ['it_resume_route_test']
+  [PASS] 续传清零残留 done_bytes
+
+ALL PASS
+
+======================================================================
+[PASS] tests/_it_tool_convert.py  (0.7s)
+----------------------------------------------------------------------
+== 单端 .sra（sracha 写无下划线名，历史 bug 现场）==
+  [PASS] 单端 fastq：识别产物  n=1 files=['SRR39909446.fastq.gz']
+  [PASS] 单端 fastq：文件名正确  ['SRR39909446.fastq.gz']
+
+== 双端 .sra（split-3 命名，不能被改坏）==
+  [PASS] 双端 fastq：识别产物  n=2 files=['SRR39909446_1.fastq.gz', 'SRR39909446_2.fastq.gz']
+  [PASS] 双端 fastq：文件名正确  ['SRR39909446_1.fastq.gz', 'SRR39909446_2.fastq.gz']
+
+== FASTA 目标（--fasta，输出 .fasta.gz）==
+  [PASS] 单端 fasta：识别产物  n=1 files=['SRR39909446.fasta.gz']
+  [PASS] 单端 fasta：文件名正确  ['SRR39909446.fasta.gz']
+
+== 真无输出时仍须报错（防止判定被放得过宽）==
+  [PASS] 无产物时抛 sracha 无输出  sracha 无输出
+
+== --fasta 标志只在 fasta 目标出现 ==
+  [PASS] fasta 目标带 --fasta  ['sracha.exe', 'fastq', 'C:\\Users\\17711\\AppData\\Local\\Temp\\vp_toolconv_sqkwrg7y\\SRR39909446.sra', '-O', 'C:\\Users\\17711\\AppData\\Local\\Temp\\vp_toolconv_sqkwrg7y', '-t', '4', '-f', '-q', '--fasta']
+
+全部通过
+
+======================================================================
+[PASS] tests/_it_dl_http_fallback.py  (0.7s)
+----------------------------------------------------------------------
+  [PASS] （3）返回成功
+  [PASS] （3）直接改名到位且内容完整
+
+== 4) 精确总量（expect_bytes）优先 ==
+  [PASS] （4）size 未被 content-length 覆盖（仍是 999）  999
+  [PASS] （4）文件仍然完整
+  [PASS] （4）无精确值时用 content-length 填 size  1048576
+
+== 5) 404 失败 ==
+  [PASS] （5）返回失败
+  [PASS] （5）error 可读  HTTP 下载失败: HTTP Error 404: nope
+  [PASS] （5）失败时不留下成品文件（只有 .aria_part）
+
+== 6) gzip 完整性检查 ==
+  [PASS] （6）假 gzip 被判损坏
+  [PASS] （6）真 gzip 通过
+
+== 7) 完整性闸门 ==
+  [PASS] （7）字节数不一致 → failed  status=failed error='字节数不一致（期望 100, 实际 10）'
+  [PASS] （7）无精确值且偏差过大 → failed  status=failed error='字节数偏差过大（约 10485760, 实际 10）'
+  [PASS] （7）gzip 损坏 → failed  status=failed error='gzip 文件损坏（魔数/抽样解压失败）'
+  [PASS] （7）正常文件 → done 且 verified  status=done verified=True
+
+ALL PASS
+
+======================================================================
+[PASS] tests/_it_dl_recovery.py  (0.2s)
+----------------------------------------------------------------------
+  [PASS] （2）没有 batch.json 的目录被跳过
+
+== 3) 每个载入的批次都要能被安全快照 ==
+  [PASS] （3）snapshot() 对全部载入批次都不抛异常  []
+  [PASS] （3）list_snapshots() 不抛异常  返回 5 / 载入 5
+
+== 4) 重启中断语义 ==
+  [PASS] （4）running 批次被标记为 interrupted  interrupted
+  [PASS] （4）downloading/pending/verifying 条目退回 pending  {'D1': 'pending', 'D2': 'pending', 'D3': 'pending', 'D4': 'done', 'D5': 'failed'}
+  [PASS] （4）已完成 / 已失败条目不受影响  {'D1': 'pending', 'D2': 'pending', 'D3': 'pending', 'D4': 'done', 'D5': 'failed'}
+  [PASS] （4）正常批次的状态不被改写  completed
+
+== 5) 二次构造幂等 ==
+  [PASS] （5）再次构造得到同一批批次  []
+
+== 6) cancel() 不得改写终态批次 ==
+  [PASS] （6）已完成批次：cancel() 返回 False（没什么可停的）  返回 False
+  [PASS] （6）已完成批次的状态仍是 completed（没被改写成已取消）  completed
+  [PASS] （6）已完成批次的条目仍是 done（进度没被抹掉）  ['done']
+  [PASS] （6）可续传（interrupted）批次不被误取消，续传出路还在  interrupted
+  [PASS] （6）不存在的批次返回 False
+  [PASS] （6）在跑的批次照旧能被取消（守卫没有过宽）  cancelled
+
+ALL PASS
+
+======================================================================
+[PASS] tests/_it_dl_to_pipeline.py  (1.0s)
+----------------------------------------------------------------------
+  [PASS] （2）双端样品 r1/r2 成对写入  r1=D:\桌面\植物病毒分析平台\run\_it_dl_to_pipeline\downloads\itpipe_batch\PAIR1_1.fastq.gz r2=D:\桌面\植物病毒分析平台\run\_it_dl_to_pipeline\downloads\itpipe_batch\PAIR1_2.fastq.gz
+  [PASS] （2）单端样品只写 r1  r1=D:\桌面\植物病毒分析平台\run\_it_dl_to_pipeline\downloads\itpipe_batch\SINGLE1.fastq.gz r2=None
+  [PASS] （2）input.json 结构完整（sample/r1/r2/project）  ['project', 'r1', 'r2', 'sample']
+
+== 3) 跳过的条目不留下空样品目录 ==
+  [PASS] （3）只有 _2 的条目不留空样品目录（空目录会被当成坏样品）  exists=False empty=False
+  [PASS] （3）失败/未完成条目也不建目录
+  [PASS] （3）已存在样品的内容未被清空
+
+== 4) runs 过滤 ==
+  [PASS] （4）只转指定条目（PAIR1 已存在 → 跳过）  created=[] skipped=['SINGLE1']
+
+== 5) 无可用文件 → 400 ==
+  [PASS] （5）指定不可用条目时 400  status=400 {'error': '该批次没有可用的 FASTQ 文件（可能仍在下载或需要 .sra 转换）'}
+  [PASS] （5）批次不存在时 400  status=400
+  [PASS] （5）非法批次名被拒  status=400
+
+== 6) enqueue 入队 ==
+  [PASS] （6）enqueue 时返回 queued 数量  created=['PAIR1', 'SINGLE1'] queued=2
+  [PASS] （6）队列收到新建样品（含 project）  {'samples': ['PAIR1', 'SINGLE1'], 'project': 'projX'}
+  [PASS] （6）不 enqueue 时不入队  0
+  [PASS] （7）真实 run/tasks/queue.json 未被测试写入  D:\桌面\植物病毒分析平台\run\tasks\queue.json
+
+ALL PASS
+
+======================================================================
+[PASS] tests/_it_dl_convert_cancel.py  (4.7s)
+----------------------------------------------------------------------
+== 1) 解码过程中点「停止」==
+  [PASS] （1）cancel() 被受理（批次已置 cancelled）  cancelled
+  [PASS] （1）收尾结束后状态**仍是 cancelled**（不被覆写成 completed）  status=cancelled
+  [PASS] （1）剩余的 .sra 不再继续解码（循环提前退出）  已解码 0/3 个: []
+  [PASS] （1）正在跑的解码子进程被终止  killed=1
+  [PASS] （1）取消不误报为「转换失败」  convert_failed=0
+  [PASS] （1）convert_msg 说明是被取消  已取消（未完成的 .sra 可点「重试转换」）
+
+== 2) 不取消时照旧全部解码 ==
+  [PASS] （2）状态为 completed  status=completed
+  [PASS] （2）两个 .sra 都被解码  ['SRR900', 'SRR901']
+  [PASS] （2）.sra 源文件已清理
+  [PASS] （2）条目已替换为 FASTQ（ready_files 可用）  {'SRR900': ['single'], 'SRR901': ['single']}
+  [PASS] （2）没有进程被误杀  killed=0
+    （耗时 2.4s）
+
+== 3) 取消发生在两个文件之间 ==
+  [PASS] （3）状态保持 cancelled  status=cancelled
+  [PASS] （3）第三个 .sra 没有被解码  ['SRR900']
+  [PASS] （3）已解出的 FASTQ 保留（不丢已完成的成果）  ['SRR900']
+
+ALL PASS
+
+======================================================================
+[PASS] tests/_it_bg_tasks.py  (13.7s)
+----------------------------------------------------------------------
+== 接口面 ==
+  [PASS] 既有路由仍在 /api/submit/table/<name>/sqn
+  [PASS] 既有路由仍在 /api/submit/table/<name>/sqn_status
+  [PASS] 既有路由仍在 /api/submit/table/<name>/taxonomy_check
+  [PASS] 既有路由仍在 /api/cds/export
+  [PASS] 既有路由仍在 /api/meta/ai_summary
+  [PASS] 既有路由仍在 /api/tool/report
+  [PASS] 既有路由仍在 /api/tool/report_data
+  [PASS] 既有路由仍在 /api/seqview
+  [PASS] 既有路由仍在 /api/align/file
+  [PASS] 既有路由仍在 /api/align/save
+  [PASS] 后台任务化未新增任何路由
+
+ALL PASS
+C:\Python312\Lib\site-packages\Bio\GenBank\Scanner.py:1393: BiopythonParserWarning: Truncated LOCUS line found - is this correct?
+:'LOCUS       IT1                       60 bp    RNA     linear\n'
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\__init__.py:840: BiopythonParserWarning: Expected sequence length 60, found 21 (IT1).
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\Scanner.py:1393: BiopythonParserWarning: Truncated LOCUS line found - is this correct?
+:'LOCUS       IT1                       60 bp    RNA     linear\n'
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\__init__.py:840: BiopythonParserWarning: Expected sequence length 60, found 21 (IT1).
+  warnings.warn(
+
+======================================================================
+[PASS] tests/_it_taskcenter_ext.py  (1.1s)
+----------------------------------------------------------------------
+    tm.tasks[t1]['provider'] = lambda: (_ for _ in ()).throw(RuntimeError('x'))
+RuntimeError: x
+外部任务状态读取失败 b869378a5a5e
+Traceback (most recent call last):
+  File "D:\桌面\植物病毒分析平台\Virus_Platform_Core\web\tasks.py", line 479, in _provider_state_ex
+    return prov(), True
+           ^^^^^^
+  File "D:\桌面\植物病毒分析平台\tests/_it_taskcenter_ext.py", line 212, in <lambda>
+    tm.tasks[t1]['provider'] = lambda: (_ for _ in ()).throw(RuntimeError('x'))
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\桌面\植物病毒分析平台\tests/_it_taskcenter_ext.py", line 212, in <genexpr>
+    tm.tasks[t1]['provider'] = lambda: (_ for _ in ()).throw(RuntimeError('x'))
+RuntimeError: x
+外部任务状态读取失败 b869378a5a5e
+Traceback (most recent call last):
+  File "D:\桌面\植物病毒分析平台\Virus_Platform_Core\web\tasks.py", line 479, in _provider_state_ex
+    return prov(), True
+           ^^^^^^
+  File "D:\桌面\植物病毒分析平台\tests/_it_taskcenter_ext.py", line 212, in <lambda>
+    tm.tasks[t1]['provider'] = lambda: (_ for _ in ()).throw(RuntimeError('x'))
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\桌面\植物病毒分析平台\tests/_it_taskcenter_ext.py", line 212, in <genexpr>
+    tm.tasks[t1]['provider'] = lambda: (_ for _ in ()).throw(RuntimeError('x'))
+RuntimeError: x
+
+======================================================================
+[PASS] tests/_it_download_ui.py  (14.8s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/app.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/app-compare.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/app-runhistory.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /static/examples.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /api/tools HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /api/dl/batches HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:04] "GET /api/dl/batch/uiA HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:06] "GET /api/dl/batches HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:06] "GET /api/dl/batch/uiA HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:08] "GET /api/dl/batches HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:08] "GET /api/dl/batch/uiA HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:10] "GET /api/dl/batches HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:10] "GET /api/dl/batch/uiA HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:12] "GET /api/dl/batches HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:12] "GET /api/dl/batch/uiA HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_it_async_ui.py  (28.1s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/i18n.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app-ai.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app-compare.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app-runhistory.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /static/cds_export.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /favicon.ico HTTP/1.1" 200 -
+C:\Python312\Lib\site-packages\Bio\GenBank\Scanner.py:1393: BiopythonParserWarning: Truncated LOCUS line found - is this correct?
+:'LOCUS       ITASYNC                   60 bp    RNA     linear\n'
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\__init__.py:840: BiopythonParserWarning: Expected sequence length 60, found 21 (ITASYNC).
+  warnings.warn(
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /api/cds/table?name=uitest_async_cds HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:39] "POST /api/cds/export HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:41] "GET /api/task/6816f4e8f408?log_lines=10 HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_convert_paired.py  (9.0s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/msa/path?sample=cli_fulltest&group=Alphaendornavirus_lagenariae HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/msa/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tree/data?sample=cli_fulltest&group=Alphaendornavirus_lagenariae&file=tree.nwk HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/msa/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tool/dsrna_panel HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/sdt/data?sample=cli_fulltest&group=Alphaendornavirus_lagenariae HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "POST /api/tool/run HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/align/file?path=run/results/cli_fulltest/05_phylo/Alphaendornavirus_lagenariae/aln.fasta HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:47] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:48] "GET /api/kv_index_list HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:48] "GET /api/examples/convert HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:50] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:50] "GET /api/samples HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_dl_outdir.py  (11.7s)
+----------------------------------------------------------------------
+ALL PASS
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /download HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/ai-logo.png?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app.css?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-nav.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-ai.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/i18n.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-compare.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-runhistory.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:54] "GET /static/examples.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "GET /api/tools HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "GET /api/dl/batches HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:24:55] "POST /api/dl/create HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:01] "GET /api/dl/batches HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_meta_tasklog.py  (17.3s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /static/examples.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /static/plotly.min.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:06] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/meta/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/meta/plot/files?name=Panax_notoginseng_20261013_1522 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/meta/plot/files?name=Panax_notoginseng_20261013_1522 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /favicon.ico HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/meta/table/Panax_notoginseng_20261013_1522?which=search&page=1&per_page=20 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/meta/table/Panax_notoginseng_20261013_1522?which=search&page=1&per_page=20 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/meta/unique/Panax_notoginseng_20261013_1522?which=search&cols=ScientificName,Tissue,Location,BioProject,LibrarySource,CenterName HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:07] "GET /api/meta/table/Panax_notoginseng_20261013_1522?which=search&page=1&per_page=20 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:08] "GET /api/task/4bb079ba4184/log?lines=200 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:17] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:17] "GET /api/task/4bb079ba4184/log?lines=200 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:17] "GET /api/task/4bb079ba4184/log?lines=200 HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_it_nav_responsive.py  (32.8s)
+----------------------------------------------------------------------
+  ✔ / 1100px 页面无横向溢出  navW=236 pageLeft=236 ovX=-15 links=10
+  ✔ / 1100px 10 个一级链接全在  10（期望 10）
+  ✔ / 1100px 顶栏工具入口都在且可见  chip={'h': 29, 'w': 154} reset={'h': 29, 'w': 93} lang={'h': 24, 'w': 42} icon={'h': 22, 'w': 19}
+  ✔ / 1100px 侧栏内部可滚动（不撑破页面）  navW=236 pageLeft=236 ovX=-15 links=10
+  ✔ / 1600px 悬停时点击整行标题能收起二级菜单  group=sample {'hovering': False, 'open': False, 'subVisible': False, 'url': '/'}
+  ✔ / 1600px 点标题不跳转（只做开合）  当前 /，期望 /
+  ✔ / 1600px 再次点击整行标题能重新展开  group=sample {'open': True, 'subVisible': True}
+  ✔ / 1024px 侧栏默认收起  navLeft=-270 navW=270 ovX=-15
+  ✔ / 1024px ☰ 按钮可见  toggle={'h': 34, 'w': 34}
+  ✔ / 1024px 主区恢复全宽  navLeft=-270 navW=270 ovX=-15
+  ✔ / 1024px 页面无横向溢出  navLeft=-270 navW=270 ovX=-15
+  ✔ / 1024px 点 ☰ 后侧栏展开  {'left': 0, 'open': True, 'ovX': -15, 'scrim': True}
+  ✔ / 1024px 展开时遮罩出现  {'left': 0, 'open': True, 'ovX': -15, 'scrim': True}
+  ✔ / 1024px 点遮罩后侧栏收起  {'left': -270, 'open': False, 'w': 270}
+  ✔ / 900px 侧栏默认收起  navLeft=-270 navW=270 ovX=-15
+  ✔ / 900px ☰ 按钮可见  toggle={'h': 34, 'w': 34}
+  ✔ / 900px 主区恢复全宽  navLeft=-270 navW=270 ovX=-15
+  ✔ / 900px 页面无横向溢出  navLeft=-270 navW=270 ovX=-15
+  ✔ / 768px 侧栏默认收起  navLeft=-270 navW=270 ovX=-15
+  ✔ / 768px ☰ 按钮可见  toggle={'h': 34, 'w': 34}
+  ✔ / 768px 主区恢复全宽  navLeft=-270 navW=270 ovX=-15
+  ✔ / 768px 页面无横向溢出  navLeft=-270 navW=270 ovX=-15
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_check_toolrun_latest.py  (11.3s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/tree/data?sample=cli_fulltest&group=Alphaendornavirus_lagenariae&file=tree.nwk HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/msa/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/tool/dsrna_panel HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/sdt/data?sample=cli_fulltest&group=Alphaendornavirus_lagenariae HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:57] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "POST /api/tool/run HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "GET /api/align/file?path=run/results/cli_fulltest/05_phylo/Alphaendornavirus_lagenariae/aln.fasta HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "GET /api/examples/convert HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:25:58] "GET /api/kv_index_list HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:00] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:00] "POST /api/tool/run HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:00] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:01] "GET /api/task/a486d551a466 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:01] "GET /api/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:03] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:03] "GET /api/samples HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_tool_outdir_ui.py  (10.0s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/msa/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/dbs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/msa/path?sample=cli_fulltest&group=Alphaendornavirus_lagenariae HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/align/file?path=run/results/cli_fulltest/05_phylo/Alphaendornavirus_lagenariae/aln.fasta HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/msa/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/msa/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/gb/collections HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tree/data?sample=cli_fulltest&group=Alphaendornavirus_lagenariae&file=tree.nwk HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/sdt/data?sample=cli_fulltest&group=Alphaendornavirus_lagenariae HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/kv_index_list HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "POST /api/tool/run HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:10] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:11] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:11] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:13] "GET /api/tasks HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:14] "GET /api/samples HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_it_global_ctx_ui.py  (33.8s)
+----------------------------------------------------------------------
+[7] 全局清理按钮（fetch 打桩，不触碰真实数据）
+  ✔ 清理弹窗打开
+  ✔ 含"同时清空任务归档"选项
+  ✔ 弹窗声明保留结果文件
+  ✔ 确认后发出 POST /api/global/reset  {'url': '/api/global/reset', 'body': '{"confirm":"reset","include_archive":true}', 'method': 'POST'}
+  ✔ 请求体带 include_archive  {'url': '/api/global/reset', 'body': '{"confirm":"reset","include_archive":true}', 'method': 'POST'}
+  ✔ 请求体带 confirm 防误触令牌  {'url': '/api/global/reset', 'body': '{"confirm":"reset","include_archive":true}', 'method': 'POST'}
+  ✔ 浏览器端关联键已清除
+  ✔ context 胶囊已复位为空
+  ✔ 刷新后已不再选中样品（关联确被清掉）
+  ✔ 刷新后回显清理结果（toast 含计数与"保留"语义）  全局清理完成已停止 1 个任务 · 清空队列 2 条 · 清除任务记录 3 条
+[8] kvsuite 选样弹窗接入全局样品/项目
+  ✔ kvPickSamples 可用
+  ✔ 选样弹窗打开
+  ✔ 弹窗有项目筛选下拉  3
+  ✔ 项目下拉默认落到全局项目
+  ✔ 全局当前样品默认已勾选
+  ✔ 按项目筛选生效（其它项目行被隐藏）  {'shown': 1, 'total': 2, 'wrongProject': 0}
+  ✔ 全选只勾选当前项目下的可见样品
+[10] 样品名被规范化时前端提示实际登记名
+  ✔ 错误/提示区显示 note（把实际登记名讲清楚）  样品名「样品A」已按文件名安全规则登记为「A」
+  ✔ toast 用实际登记名 A 而非输入名  创建样品✔ A
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_it_taskcenter_ui.py  (15.3s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:26:55] "GET /api/tasks?full=1&logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:55] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:55] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:55] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:55] "POST /api/task/34e414a7eab8/cancel HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:55] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:55] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:55] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:57] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:57] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:57] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:57] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:58] "GET /api/tasks?full=1&logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:58] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:58] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:58] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:26:59] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:27:00] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:27:00] "GET /api/tasks?full=1&logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:27:01] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:27:01] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:27:01] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:27:01] "GET /api/tasks?full=1&logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:27:01] "GET /api/task/34e414a7eab8?log_lines=300 HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_it_taskcenter_dl_ui.py  (6.2s)
+----------------------------------------------------------------------
+    mgr.snapshot = lambda *x, **k: (_ for _ in ()).throw(
+                                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\桌面\植物病毒分析平台\tests/_it_taskcenter_dl_ui.py", line 337, in <genexpr>
+    mgr.snapshot = lambda *x, **k: (_ for _ in ()).throw(
+RuntimeError: boom
+127.0.0.1 - - [25/Oct/2026 22:27:07] "GET /api/tasks?full=1&logs=0 HTTP/1.1" 200 -
+外部任务状态读取失败 1e820daad9af
+Traceback (most recent call last):
+  File "D:\桌面\植物病毒分析平台\Virus_Platform_Core\web\tasks.py", line 479, in _provider_state_ex
+    return prov(), True
+           ^^^^^^
+  File "D:\桌面\植物病毒分析平台\Virus_Platform_Core\web\download.py", line 105, in <lambda>
+    tm.attach(f'下载·{bid}', lambda b=bid: download_task_provider(b),
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\桌面\植物病毒分析平台\Virus_Platform_Core\web\download.py", line 66, in download_task_provider
+    snap = m.snapshot(bid, include_files=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\桌面\植物病毒分析平台\tests/_it_taskcenter_dl_ui.py", line 337, in <lambda>
+    mgr.snapshot = lambda *x, **k: (_ for _ in ()).throw(
+                                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\桌面\植物病毒分析平台\tests/_it_taskcenter_dl_ui.py", line 337, in <genexpr>
+    mgr.snapshot = lambda *x, **k: (_ for _ in ()).throw(
+RuntimeError: boom
+127.0.0.1 - - [25/Oct/2026 22:27:07] "GET /api/task/1e820daad9af?log_lines=300 HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_it_dl_repair_ui.py  (5.5s)
+----------------------------------------------------------------------
+临时实例: http://127.0.0.1:8796  （用户的 8989 未被触碰）
+  [SKIP] Edge 驱动  NoSuchDriverException: Message: Unable to obtain driver for MicrosoftEdge; For documentation on this er（已重试 3 次）
+
+======================================================================
+[PASS] tests/test_logan_trace.py  (1.0s)
+----------------------------------------------------------------------
+  ✔ 无头纯序列补 query 头: 2400bp
+  ✔ 2810bp 粘贴序列切 2 段
+== Flask 页面与 API ==
+  ✔ /logan 页面 200
+  ✔ 总览页含 LOGAN 导航
+  ✔ /api/logan/samples
+  ✔ /api/logan/jobs
+  ✔ 片段序列 API
+  ✔ 溯源报告页 200
+  ✔ 无尾斜杠 308 重定向（相对路径可解析）
+  ✔ 报告目录静态文件路由 200
+  ✔ 既有 ⑧报告的 plotly 静态路由 200（cli_fulltest）
+  ✔ multipart 上传导入 s1
+  ✔ 导入后状态 done（1/1）
+  ✔ 坏结果文件返回 400
+  ✔ 路径穿越被拦截
+== 默认阶段与任务去重 ==
+  ✔ 默认分析阶段包含 hostana
+  ✔ 默认分析阶段不含旧的 virome
+  ✔ CLI 默认阶段与管道常量一致
+  ✔ 同一样品的样品分析会被拦截
+  ✔ 英文 LOGAN 批量任务名也会被拦截
+
+全部通过 ✔  (任务已清理)
+
+======================================================================
+[PASS] tests/test_logan_batch.py  (3.8s)
+----------------------------------------------------------------------
+  ✔ 回收导入 2/2
+  ✔ 收到 13 次进度回调（含最终完成）
+  ✔ 其中结构化进度 6 次
+  ✔ 进度单调不回退: [0.02, 0.02, 0.02, 0.02, 0.02, 0.49, 0.49, 0.49, 0.49, 0.49, 0.49, 0.97, 1.0]
+  ✔ 最终进度 100%
+  ✔ 等待阶段文案含已等时长与 HTTP 状态
+== 任务状态与报告 ==
+  ✔ 全部片段已导入且报告已生成
+  ✔ 报告聚合了导入的物种
+== 全部导入后再批量 → 应拒绝 ==
+  ✔ 已拒绝: 该任务所有片段均已导入结果，无需批量提交
+== 补漏场景（仅未导入片段进入批量） ==
+  ✔ 部分回收 1 片段
+  ✔ 任务状态 partial
+  ✔ 补漏批量仅含未导入片段
+  ✔ 补漏批量回收 s2
+  ✔ 补漏后结果齐全
+== SSE 实时进度流 ==
+  ✔ 批量任务经 API 启动
+  ✔ SSE 推送任务快照
+  ✔ SSE 快照含状态/进度（done）
+
+批量模式 + 实时进度全部通过 ✔
+（测试任务与假脚本已清理）
+
+======================================================================
+[PASS] tests/_check_local_annot.py  (0.9s)
+----------------------------------------------------------------------
+示例 contig: example_contig_1 (6096 bp)
+  blastn: 命中缓存
+  blastn: engine=local hits=50
+        NC_077216.1       100.0% Pepper yellows virus genome assembly, complete Polerovirus PEVYV6
+        NC_036803.1        92.0% Pepper vein yellows virus 5 isolate Spain-Alme Polerovirus PEVYV5
+        KP326573.1         94.6% Polerovirus PEVYV3 isolate HN, complete sequen Polerovirus PEVYV3
+  blastx: 命中缓存
+  blastx: engine=local hits=15
+        YP_010806246.1    100.0% P2-RdRp                                        Pepper yellows virus
+        YP_009455740.1     96.2% P2                                             Pepper vein yellows virus 5
+        YP_010790320.1     95.9% putative P1-P2 fusion protein                  Pepper vein yellows virus
+ALL OK
+
+======================================================================
+[PASS] tests/_check_hostdb.py  (2.7s)
+----------------------------------------------------------------------
+[配置与目录]
+  ok   当前宿主库存在: D:\桌面\植物病毒分析平台\host-db\112863_genomes_host_db
+  ok   databases["host"] 与 active_host_db 解析一致
+  ok   库结构完整（hash + opts/taxo/hash_config）: 112863_genomes_host_db
+
+[库身份]
+  ok   库内有 host_db.json 清单
+       声明: taxid=112863 species='Lycium barbarum' source=ningxia.fa
+       seqid2taxid.map 内 taxid: [112863]
+  ok   map 内只有 1 个 taxid（实际 1 个: [112863]）——多于 1 个说明库元数据被历史建库污染，应换新目录重建
+  ok   清单声明的 taxid 与 map 内容一致
+
+[旧布局]
+       （无 legacy 槽位）
+
+[分类探针（库是否真的认这个物种）]
+  ok   探针（>chr01 前 20000bp）判为 112863 = 声明的 taxid 112863
+  ok   kreport 出现声明物种之外的节点（污染）: []
+
+====================================================
+宿主库检查通过 ✔
+
+======================================================================
+[PASS] tests/_check_ascii_stage.py  (0.1s)
+----------------------------------------------------------------------
+[中转触发]
+  平台根含非 ASCII → 走中转（本机符合）
+
+[并发隔离] 两个线程各自 staged，目录必须不同
+  ok   两次调用都走了中转
+  ok   两个线程的中转目录不同（2 个）
+  ok   线程0 暂存文件已写出
+  ok   线程1 暂存文件已写出
+
+[用后回收] 文件删掉、空目录也回收
+  ok   中转目录已回收（残留: 无）
+
+====================================================
+ASCII 中转隔离检查通过 ✔
+
+======================================================================
+[PASS] tests/_check_start_modes.py  (7.6s)
+----------------------------------------------------------------------
+  ok   确实走浏览器分支: ['window', 'browser']
+
+[--gui] 强制桌面窗口
+  ok   模式=gui 首次调用=[['window', 'gui']]
+  ok   未回退浏览器
+
+[VP_GUI=browser] 旧写法（环境变量）仍生效
+  ok   模式=web 调用=['window', 'browser']
+
+[优先级] 命令行 --gui 覆盖 VP_GUI=browser
+  ok   模式=gui 调用=['window']
+
+[别名] --browser / --no-gui / --webview / VP_GUI=gui
+  ok   --browser → web
+  ok   --no-gui → web
+  ok   --webview → gui
+  ok   VP_GUI=gui → gui
+
+[启动脚本] 两个显式 .bat 存在且带对应对参数
+  ok   启动平台-桌面窗口.bat 存在且调用 app.py --gui
+  ok   启动平台-网页.bat 存在且调用 app.py --web
+
+====================================================
+启动模式检查通过 ✔
+
+======================================================================
+[PASS] tests/_check_browse_dlg.py  (0.1s)
+----------------------------------------------------------------------
+OK  browse 对话框检查通过（13 个页面均引用共享片段）
+
+======================================================================
+[PASS] tests/_check_examples_manifest.py  (0.1s)
+----------------------------------------------------------------------
+manifest 工具条目 32 个
+
+△ 文件存在但快照未声明 165 个:
+   kvsuite/kvsuite/align/EXAMPLE_pandepth.pandepth.chr.stat.gz
+   kvsuite/kvsuite/align/EXAMPLE_pandepth_pandepth.log
+   kvsuite/kvsuite/align/EXAMPLE_pandepth_samtools.log
+   kvsuite/kvsuite/batches/batch_0001.json
+   kvsuite/kvsuite/consensus/consensus_qc.tsv
+   kvsuite/kvsuite/consensus/Cassava_Colombian_symptomless_virus_NC_076132.1/EXAMPLE_NC_076132.1/EXAMPLE_NC_076132.1.consensus.fasta
+   kvsuite/kvsuite/consensus/Naranjilla_chlorotic_mosaic_virus_NC_077008.1/EXAMPLE_NC_077008.1/EXAMPLE_NC_077008.1.consensus.fasta
+   kvsuite/kvsuite/consensus/Pepper_yellows_virus_NC_077216.1/EXAMPLE_NC_077216.1/EXAMPLE_NC_077216.1.consensus.fasta
+   kvsuite/kvsuite/filter/filtered.tsv
+   kvsuite/kvsuite/gbk_files/NC_076132.1.gb
+   kvsuite/kvsuite/gbk_files/NC_077008.1.gb
+   kvsuite/kvsuite/gbk_files/NC_077216.1.gb
+   ... 另有 153 个（--verbose 看全部）
+
+✔ 无硬性差异（列表/详情均以实际文件为准，计数已对齐）
+
+======================================================================
+[PASS] tests/_check_db_paths.py  (2.1s)
+----------------------------------------------------------------------
+/api/dbs: 路径字段 7 个，非绝对 0 个
+/api/host_dbs: 路径字段 7 个，非绝对 0 个
+/api/kv_index_list: 路径字段 13 个，非绝对 0 个
+
+AST 扫描：146 个文件，命中 0 处（白名单 2 个模块）
+  自测① 代码形式命中 1 处（应 1）
+  自测② 注释/字符串形式命中 0 处（应 0）
+  自测③ 真实白名单文件 config.py 命中 4 处（应 > 0）
+
+✔ 库/目录类 API 返回的路径全部为绝对路径；无 PLATFORM_ROOT/databases 读盘
+
+======================================================================
+[PASS] tests/_check_spec_datas.py  (0.2s)
+----------------------------------------------------------------------
+spec datas 展开校验：
+  OK   spec 中能找到 _tree
+  OK   webapp 目录存在
+  OK   不漏文件（96 个）
+  OK   不带残留
+  OK   备份文件（*.bak*）不在 datas 里
+  OK   源码树已无 .bak 手工备份（若再现请归档 archive/_bak_*）（扫 3386 个文件）
+  OK   范围自证：扫描覆盖 webapp/ 之外的源码目录  未覆盖 []（已覆盖 ['.', '.workbuddy', '.workbuddy-ai', '.zcode', 'Virus_Platform_Core', 'analysis', 'dev_tools', 'docs', 'examples', 'figures', 'outputs', 'plugins', 'plugins-dist', 'plugins-repo', 'scripts', 'tests', 'webapp', 'wiki']）
+  OK   灵敏度：临时目录里的 .bak 能被扫到  扫到 1 个（应 1）
+  OK   残留被显式排除
+  OK   源码树里确实存在 .mimosa（否则本条无意义）
+  OK   目标路径为 posix 且都在 webapp/ 下  []
+  OK   存在嵌套文件可供校验
+  OK   嵌套文件目录映射正确  ai-logo.png -> 'webapp/static'（期望 webapp/'static'）
+  OK   webapp 下无空目录（_tree 不创建空目录）  需处理: []
+
+✔ 全部通过（datas 覆盖 96 个前端文件，零残留）
+
+======================================================================
+[PASS] tests/_check_i18n.py  (0.4s)
+----------------------------------------------------------------------
+裸 CJK 对话框文案 0 处 ✔（alert/confirm/prompt 已全部走 t()）
+
+node: C:\Program Files\nodejs\node.exe
+[zh] 模板锚点 1379 个，字典缺失 0 个
+[en] 模板锚点 1379 个，字典缺失 0 个
+
+（跳过含模板语法的动态键 1 个，静态查不了）
+
+重复键定义 0 处 ✔
+
+结论：模板锚点 1379 个全部有定义，中英成对，无重复键
+
+i18n 校验通过 ✔
+
+======================================================================
+[PASS] tests/_check_js_syntax.py  (3.8s)
+----------------------------------------------------------------------
+node: C:\Program Files\nodejs\node.exe
+
+[1] 内联 script 块 / static/*.js 语法
+  ok   抽到 59 个 JS 块（0 个说明抽取逻辑失效了）
+  · 59/59 个块语法通过
+
+[2] 关键函数仍然存在（防「批量替换把函数头删了」这类事故）
+  ok   function _pgArc( 仍在（迁移弧线的唯一几何实现（网页/GIF/静态图共用））
+  ok   function drawPgGeo( 仍在（弧线地图渲染（系统地理卡 + 时间与地理推断卡共用））
+  ok   async function pgGifExport( 仍在（GIF 导出入口）
+  ok   async function loadPhylogeoResult( 仍在（系统地理卡结果装配）
+
+[3] tools.html 无重复 id（getElementById 只返回靠前那个）
+  ok   tools.html 无重复 id（重复的：无）
+  · 共 1934 个静态 id
+
+====================================================
+前端 JS 语法检查通过 ✔
+
+======================================================================
+[PASS] tests/_route_inventory.py  (0.8s)
+----------------------------------------------------------------------
+路由数: 247
+
+✔ 路由清单与基线一致
+
+======================================================================
+[PASS] tests/_audit_contract.py  (3.6s)
+----------------------------------------------------------------------
+====================================================================
+跨层契约审计
+====================================================================
+
+[1] 后端路由 247 条 / 前端站内路径 234 个
+  ✔ 前端引用的站内路径全部命中后端路由
+  · 前端未引用的 /api/ 路由 21 条（可能仅供 CLI/测试使用）
+
+[2] i18n：zh 定义 2540 键 / en 定义 2540 键 / 代码使用 2475 键
+  ✔ i18n 键完整（zh/en 一致，使用键全部有定义）
+  · 动态拼接前缀 1 个（已跳过）: tk.
+  · 字典中未被使用的键 66 个
+
+[3] 模板/JS 引用静态资源 26 个
+  ✔ 全部存在
+
+[4] vp 包模块可达性
+  · 未被任何模块 import 的 1 个（可能是 CLI 延迟导入或废弃）:
+      Virus_Platform_Core/mem_check.py
+
+====================================================================
+审计结论：✔ 无硬性差异
+
+======================================================================
+[PASS] tests/_audit_routes.py  (10.6s)
+----------------------------------------------------------------------
+路由数: 250  请求数: 250
+500 错误: 0
+未捕获异常: 0
+✔ 巡检未触发任何后台任务
+明细: D:\桌面\植物病毒分析平台\tests\_audit_routes_report.txt
+
+======================================================================
+[PASS] tests/_it_stage_tables.py  (2.8s)
+----------------------------------------------------------------------
+  （阶段键扫描范围: app-batch.js, app-jobs.js；byKey 访问全量扫 16 个）
+  ✔ 代码里无 virus 阶段键 / byKey.virus 访问  []
+  ✔ renderPipe 的 known 集合含 'kvsuite' 且不含退役键 'virus'  const known = new Set([...pre.map(s => s.stage), 'kvsuite', 'assembly', 'report', ...PIPE_FANOUT]);
+  ✔ STAGE_PARAMS 的 db_virus 挂在 kvsuite 上（输入框才会渲染）
+[6] ③c 共识阶段实测：产物 → 卡片
+  ✔ pipeline_overview 产出了 consensus 卡
+  ✔ ③c 卡状态为 done  done
+  ✔ ③c 卡有摘要  共识 3 条（判定存在 2），比对 reads 12,345，变异位点 7（SNV 5 / iSNV 2）
+  ✔ ③c 摘要含共识条数与变异位点  共识 3 条（判定存在 2），比对 reads 12,345，变异位点 7（SNV 5 / iSNV 2）
+  ✔ ③c 卡有查看入口  /api/samples/DEMO/03c_consensus/coverage.tsv
+  ✔ ③c 查看指向 coverage.tsv  /api/samples/DEMO/03c_consensus/coverage.tsv
+  ✔ ③c 卡列出产物  ['03c_consensus\\consensus.fa', '03c_consensus\\coverage.tsv', '03c_consensus\\variants.tsv', '03c_consensus\\summary.json']
+  ✔ 卡片总数 == STAGE_ORDER 阶段数  15 vs 15
+  ✔ ③c 排在 ③b 之后、④ 之前
+  ✔ consensus 出现在 done 集合里  ['consensus']
+[7] /api/samples 的 done/total 计入 ③c
+  ✔ HTTP 200  200
+  ✔ /api/samples 返回了 DEMO  [{'done': 1, 'last_run': '', 'last_status': '', 'name': 'DEMO', 'project': '', 'r1': '', 'r2': '', 'total': 15}]
+  ✔ total 等于阶段数  15 vs 15
+  ✔ done 计入 ③c  {'done': 1, 'last_run': '', 'last_status': '', 'name': 'DEMO', 'project': '', 'r1': '', 'r2': '', 'total': 15}
+  ✔ HTTP 200 (/api/pipeline/DEMO)
+  ✔ 管道接口含 consensus 卡
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_selftest_pyz_cmp.py  (0.0s)
+----------------------------------------------------------------------
+灵敏度自检：
+  OK  同一源码两遍: 无差异 (期望无)
+  OK  常量改动 1->2: 发现差异 (期望有)
+  OK  运算符 + -> -: 发现差异 (期望有)
+  OK  新增函数 g: 发现差异 (期望有)
+  OK  函数体内部常量改动: 发现差异 (期望有)
+
+✔ 自检通过：比较器能区分不同字节码，且对相同字节码不误报
+
+======================================================================
+[PASS] tests/_check_pages_console.py  (495.2s)
+----------------------------------------------------------------------
+[ 2/23] /annotation                  ✔
+[ 3/23] /build                       ✔
+[ 4/23] /cds-export                  ✔
+[ 5/23] /download                    ✔
+[ 6/23] /favicon.ico                 ✔
+[ 7/23] /genome                      ✔
+[ 8/23] /help                        ✔
+[ 9/23] /hostremoval                 ✔
+[10/23] /logan                       ✔
+[11/23] /meta                        ✔
+[12/23] /orf                         ✔
+[13/23] /pipeline                    ✔
+[14/23] /prescreen                   ✔
+[15/23] /primer                      ✔
+[16/23] /refdata                     ✔
+[17/23] /results                     ✔
+[18/23] /samples                     ✔
+[19/23] /settings                    ✔
+[20/23] /submit                      ✔
+[21/23] /svguest/                    ✔
+[22/23] /tasks                       ✔
+[23/23] /tools                       ✔
+================================================================
+✔ 全部 23 个页面加载无 JS 报错，全局函数抽查通过
+
+======================================================================
+[PASS] tests/_check_settings_nav.py  (21.8s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/i18n.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/app.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/app-runhistory.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/app-compare.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /static/examples.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/storage?detail=1 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/settings HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/tools HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/plugin/list HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/ai/profiles HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/ai/config HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/dbs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/plugin/available HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:15] "GET /api/plugin/modules HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:21] "GET /api/selfcheck HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:36:30] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_kvchain_ui.py  (7.7s)
+----------------------------------------------------------------------
+  ok   搬来覆盖率阈值
+  ok   搬来开关状态
+
+[5] 未选样品点运行的提示
+  ok   有明确提示（实际 ['请先选样品（📋 按钮可多选），或填入测序数据 R1（双端再填 R2）路径']）
+
+[6] 内联结果渲染（桩数据：chain_result + kvsuite_result）
+  ok   汇总面板已展开
+  ok   标题含汇总运行名
+  ok   标出定量子运行名
+  ok   流程各段表已渲染
+  ok   汇总目录清单已渲染
+  ok   计量徽标来自子运行结果
+  ok   鉴定表已渲染
+  ok   过滤表已渲染
+  ok   共识 QC 表已渲染
+  ok   变异注释表已渲染
+  ok   内联渲染未写入 t-kvsuite 卡容器
+
+[7] 页面无 JS 报错
+  ok   无 pageerror（实际 []）
+
+====================================================
+一键全流程卡 UI 检查通过 ✔  截图: run\_check_kvchain_ui.png
+
+======================================================================
+[PASS] tests/_check_phylogeo_fitch.py  (0.4s)
+----------------------------------------------------------------------
+  ok   新实现不多算迁移（新 3 ≤ 旧 5）
+  ok   有重复区划时旧实现确实多算（旧 5 → 新 3）
+     RRT：观测 3，零分布均值 4.01，p_low=0.21927，p_high=0.99336 → 未检出显著地理结构
+  ok   真实数据 RRT 跑完 300 次置换
+  ok   识别出 3 个洲（3）
+  ok   RRT 返回完整零分布（供写 TSV）
+--- 6. analyze() 接线（RRT + RSPP 可选开关）---
+  ok   开启后 RRT 跑了 200 次（200）
+  ok   RRT 零分布已从返回值摘出（避免撑爆 summary.json）
+  ok   rrt_permutation.tsv 已写出
+  ok   RSPP 复本成功 20/20
+  ok   RSPP 给出迁移数区间 [4.0, 4.0]（均值 4.0）
+  ok   RSPP 带回全量点估计（4）
+  ok   RSPP 判定点估计是否在区间内（True）
+     点估计 4，bootstrap [4.0, 4.0]，在区间内=True
+  ok   RSPP 给出 17 个 clade 的区划概率
+  ok   RSPP 复本树目录已建立
+  ok   默认（不传开关）时 rrt/rssp 均为 None
+  ok   默认时不产出 rrt_permutation.tsv
+  ok   每序列区划全不同时给出告警（头回退成整条描述的数据陷阱）
+     告警: 10 条样本有 10 个各不相同的区划 —— 多为区划列没匹配上、回退成了整条 FASTA 描述。请检查元数据 CSV，或把 FASTA 头写成 `名称|区…
+  ok   区划正常（洲分组）时不误报告警
+================================================================
+PHYLOGEO CHECKS PASSED
+
+======================================================================
+[PASS] tests/_check_phylogeo_geo.py  (1.0s)
+----------------------------------------------------------------------
+  ok   迁移数 1
+  ok   逐样本点层 8 个（参与落点 8 个）
+  ok   落点出处如实标（{'Asia': 'samples', 'Europe': 'samples'}）
+  ok   两个区划都有落点（无 missing）
+  ok   MOTP 走近似轴（tip_years）
+  ok   分箱行数 1（每行计数 ≥1）
+  ok   RRT 按 200 次置换跑完
+  ok   RSPP 复本成功 6/6
+  ok   权重分带由 RSPP 支持率驱动（不降级成计数口径）
+  ok   分带四档齐全（前端表格按四档布局）
+  ok   期望事件数 = 事件数 × 支持率（逐条核对）
+  ok   三分类结果带口径说明（method 随结果走）
+  ok   产物 tree_annotated.nwk 已写出
+  ok   产物 transition_classes.tsv 已写出
+  ok   产物 motp.tsv 已写出
+  ok   产物 coords_resolved.tsv 已写出
+  ok   产物 sample_coords.tsv 已写出
+  ok   产物 weight_bands.json 已写出
+  ok   产物 rrt_permutation.tsv 已写出
+  ok   summary 可 JSON 序列化（写得进 summary.json）
+  ok   真结果可出 GIF 帧计划（1 帧 / 1 条有年代转移）
+  ok   默认（不传开关）时 rrt/rssp/motp/weight_bands 均为 None
+================================================================
+PHYLOGEO GEO CHECKS PASSED
+
+======================================================================
+[PASS] tests/_check_phylogeo_ui.py  (10.1s)
+----------------------------------------------------------------------
+  ok   分带表已渲染且口径写明非贝叶斯（后验权重分带　权重口径：RSPP bootstrap 方向支持率（非贝叶斯后验）…）
+  ok   分带表四档齐全
+  ok   汇总含 MOTP 段
+  ok   GIF 导出按钮已出（GIF 区: 🎞 导出 GIF 动画…）
+  ok   分带措辞不冒充 BEAST/BSSVS
+  ok   弧线地图容器已出
+  ok   真画出 scattergeo 图元（7 个 / 共 7 trace）
+  ok   至少一条迁移弧线（2 条）
+  ok   说明行写明弧线口径
+  ok   说明行标出坐标出处（不许把近似质心当准坐标）
+  ok   说明行给出已画弧线条数
+
+[6] GIF 区：有 MOTP 但坐标不足时给指引（纯函数）
+  ok   坐标不足时显式列出缺口（<div class="hint">迁移时间动画：可用坐标区划不足 2 个，无法画弧线；可在上方「区域坐标表」补坐标。（…）
+  ok   没勾 MOTP 时给「先勾 MOTP」指引（<div class="hint">GIF 动画需要「迁移随时间（MOTP）」分…）
+
+[6b] 弧线地图负控：坐标不足 2 个时必须显式列出缺口（纯函数）
+  ok   坐标不足时列出缺口（迁移弧线地图：可用坐标区划不足 2 个（弧线两端都要有落点）（缺坐标：B、C）；可在上方「区域坐标表」给出 区划/纬度/…）
+
+[7] 页面无 JS 报错
+  ok   无 pageerror（实际 []）
+
+====================================================
+系统地理卡 UI 检查通过 ✔  截图: run\_check_phylogeo_ui.png
+
+======================================================================
+[PASS] tests/_check_phylodyn_kit.py  (45.4s)
+----------------------------------------------------------------------
+'LOCUS       LC001                  8 bp    DNA     linear   VRL 01-MAR-2019\n'
+Found locus 'LC001' size '8' residue_type 'DNA'
+Some fields may be wrong.
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\Scanner.py:1537: BiopythonParserWarning: Attempting to parse malformed locus line:
+'LOCUS       LC002                  8 bp    DNA     linear   VRL 2019-07-15\n'
+Found locus 'LC002' size '8' residue_type 'DNA'
+Some fields may be wrong.
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\Scanner.py:1537: BiopythonParserWarning: Attempting to parse malformed locus line:
+'LOCUS       LC003                  8 bp    DNA     linear   VRL 2020\n'
+Found locus 'LC003' size '8' residue_type 'DNA'
+Some fields may be wrong.
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\Scanner.py:1537: BiopythonParserWarning: Attempting to parse malformed locus line:
+'LOCUS       LC001                  8 bp    DNA     linear   VRL 01-MAR-2019\n'
+Found locus 'LC001' size '8' residue_type 'DNA'
+Some fields may be wrong.
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\Scanner.py:1537: BiopythonParserWarning: Attempting to parse malformed locus line:
+'LOCUS       LC002x                  8 bp    DNA     linear   VRL 2019-07-15\n'
+Found locus 'LC002x' size '8' residue_type 'DNA'
+Some fields may be wrong.
+  warnings.warn(
+
+======================================================================
+[PASS] tests/_check_phylodyn_e2e.py  (22.3s)
+----------------------------------------------------------------------
+  ok   控件存在: #pd_input
+  ok   控件存在: #pd_mode
+  ok   控件存在: #pd_meta
+  ok   控件存在: #toolrun-phylodyn
+  ok   控件存在: #pdFlow
+  ok   控件存在: #pdResult
+  ok   加载结果前阶段流是空的（实际 0；图纸由 loadPhylodynResult 填）
+  ok   结果面板已展开
+  ok   阶段流画出 A0–A5 共 6 格（实际 6）
+  ok   阶段编号顺序正确（['A0', 'A1', 'A2', 'A3', 'A4', 'A5']）
+  ok   #pdTimeTreePlot 真画出来了（_fullData 2 条 trace）
+  ok   时间树横轴是日历年（[1978.430736, 2018.455566]）
+  ok   #pdGeoArcPlot 真画出来了（_fullData 9 条 trace）
+  ok   至少一条迁移弧线（scattergeo 9 个 / 线 3 条）
+  ok   说明行写明弧线用的是 ML 一列（Americas
+Asia
+Europe
+Americas→Asia 1 次（ML）
+Asia→Eu…）
+  ok   说明行重申 ml/fitch 不可相加（口径红线）
+  ok   无 JS 报错（[]）
+
+====================================================
+PHYLODYN E2E PASSED（32 项）
+
+======================================================================
+[PASS] tests/_check_phylodyn_ui.py  (8.2s)
+----------------------------------------------------------------------
+  ok   归档卡 section 不存在: #t-pdspacetime
+  ok   归档卡 section 不存在: #t-pdsub
+  ok   归档控件已消失: #pdmj_traits
+  ok   归档控件已消失: #pdmj_xml
+  ok   归档控件已消失: #pdtt_input
+  ok   归档控件已消失: #pdltt_input
+  ok   归档控件已消失: #pdbsp_path
+  ok   归档控件已消失: #pdrspp_input
+  ok   归档控件已消失: #pdtm_input
+  ok   归档控件已消失: #pdrrt_original
+  ok   归档控件已消失: #pdrand_input
+  ok   归档卡的 JS 函数已移除（残留: 无）
+  ok   保留卡 JS 函数齐（实际 ['runPdprep']）
+
+[6] 保留卡控件存在性（点卡进卡）
+
+[7] 切英文（新增键 zh/en 双份）
+  ok   英文汇总文案（Kept {k} / input {i} · locations {loc} · yea…）
+
+[8] 无 JS 报错
+  ok   无 pageerror（实际 []）
+
+====================================================
+进化动力学新卡 UI 检查通过 ✔  截图: run\_check_phylodyn_ui.png
+
+======================================================================
+[PASS] tests/_check_pdprep_chain.py  (19.3s)
+----------------------------------------------------------------------
+  ok   地点全 Unknown → 4 条都**不参与**去重（实测 4）
+
+[8] 上游预处理③比对 QC（含"先 MAFFT 再 QC"真跑）
+  ok   任务跑通（done: ）
+  ok   QC 剔 2 留 2（{'too_gappy': 1, 'too_short': 1}）
+  ok   不等长被判出来（A0 的硬前置）
+  ok   clean / removed 另存（['clean', 'removed', 'report']）
+
+[9] 契约：允许没有地点（只做定年时用）
+  ok   任务跑通（done: ）
+  ok   允许无地点后全收 15/15（默认要求地点时会掉到 6 条：{'placeholder': 9}）
+
+[10] 负向：被合并的两张卡已摘除
+  ok   注册表里没有 pdspacetime / pdsub
+  ok   页面里没有它们的标记（残留: 无）
+  ok   数据准备卡有新控件: id="pd_sub_on"
+  ok   数据准备卡有新控件: id="pd_coords_tsv"
+  ok   数据准备卡有新控件: id="pdprepToA0"
+  ok   数据准备卡有新控件: function pdSubToggle(
+  ok   数据准备卡有新控件: function pdPrepToA0(
+
+====================================================
+PREP CHAIN CHECKS PASSED（44 项）
+临时产物: D:\桌面\植物病毒分析平台\run\_check_prep_chain
+
+======================================================================
+[PASS] tests/_check_govern_vs_upstream.py  (0.1s)
+----------------------------------------------------------------------
+  ok   'unknown'                          → None                   issue='placeholder' usable=False
+  ok   'Russia: Stavropol'                → 'Russia, Stavropol'    issue='' usable=True
+  ok   'Russia'                           → 'Russia'               issue='' usable=True
+  ok   'USA'                              → 'USA'                  issue='' usable=True
+  ok   'Germany: Bavaria, Munich'         → 'Germany, Bavaria, Munich' issue='' usable=True
+  ok   'XX.XX N XXX.XX E'                 → None                   issue='placeholder' usable=False
+  ok   'Country:Region'                   → None                   issue='placeholder' usable=False
+  ok   ''                                 → None                   issue='placeholder' usable=False
+  ok   'China:Beijing'                    → 'China, Beijing'       issue='' usable=True
+  ok   'Macao, China'                     → 'Macao, China'         issue='' usable=True
+  ok   地理 16/16 条与上游一致
+
+[3] 不变量（无论与上游是否逐字一致，这几条必须成立）
+  ok   越界月份判 out_of_range（**不夹取**，否则 13 月会被当好数据放行）
+  ok   越界日期判 out_of_range
+  ok   小数年（≥4 位）与「年.月」（2 位）消歧正确
+  ok   只剩国家名 → usable=False（不赋国家中心点）
+  ok   冒号也拆（修「只拆逗号」的缺口）
+  ok   mode=mid 在「只给年」时晚于 mode=start（口径显式，不藏在实现里）
+  ok   完整日期口径 = yr+(mo-1+(dy-1)/dim)/12（与上游一致）
+  ok   占位符识别不误伤真实地理（上游曾用泛化正则误伤 72 条）
+
+====================================================
+GOVERN CROSSCHECK PASSED（10 项；与上游日期/地理逐条一致）
+
+======================================================================
+[PASS] tests/_check_phylodyn_meta_alias.py  (0.2s)
+----------------------------------------------------------------------
+
+[1b] 边界：显式关治理 → 回到"只择优、不治理"的老行为
+  ok   关治理时冒号保留、Unknown 保留（('2022', 'Russia: Stavropol') / ('1982-06-09', 'Unknown')）
+
+[2] A0 层：同一套择优 + 区划列自动识别
+  ok   A0 通过（error=None）
+  ok   区划列自动识别到 location（实际 location）
+  ok   自动识别有告警留痕
+  ok   用了发布日的行数被记下（7）
+  ok   “时间轴偏晚”的告警进了 meta_pick.warnings
+  ok   区划取自元数据 location 列（{'元数据列 location': 15}）
+  ok   日期来源已汇总（{'元数据列 date': 15}）
+  ok   没有未匹配：no_date=0 no_state=0
+  ok   dates.csv 写入了择优后的日期
+      日期来源: [('元数据列 date', 15)]  区划来源: [('元数据列 location', 15)]
+
+[3] 灵敏度：两列都空必须点名缺列
+  ok   缺地点列时报错点名 location（测试表2 缺少必需列：location（表头需为 name,date,location[,lat,lon]）。已自动识别…）
+  ok   缺日期+地点时两条都点名（测试表3 缺少必需列：date,location（表头需为 name,date,location[,lat,lon]）。…）
+  ok   只有发布日 + 只有国名也能识别（{'accession': 'X1', 'release_date': '1982-01-01', 'country': 'Japan', 'name': 'X1', 'date': '1982-01-01', 'location': 'Japan'}）
+
+====================================================
+META ALIAS CHECKS PASSED（19 项）
+临时产物目录: D:\桌面\植物病毒分析平台\run\_check_meta_alias
+
+======================================================================
+[PASS] tests/_check_identity_aa.py  (65.3s)
+----------------------------------------------------------------------
+ok   identity_table.csv 生成: D:\桌面\植物病毒分析平台\run\_tmp\id_aa_check\identity_table.csv
+  ok   高 NT 对样本量足够（NT≥75% 共 7 对）
+  ok   高 NT 对无 AA 塌陷（NT≥75% 且 AA<55% 的对 = 0）
+✓ AA 同一性回归守卫全部通过
+findfont: Failed to find font weight bold, now using 400.
+
+======================================================================
+[PASS] tests/_check_genome_circos.py  (2.6s)
+----------------------------------------------------------------------
+ok   返回 True（真圈图，未回退线性图）
+  ok   PNG 产出且非空（169855 B）
+  ok   SPAdes 节点名 → 可读标题
+  ok   非节点名原样返回
+✓ 圈图回归守卫全部通过
+
+======================================================================
+[PASS] tests/_check_svg_wellformed.py  (0.7s)
+----------------------------------------------------------------------
+  ok   非白名单残缺 SVG = 0 个（应 0）
+
+[B] 灵敏度自测（对照臂）：判据必须能区分残缺与良构
+  ok   残缺 fixture 被判坏（err=not well-formed (invalid token): line 2, column 0）
+  ok   良构 fixture 未被误判
+
+[C] 修复路径：verify_svg 幂等自修仍然可用
+  ok   verify_svg 返回 True（实际 True）
+  ok   修复后文件可解析（err=无）
+  ok   幂等：二次调用后仍良构
+
+[D] 白名单不腐烂：KNOWN_BAD 每条必须仍然残缺
+  note  run/_audit_figs/synteny.svg 不存在（2026-10-04 审查复现图（</path 缺 >））—— 无待抑制项，跳过
+  note  run/_tmp/bad.svg 不存在（最小残缺 fixture（判据灵敏度样本））—— 无待抑制项，跳过
+  ok   0/2 条白名单仍然残缺（2 条样本缺失已跳过）
+
+[E] 出口覆盖（AST 判据）：产物出口与内嵌前必须调 verify_svg
+  ok   Virus_Platform_Core/dfv_plot.py: verify_svg 调用 2 处（应 >0）
+  ok   Virus_Platform_Core/gbdraw_plot.py: verify_svg 调用 1 处（应 >0）
+  ok   Virus_Platform_Core/genome_diag.py: verify_svg 调用 1 处（应 >0）
+  ok   Virus_Platform_Core/viz.py: verify_svg 调用 1 处（应 >0）
+  ok   Virus_Platform_Core/viz.py: verify_svg(svg_p)@935 早于 safe_open(svg_p)@938（先修后读）
+
+✓ SVG 良构守卫通过（范围含 run/ 产物；判据经灵敏度自测）
+
+======================================================================
+[PASS] tests/_check_fig_qa_scans.py  (46.2s)
+----------------------------------------------------------------------
+📊 绘制 D: ...
+📊 绘制 E: ...
+📊 绘制 F: ...
+✅ 合并总览图: C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy\Combined_Landscape_Full.png
+✅ 独立图: C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy\Panel_A_temporal.png
+✅ 独立图: C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy\Panel_B_database.png
+✅ 独立图: C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy\Panel_C_organizations.png
+✅ 独立图: C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy\Panel_D_tissues.png
+✅ 独立图: C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy\Panel_E_regions.png
+✅ 独立图: C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy\Panel_F_stages.png
+
+🎉 完美收工！所有图表已存放至文件夹: [ C:\Users\17711\AppData\Local\Temp\_figqa_meta_snk18goy/ ]
+  ✓ landscape_plot(meta csv): 0 重叠 / 0 越界
+
+✓ 图形体检通过：4 个扫描目标 0 重叠 / 0 越界
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+WARNING:matplotlib.font_manager:findfont: Failed to find font weight bold, now using 400.
+
+======================================================================
+[PASS] tests/_check_primer.py  (4.7s)
+----------------------------------------------------------------------
+ok   任务提交 200（task=82bfea1faea6）
+  ok   任务完成（done）
+  ok   设计出引物对 ≥3（实际 9）
+  ok   primers.tsv 产出
+  ok   表行数 = n_primers（9 vs 9）
+  ok   每对引物都有热力学 score
+  ok   score 值域 0-100（73.3-95.6）
+  ok   recommendation 只取已知分级（['RECOMMENDED', 'USABLE']）
+  ok   引物长度 18-30nt
+  ok   Tm ≥ 50℃
+✓ 引物设计守卫全部通过
+
+======================================================================
+[PASS] tests/_check_examples_inputs.py  (0.1s)
+----------------------------------------------------------------------
+  ok   example_rdp.fasta 可读（5 条）
+  ok   example_recomb_set.fasta 可读（10 条）
+  ok   example_tmv.fasta 可读（1 条）
+  ok   example_viral_contigs.fasta 可读（2 条）
+  ok   example_viral_target_sites.fasta 可读（2 条）
+  ok   example_virus_set.fasta 可读（6 条）
+
+[3] 平台侧引用一致性（卡片「✨示例」填的路径必须真实存在）
+  ok   EXAMPLE_CONSERVED_FASTA → examples/example_conserved_set.fasta 存在
+  ok   EXAMPLE_DATING_TREE → examples/example_treedater.nwk 存在
+  ok   EXAMPLE_FASTA → examples/example_viral_contigs.fasta 存在
+  ok   EXAMPLE_GB_TRIO → examples/example_synteny_A.gb 存在
+  ok   EXAMPLE_GB_TRIO → examples/example_synteny_B.gb 存在
+  ok   EXAMPLE_GB_TRIO → examples/example_synteny_C.gb 存在
+  ok   EXAMPLE_GENBANK_GB → examples/example_genome.gb 存在
+  ok   EXAMPLE_PHYLOGEO_FASTA → examples/example_phylogeo.fasta 存在
+  ok   EXAMPLE_PHYLOGEO_META → examples/example_phylogeo.meta.csv 存在
+  ok   EXAMPLE_RECOMB_FASTA → examples/example_recomb_set.fasta 存在
+  ok   EXAMPLE_SET_FASTA → examples/example_virus_set.fasta 存在
+  ok   EXAMPLE_SYNTENY_TREE_NWK → examples/example_synteny_tree.nwk 存在
+  ok   EXAMPLE_TREE_NWK → examples/example_tree.nwk 存在
+
+====================================================
+EXAMPLE INPUT CHECKS PASSED（35 项）
+
+======================================================================
+[PASS] tests/_check_online_meta.py  (27.6s)
+----------------------------------------------------------------------
+  ok   host 带进数据集：'Dahlia sp.'
+  ok   老式 country 记录仍能取到地点：'China'
+
+[3] 负向：`geo_loc_name` 必须被引擎读到（曾整条漏读）
+  ok   引擎 meta['geo_loc_name'] 非空：'Japan:Chiba'
+  ok   meta 字典里**有**这个键（只写进读取循环不够）
+
+[4] 在线（无网自动 SKIP）
+  ok   物种名 → taxid = 12892（PSTVd 应为 12892）
+  ok   accession → taxid = 12892（两条独立通路应一致）
+  ok   一键采集收到 2 条
+  ok   在线输出前五列同样是标准（['name', 'date', 'location', 'lat', 'lon', 'host']）
+  ok   每条都有地点（geo_loc_name 优先）
+
+====================================================
+ONLINE META CHECKS PASSED（19 项）
+C:\Python312\Lib\site-packages\Bio\GenBank\__init__.py:840: BiopythonParserWarning: Expected sequence length 359, found 419 (TEST0001.1).
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\__init__.py:840: BiopythonParserWarning: Expected sequence length 359, found 360 (TEST0002.1).
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\__init__.py:840: BiopythonParserWarning: Expected sequence length 359, found 419 (TEST0001.1).
+  warnings.warn(
+C:\Python312\Lib\site-packages\Bio\GenBank\__init__.py:840: BiopythonParserWarning: Expected sequence length 359, found 360 (TEST0002.1).
+  warnings.warn(
+
+======================================================================
+[PASS] tests/_check_gtr_mapping.py  (0.1s)
+----------------------------------------------------------------------
+  ok   标点代号 ']' 也被解析（→ Russia）
+  ok   标点代号 '\\' 也被解析（→ Poland）
+  ok   标点代号 '^' 也被解析（→ Russia, Khabarovsk）
+  ok   标点代号 '_' 也被解析（→ Loc30）
+  ok   `]` 映射成 Russia（真跑实测值）
+  映射样例: {'Y': 'Loc24', 'Z': 'Loc25', '[': 'Peru', '\\': 'Poland', ']': 'Russia', '^': 'Russia, Khabarovsk'}
+
+[2] pi（均衡频率）同样不能漏标点代号
+  ok   pi 条数 = 状态数（40/40）
+
+[3] confidence.csv 必须**全部**翻译成地名，且未映射数为 0
+  ok   未映射列数 = 0（实际 0）
+  ok   整体标记为已映射
+  ok   内部节点状态是地名而不是代号（'Russia'）
+  ok   `[` → Peru（'Peru'）
+  ok   叶状态也走同一套映射（'China'）
+
+[4] 部分未映射必须**能被报出来**（旧条件只在"全失败"时才告警）
+  ok   部分映射时未映射数被如实统计（39）
+  ok   并给出未映射代号清单（前 3: ['A', 'B', 'C']）
+  ok   （旧字段仍为 True —— 正因如此才需要新的计数与告警条件）
+
+====================================================
+GTR MAPPING CHECKS PASSED（16 项）
+
+======================================================================
+[PASS] tests/_check_tree_overlay.py  (8.6s)
+----------------------------------------------------------------------
+
+[3] 真浏览器：点示例 → 叠加真的画进 SVG
+  ok   属色带 3 条（期望 3）
+  ok   基因框 18 个（期望 18；窄框退化 rect 另计 1 个）
+  ok   同源连线 18 条（期望 18）
+  ok   坐标标尺 1 条
+  ok   同一性色标图例 1 条（0-100% 渐变色条）
+  ok   tvMeta 带叠加摘要：3 个序列 · example_synteny_tree.nwk · 基因组叠加：3 条轨道 / 18 个基因 / 18 条同源连线（按蛋白同一性着色）（仅矩形布局绘制） · 查看器面板：布局切换 / 显示与支持值 / 
+  ok   面板出现「Genome Tracks」开关
+  ok   面板出现「Identity %」开关（clinker 式同一性标签）
+
+[4] 真浏览器负控：换纯树示例 → 叠加元素必须清零
+  ok   纯树示例已渲染（tvMeta 出现「N 个序列」）
+  ok   负控：纯树时属色带为 0（实际 0）
+  ok   负控：纯树时基因框为 0（实际 0）
+  ok   负控：纯树时同一性色标为 0（实际 0）
+  ok   负控：纯树时同源连线为 0（实际 0）
+  ok   负控：纯树时 tvMeta 不提叠加
+
+[6] 无 JS 报错
+  ok   无 pageerror（实际 []）
+
+====================================================
+「进化树 + 基因组叠加」接线检查通过 ✔  截图: run\_check_tree_overlay.png
+
+======================================================================
+[PASS] tests/_check_sdt_gap_parity.py  (1.1s)
+----------------------------------------------------------------------
+对照臂：旧实现抽自 archive\_bak_20261007\Virus_Platform_Core\sdt_exact.py
+
+[A] 一致性：_sdt_formula == pairwise_identity_matrix（含 "." 输入）
+  ok   s1 vs s2: sdt=90.9091 phylo=90.9091
+  ok   s1 vs s3: sdt=100.0000 phylo=100.0000
+  ok   s2 vs s3: sdt=90.9091 phylo=90.9091
+  ok   全部对的最大偏差 0.00e+00 < 1e-9
+
+[B] 灵敏度（对照臂）：旧实现必须给出不同值，否则本测试恒过
+  ok   旧实现与新实现存在差异的对数 = 1（应 > 0）
+         s1 vs s2: 旧 83.3333 → 新 90.9091（差 +7.5758 个百分点）
+
+[C] 改动面受限：不含 "." 的输入上新旧必须零差异
+  ok   无 "." 输入上的最大新旧差 0.00e+00 == 0
+
+✓ SDT gap 口径守卫通过（_sdt_formula 与 pairwise_identity_matrix 同口径）
+
+======================================================================
+[PASS] tests/_check_sdt_distribution.py  (3.6s)
+----------------------------------------------------------------------
+对照臂：旧实现抽自 archive\_bak_20261007\Virus_Platform_Core\sdt_exact.py
+
+[B] 灵敏度（对照臂）：旧实现在全同矩阵上必须抛异常
+  ok   旧实现抛异常 = ValueError（应非 None）
+         ValueError: max() iterable argument is empty
+
+[A] 新实现：全同矩阵能正常出图
+  ok   不抛异常
+  ok   生成 .png
+  ok   生成 .pdf
+
+[C] 常规矩阵：Proportion 合计 == 1.0（钉住 2026-10-04 D3 修复）
+  ok   bins 覆盖全域：合计 = 1.000000（min_v=71）
+  ok   常规矩阵出图正常
+
+✓ SDT 分布图守卫通过（全同输入不再崩，常规输入行为不变）
+findfont: Failed to find font weight bold, now using 400.
+
+======================================================================
+[PASS] tests/_check_crispr_primer_purity.py  (1.3s)
+----------------------------------------------------------------------
+对照臂：旧实现抽自 archive\_bak_20261007\Virus_Platform_Core\crispr_design.py
+
+[A] 新实现：含 "W" 的窗口上，路线 B 产出的引物必须全部纯 ACGT
+  ok   仍有引物产出（5 对，证明未把候选全毙）
+  ok   含非 ACGT 碱基的引物对 = 0（应 0）
+
+[B] 灵敏度（对照臂）：旧实现必须漏出含兼并码的引物，否则本测试恒过
+  ok   旧实现漏出的含兼并码引物对 = 5（应 > 0）
+         旧 f=CACCGGATCATTGGTGCATAGAGCCTGGGC  r=CAATGATTWWGAGCGCTAWWACATTATWWWTTAG
+         旧 f=CACCGGATCATTGGTGCATAGAGCCTGGGC  r=GCAATGATTWWGAGCGCTAWWACATTATWWWTTA
+         旧 f=CACCGGATCATTGGTGCATAGAGCCTGGGC  r=TGCAATGATTWWGAGCGCTAWWACATTATWWWTT
+
+[C] 不过度过滤：纯 ACGT 窗口上新实现仍产出引物
+  ok   构造窗口本身是纯 ACGT
+  ok   纯 ACGT 窗口上产出 5 对（应 > 0）
+  ok   纯 ACGT 窗口上产出亦全为纯 ACGT
+
+✓ CRISPR 引物纯度守卫通过（路线 B 交付序列已限纯 ACGT）
+
+======================================================================
+[PASS] tests/_check_task_on_finish.py  (5.4s)
+----------------------------------------------------------------------
+对照臂：旧 TaskManager 抽自 archive\_bak_20261007\Virus_Platform_Core\web\tasks.py
+
+[A] 灵敏度（对照臂）：旧实现在「排队取消」时 fn 的 finally 不执行
+  ok   旧：任务确为排队取消（status=cancelled, error=任务已停止（排队中取消））
+  ok   旧：fn 的 finally 执行次数 = 0（应 0，即会泄漏）
+
+[B] 新实现：同一场景下 on_finish 被调用恰一次
+  ok   新：任务确为排队取消（status=cancelled）
+  ok   新：fn 的 finally 仍为 0（证明泄漏窗口真实存在）
+  ok   新：on_finish 调用次数 = 1（应恰 1）
+
+[C] 正常路径：未取消的任务跑完后 on_finish 也被调用恰一次
+  ok   正常路径 fn 的 finally = 1（应 1）
+  ok   正常路径 on_finish = 1（应恰 1）
+
+[D] 失败路径：抛异常的任务 on_finish 仍恰一次
+  ok   失败路径 on_finish = 1（应恰 1）
+
+✓ on_finish 守卫通过（排队取消/正常/失败三种终态都恰调一次）
+
+======================================================================
+[PASS] tests/_it_svg_embed_chain.py  (1.1s)
+----------------------------------------------------------------------
+P1-4 链路回归：残缺 SVG 不得进入 report.html
+==============================================================
+[对照] 两个坏样本读原文确实非良构（否则本测试恒过）
+  ok   fixable.svg 读原文非良构（not well-formed (invalid token): line 3, column 0）
+  ok   unfixable.svg 读原文非良构（not well-formed (invalid token): line 2, column 100）
+
+[被测] build_report → run\_it_svg_chain\07_report\report.html
+  ok   报告内不含残缺字节串 "</path\n"
+         报告内 SVG 片段 2 个，非良构 0 个
+  ok   非良构片段 = 0 个（应 0）
+  ok   修得动的 SVG 已修复并内嵌（标记 gfix 可见）
+  ok   本来良构的 SVG 正常内嵌（标记 gok 可见）
+  ok   修不动的 SVG 已被跳过、未内嵌（标记 gbad 不可见）
+  ok   fixable.svg 落盘文件已被就地修复（可解析）
+  ok   unfixable.svg 落盘内容未被改动（不留半成品）
+
+✓ P1-4 链路回归通过：报告内 SVG 全部良构，修不动的被跳过
+
+======================================================================
+[PASS] tests/_it_global_reset.py  (2.0s)
+----------------------------------------------------------------------
+  ✔ 内存记录被清
+  ✔ 磁盘归档保留
+  ✔ removed 只计内存 1 条  1
+[5] /api/global/reset 端到端
+  ✔ 无 confirm 令牌 → 400（防误触）  400
+  ✔ 400 后未清任何任务记录（磁盘记录仍在）  ['555555555555.json', '666666666666.json', '777777777777.json']
+  ✔ 400 后队列未被清空  [{'id': 'z', 'sample': 'S9', 'status': 'queued'}]
+  ✔ HTTP 200  200
+  ✔ cleared_queue=1  {'active_left': 0, 'cancelled_tasks': 0, 'cleared_queue': 1, 'kept_results': True, 'ok': True, 'removed_task_records': 3}
+  ✔ active_left=0  {'active_left': 0, 'cancelled_tasks': 0, 'cleared_queue': 1, 'kept_results': True, 'ok': True, 'removed_task_records': 3}
+  ✔ removed_task_records>=2  {'active_left': 0, 'cancelled_tasks': 0, 'cleared_queue': 1, 'kept_results': True, 'ok': True, 'removed_task_records': 3}
+  ✔ kept_results=True
+  ✔ 接口调用后 queue.json 仍在
+  ✔ 接口调用后结果文件仍在
+  ✔ 接口调用后磁盘任务记录清空  []
+[5b] include_archive=false 保留归档
+  ✔ HTTP 200  200
+  ✔ 归档文件保留
+[6] /results 页面带出 project 字段
+  ✔ HTTP 200  200
+  ✔ /results 渲染出项目标签
+  ✔ /results 渲染出样品行
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_it_sample_names.py  (5.0s)
+----------------------------------------------------------------------
+  ✔ 接口读到了 input.json 里的 R1  r1.fq
+  ✔ HTTP 200 (/api/samples/my sample/marker.txt)  200
+  ✔ 文件内容正确
+  ✔ HTTP 200 (/api/sample_files/my sample)
+  ✔ 文件列表含 marker.txt 与输入档案  ['00_prep/input.json', 'marker.txt']
+  ✔ run 路由存在（错误码非 404）  405
+[6] 归一化不再是静默的：创建接口回 note
+  ✔ HTTP 200 (create 样品A)  200 {"note":"样品名「样品A」已按文件名安全规则登记为「A」（目录名不能含中文/空格等字符）","sample":"A","typed":"样品A"}
+
+  ✔ 返回实际登记名 A  A
+  ✔ 返回用户输入名 样品A  样品A
+  ✔ 返回非空 note 说明被规范化  样品名「样品A」已按文件名安全规则登记为「A」（目录名不能含中文/空格等字符）
+  ✔ note 里同时出现输入名与实际名  样品名「样品A」已按文件名安全规则登记为「A」（目录名不能含中文/空格等字符）
+  ✔ 磁盘上真的建了 A 目录
+[7] 输入名不需要规范化时不回 note
+  ✔ sample == typed  {'note': '', 'sample': 'NX-77', 'typed': 'NX-77'}
+  ✔ note 为空
+[8] 撞名错误把"输入名 → 规范名"讲清楚
+  ✔ HTTP 400  400
+  ✔ 错误里同时给出输入名与规范名  样品名「样品A」会被规范化为「A」，而「A」已存在；请换一个样品名
+[9] 真实样品目录全部可解析（不回归）
+  ✔ 5 个真实样品目录名解析后不变  []
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_it_manifest_backfill.py  (11.3s)
+----------------------------------------------------------------------
+  ✔ 回填不臆测 last_run / last_status（不在函数契约内）  last_run=None last_status=None
+[3] 已有真实清单的样品一律不动
+  ✔ stages_done 未被覆盖  ['host']
+  ✔ last_status 未被覆盖
+  ✔ 未被打上 backfilled 标记
+[4] 非规范命名的样品也能回填
+  ✔ odd name 写出了清单
+  ✔ 项目名取 P2  P2
+[5] 回填后 /api/samples 的字段有值
+  ✔ HTTP 200
+  ✔ LEGACY 带出项目名 P1  {'done': 1, 'last_run': '', 'last_status': '', 'name': 'LEGACY', 'project': 'P1', 'r1': 'r1.fq', 'r2': '', 'total': 15}
+  ✔ LEGACY 带出 stages_done 数量（done>=1）  {'done': 1, 'last_run': '', 'last_status': '', 'name': 'LEGACY', 'project': 'P1', 'r1': 'r1.fq', 'r2': '', 'total': 15}
+  ✔ LEGACY 的清单里确实记下了 stages_done  ['assembly']
+  ✔ _scratch 不出现在样品列表  ['KEEPME', 'LEGACY', 'NOPROJ', 'odd name']
+  ✔ odd name 出现在列表里（非规范命名可读）  ['KEEPME', 'LEGACY', 'NOPROJ', 'odd name']
+[6] --sample 过滤
+  ✔ 只处理指定样品  {'total': 1, 'backfilled': 1, 'skipped': 0, 'dry_run': True, 'items': [{'sample': 'NOPROJ', 'project': 'NOPROJ', 'stages_done': 0, 'changed': True, 'wrote': False}]}
+  ✔ 非规范命名可被 --sample 命中  {'total': 1, 'backfilled': 1, 'skipped': 0, 'dry_run': True, 'items': [{'sample': 'odd name', 'project': 'P2', 'stages_done': 0, 'changed': True, 'wrote': False}]}
+  ✔ 不存在的名字不抛异常  {'total': 1, 'backfilled': 0, 'skipped': 1, 'dry_run': True, 'items': []}
+[7] CLI smoke（samples-backfill --dry-run）
+  ✔ 退出码 0  rc=0 
+  ✔ 输出含"扫描样品"  扫描样品 2 个，需回填 0 个，已有清单跳过 2 个（预演，未写盘） |   没有需要回填的样品 | 
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_it_review_fixes.py  (6.1s)
+----------------------------------------------------------------------
+  ✔ 同 seed 完全复现
+  ✔ proportion=0 拒绝
+  ✔ host 复用：全一致命中
+  ✔ host 复用：相对路径同库仍命中（abspath 口径）
+  ✔ host 复用：confidence 变 → 重跑
+== 接线断言（P1-1/3/5/7/8/9/10 + P2）==
+  ✔ P1-1 subsample 指纹含 mode/seed/inputs
+  ✔ proportion 子采样三路接线（CLI/Web/AI）
+  ✔ P1-1 fastp 指纹含 params
+  ✔ P1-1 host 复用校验输入/库/参数
+  ✔ P1-1 assembly .done 校验 inputs_fp
+  ✔ P1-1 kvsuite 外层指纹含 engine/thresholds
+  ✔ P1-3 未分类候选池（assembly 产出）
+  ✔ P1-3 未分类独立验证（pipeline 通道）
+  ✔ P1-5 检索源状态落盘 + 全失败退出
+  skip  docs/paper/benchmark/ 不存在（论文基准目录已裁），跳过 P1-7/P1-8 静态断言
+  ✔ P1-9 窗口表 N_EFF_BASIS + 探索性声明
+  ✔ P1-10 BEAST 等距抽样
+  ✔ P1-10 无 log 的树导入带探索性警告
+  ✔ P2 DRT 默认置换 999
+  skip  docs/paper/manuscript_body.md 不存在，跳过手稿断言
+  ✔ P2 步数口径统一（README 15 阶段）
+
+✔ 审查修复回归全部通过
+
+======================================================================
+[PASS] tests/_check_tool_outdir.py  (21.4s)
+----------------------------------------------------------------------
+[PASS] convert 外部目录返回 out_dir  D:\桌面\植物病毒分析平台\run\_uitest_toolout\convert_20261025_224144_8088b1
+  [PASS] convert 产物目录 = <out_dir>/<run_name> 且有 .fa.gz  ['example_R1.fa.gz', 'run.log']
+  [PASS] tool_runs/<run>/out_link.json 登记
+  [PASS] 历史列表含该 run 且 out_dir 指向外部目录  D:\桌面\植物病毒分析平台\run\_uitest_toolout\convert_20261025_224144_8088b1
+  [PASS] 产物经 /tool_runs/<run>/<file> 可下载（指针寻址）
+  [PASS] 历史列表文件清单含产物（touch 刷新签名生效）  ['example_R1.fa.gz', 'run.log']
+  [PASS] fastp 任务完成
+  [PASS] fastp 产物在外部目录（递归含 00_prep/）  ['run.log', '00_prep\\.fastp.done', '00_prep\\fastp.json', '00_prep\\fastp_R1.fastq.gz', '00_prep\\fastp_R2.fastq.gz']
+  [PASS] prepchain 有外移目录  done
+  [PASS] prepchain 状态非 queued（已执行或完成）  done
+  [PASS] hostremoval 外移目录已建
+  [PASS] hostremoval 指针已登记
+  [PASS] 删除运行 200
+  [PASS] 外部产物目录已清
+  [PASS] 指针目录已清
+
+ALL PASS
+
+======================================================================
+[PASS] tests/_it_ai_assist.py  (3.3s)
+----------------------------------------------------------------------
+  ✔ read_tool_run_file 拦越界
+  ✔ read_tool_run_file 拦不存在任务
+  ✔ read_tool_run_file 正常读任务文件
+  ✔ read_prescreen_file 拦非法项目名
+  ✔ read_prescreen_file 拦不存在项目
+  ✔ read_prescreen_file 正常读预筛表（test）
+  ✔ digest 读到 ①宿主去除 host_ratio
+  ✔ digest 读到 子采样 n_pairs
+  ✔ digest 读到 ⑨基因组图 n_plots
+  ✔ platform_brief 含 tool_runs/extensions/prescreen
+  ✔ 扩展契约：phylodyn 读到 root_year/n_corridors
+  ✔ 扩展契约：phylodyn 派生 n_warn=2
+  ✔ 扩展契约：rtt 读到 r2 与输入文件名
+  ✔ 预筛计数：n_runs=3 / n_pass=1 / n_ok=2
+== 4) 配置保存往返 ==
+  ✔ 保存 200
+  ✔ 温度越界被钳到 2.0
+  ✔ 掩码含尾 4 位
+  ✔ GET 掩码一致
+  ✔ platform.json 落盘无 api_key
+  ✔ run/ai_local.json 持有 Key 真身
+  ✔ 重启后 Key 从密钥文件合并
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_it_ai_events.py  (5.3s)
+----------------------------------------------------------------------
+  ✔ 播报文本来自模拟端点
+  ✔ 失败事件必发（与开关无关）
+  ✔ 播报关 → 失败无 AI 诊断
+== 3) 第三层 决策闸门 ==
+  ✔ 闸门关 → 直接继续
+  ✔ 闸门进入待决
+  ✔ pending 闸门事件发布
+  ✔ 确认 API 200
+  ✔ 闸门放行 → 线程返回 continue
+  ✔ 继续状态事件发布
+  ✔ 终止 API 200
+  ✔ 终止 → GateAborted
+  ✔ 超时自动继续
+  ✔ 空体 gate → 400
+  ✔ 无待决闸门 → 404
+  ✔ 非法 action → 404
+== 4) 配置校验 ==
+  ✔ 三层开关可保存
+  ✔ 超时钳到下限 1
+  ✔ 阶段清单按字符串保存
+  ✔ 非字符串数组 → 400
+  ✔ 非法超时 → 400
+
+✔ 主动驱动三层全部通过
+
+======================================================================
+[PASS] tests/_it_ai_actions.py  (9.1s)
+----------------------------------------------------------------------
+  ✔ 不存在样品拒绝
+  ✔ 白名单外参数拒绝
+  ✔ TUNABLE 边界钳制
+== 2) 决策端点 ==
+  ✔ actions 清单 200
+  ✔ 空体 → 400（审计安全）
+  ✔ 未知执行单 → 404
+  ✔ 非法 decision → 4xx
+== 3) 批准执行（执行器打桩） ==
+  ✔ 批准 200
+  ✔ 状态翻转为 launched
+  ✔ 执行器收到样品
+== 4) 第二级 自动重试（预算 1 次/样品·阶段） ==
+  ✔ 失败 → 自动重试启动
+  ✔ 同阶段第二次失败 → 预算拦截
+== 5) 第三级 自动调参（默认关；开后有预算与参数钳制） ==
+  ✔ 默认关 → 不动作
+  ✔ 开启后自动调参执行
+  ✔ 提议参数进入执行体
+  ✔ 每样品调参预算 1 次
+== 6) 配置持久化 ==
+  ✔ 两级开关可保存
+
+✔ 执行层三级全部通过
+
+======================================================================
+[PASS] tests/_check_ai_dock_ui.py  (7.7s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app.css?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/ai-logo.png?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-nav.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-ai.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/i18n.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-compare.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-runhistory.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /static/examples.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/ai/profiles HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/ai/config HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/dbs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:25] "GET /api/ai/context HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:26] "POST /api/ai/chat HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:26] "GET /api/kv_index_list HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_ai_events_ui.py  (13.3s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app.css?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/ai-logo.png?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-nav.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-ai.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/i18n.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-compare.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-runhistory.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/examples.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /api/ai/profiles HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:32] "GET /api/ai/config HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:33] "GET /api/dbs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:33] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:33] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:34] "GET /api/kv_index_list HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:36] "GET /api/samples HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:37] "GET /api/ai/context HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:42:38] "POST /api/ai/gate HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_ai_global_ui.py  (20.5s)
+----------------------------------------------------------------------
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-nav.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-ai.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/i18n.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-runhistory.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-compare.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-jobs.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-browse.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-batch.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/app-storage.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:42:59] "GET /static/examples.js?v=1792936355 HTTP/1.1" 304 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/tasks?logs=0 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/storage HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/settings HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/tools HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/storage?detail=1 HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/plugin/list HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/ai/config HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/ai/profiles HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/ai/events HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/tool/runs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/dbs HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/plugin/available HTTP/1.1" 200 -
+127.0.0.1 - - [25/Oct/2026 22:43:00] "GET /api/plugin/modules HTTP/1.1" 200 -
+
+======================================================================
+[PASS] tests/_check_ai_digest_parity.py  (0.4s)
+----------------------------------------------------------------------
+  ✔ A 边界：派生键 n_plots=3
+  ✔ A 边界：空串值被丢弃
+  ✔ B 真实样品对拍（2 个样品）
+  ✔ C 灵敏度：正确的 digest 不报问题
+  ✔ C 灵敏度：改错一个数字必须被报出
+  ✔ C 灵敏度：凭空造数字必须被报出
+  ✔ D tool_runs_brief 条目数对得上（10 条）
+  ✔ E 扩展分析契约对拍（覆盖 3 个工具）
+  ✔ E 范围自证：磁盘有 run 的契约工具全部入 digest
+  ✔ F 灵敏度：原样 metrics 不报问题
+  ✔ F 灵敏度：改错 phylodyn.n_changes_ml 必须被报出
+  ✔ F 灵敏度：改错 phylogeo.method 必须被报出
+  ✔ F 灵敏度：改错 rdp.aln_len 必须被报出
+  ✔ F 灵敏度：凭空造 metrics 键必须被报出
+  ✔ G 预筛计数对拍（5 个项目）
+  ✔ G 灵敏度：改错 n_pass 必须被报出
+  ✔ H beast 成功：beast_ok=True + 走廊/单位/文件名
+  ✔ H beast 报错：beast_ok=False + 原文透出
+  ✔ H beast=null：不产出任何 beast_* 键
+  ✔ H 未登记工具：_ext_metrics 返回空
+  ✔ H 契约型工具保证在列（40 个更新的非契约工具之下）
+  ✔ H 按工具去重：20 个同名 pdprep 只保留 1 条
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/_check_ai_audit.py  (14.8s)
+----------------------------------------------------------------------
+  ✔ A4 敏感键整键脱敏（api_key / x_token / db_password）
+  ✔ A4 业务键不受影响
+  ✔ A4 明文密钥绝不落盘
+  ✔ A5 超长文本被截断到上限内
+  ✔ A6 stats 报告的字节数与磁盘一致
+  ✔ A7 超保留期的旧文件被清理
+  ✔ A8 VP_AI_AUDIT=0 时不入队
+  ✔ B 装了信号处理器：SIGTERM 后 20 条事件全部落盘（退出不丢）
+  ✔ B 对照：不装处理器会丢（实际 0/20）→ 证明信号处理器确有作用
+  ✔ B 同步落盘（record_sync）扛得住不可捕获的硬杀
+  ✔ C 反复 flush/drain 后条数仍为 25（不重复写）
+  ✔ D2 create_action 成功
+  ✔ D1 broadcast.publish 真的落盘
+  ✔ D2 执行单 pending→rejected 两次状态都落盘
+  ✔ D3 broadcast.history 能从盘上读回
+  ✔ D4 审计记录里无明文密钥字段
+  ✔ E 重启后从盘上重建历史
+  ✔ E 进行中状态在重启后标为 interrupted
+  ✔ E 新单号 = act_8（不撞盘上的 act_7）
+  ✔ F 范围自证：ai_audit 在 OUTPUT_SUBDIRS 里（切输出根不会写回平台）
+  ✔ G1 灵敏度：去掉脱敏后明文密钥确实会出现（A4 有区分度）
+  ✔ G2 灵敏度：丢掉一半后条数明显不符（A1 有区分度）
+
+✔ 全部通过
+
+======================================================================
+[PASS] tests/test_crispr_design.py  (80.1s)
+----------------------------------------------------------------------
+.....................                                                    [100%]
+21 passed in 75.50s (0:01:15)
+
+======================================================================
+[PASS] tests/test_host_genome_gget.py  (4.9s)
+----------------------------------------------------------------------
+..................                                                       [100%]
+18 passed in 0.92s
+
+======================================================================
+[PASS] tests/test_mirna_alignment.py  (2.5s)
+----------------------------------------------------------------------
+.................                                                        [100%]
+17 passed in 0.23s
+
+======================================================================
+[PASS] tests/test_utils_pure.py  (3.4s)
+----------------------------------------------------------------------
+....................                                                     [100%]
+20 passed in 1.86s
+
+======================================================================
+[PASS] tests/test_datasets_cli.py  (1.5s)
+----------------------------------------------------------------------
+..................                                                       [100%]
+18 passed in 0.05s
+
+======================================================================
+[PASS] tests/test_web_guard.py  (3.8s)
+----------------------------------------------------------------------
+.....                                                                    [100%]
+5 passed in 1.91s
+
+======================================================================
+[PASS] tests/test_crispr_ui.py  (1.4s)
+----------------------------------------------------------------------
+....                                                                     [100%]
+4 passed in 0.04s
+
+======================================================================
+[PASS] tests/test_io_utils.py  (1.7s)
+----------------------------------------------------------------------
+........                                                                 [100%]
+8 passed in 0.06s
+
+======================================================================
+[PASS] tests/test_sci_palette.py  (1.8s)
+----------------------------------------------------------------------
+.....                                                                    [100%]
+5 passed in 0.17s
+
+======================================================================
+[PASS] tests/test_stage_funnel.py  (16.1s)
+----------------------------------------------------------------------
+.......                                                                  [100%]
+7 passed in 14.48s
+
+======================================================================
+[PASS] tests/test_rdp5_bdp.py  (1.5s)
+----------------------------------------------------------------------
+...........                                                              [100%]
+11 passed in 0.07s

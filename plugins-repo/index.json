@@ -614,7 +614,7 @@
     "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/suvtk-db-plugin.zip"
    ],
    "size": 221651239,
-   "sha256": "963654e08c5927caf730b4fbece3e37d378cd919cf3ee204504ae309a8af6c51",
+   "sha256": "c0497e116bb2bcc5d7b0d1b98136532c65dc281a9c1dcfc66dcd2d0329d2d5cf",
    "install_to": "databases/misc_db/suvtk"
   }
  ],

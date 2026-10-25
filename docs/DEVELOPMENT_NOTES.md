@@ -3558,3 +3558,26 @@ exe 才进分发版（v18 已重打验证；_it_submit 集成测试通过）。
   features`（其 tbl 由平台 generate_feature_tbl 等价承接）、`suvtk
   comments`（.cmt 可自备后复用）。提交链保持上一轮解耦：缺模块跳过+WARN，
   缺库自动回退平台 tbl，不阻塞 .sqn。
+
+### 2026-10-25 补⑪：BFVD 定案「优雅降级」+ 发布硬化 + 全面质检
+
+1. **BFVD 层不硬删，改为优雅降级**（用户裁定）：保留 ⑥b 层2 BFVD 证据与
+   ③b BFVD 分支的完整代码；缺 bfvd 库/mmseqs 时自动跳过并 WARN（实测
+   run_bfvd 缺库 → None + "未找到 BFVD 库…跳过"，不阻断）。suvtk-db 恢复
+   为可选下载件（索引 34 包 / GitHub Release 已上传）；提交链维持解耦
+   （平台 ⑥b tbl 默认、suvtk 模块缺失时 comments 跳过）。
+2. **发布硬化（体积污染门禁）**：构建机装有 torch/transformers/sklearn/
+   opencv/dask（平台源码零引用），v19 构建被 hooks-contrib 的
+   sklearn.array_api_compat.torch 等边卷进 _internal（+600MB，冻结自检 ⑥
+   误报数百项可选依赖）。三处硬化：
+   · spec excludes 显式排除上述重型 ML 栈（构建可复现）；
+   · audit_deps 源码遍历跳过 `_internal`（冻结态自检 ⑥ 回到"不适用"）；
+   · package.py --verify 新增体积门禁：_internal 出现 torch/transformers/
+     sklearn/cv2/dask 即失败。
+   实测 v20：程序 888M（回到基线）、selfcheck rc0、门禁 ✔。
+3. **dist_completeness 档位化**：新增 --minimal-tools/--slim-tools，与
+   package.py 同源清单过滤 3rd/tools 源码侧；webapp 比对忽略 static/virome
+   （spec 主动排除的死重副本）。独立版口径复跑：全部 ✔ 无缺件。
+4. 本轮质检项：compileall 全树 PASS；audit_deps 43 项全覆盖；许可清单
+   最新；两个 addon 索引一致且安装/卸载干测通过；GitHub 资产 34 个；
+   exe MCP stdio 握手 22 工具；全量 quick 回归见 _release_quick.log。
