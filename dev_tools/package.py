@@ -24,7 +24,9 @@
   数据集：virusref_db（参考 FASTA/ref_info + 预置 v4 blastn 库）、tax_db、
           virus_ref（RefSeq/RVDB 源 FASTA，本机有就随包）
   注释：annot_db/{prot,hmm}
-  建树/其他：tree_db、misc_db/{viroids,suvtk,prob}、genus_lens.tsv
+  建树/其他：tree_db、misc_db/{viroids,prob}、genus_lens.tsv
+  可选下载件（不随包，插件管理一键装）：ref-db（RefSeq 通用库 712M）、
+                             suvtk-db（NCBI 提交注释库 222M）
 
 程序启动时按此顺序找示例目录（Virus_Platform_Core/config.py `_detect_examples_root`）：
   platform.json.examples_root → <程序>/examples →
@@ -616,19 +618,32 @@ if _args.with_db or _args.db_only:
     #   （kv_index 的 reference.fasta + reference.ref_info.tsv，Accession/
     #   Taxid 列齐备）在建库页一键重建；ref 可由 virus_ref/ 下的 RefSeq
     #   源 FASTA 一键重建。需要开箱即用时加 --with-built-virusdb。
+    # 2026-10-25 精简口径（逐项有自愈路径）：
+    #   · annot_db/prot 只带 viral_prot.faa.gz——ensure_viral_prot_db 会
+    #     gunzip 出 faa、重建 organism_tax.tsv，_ensure_search_db 再建 dmnd；
+    #   · misc_db/suvtk（212M）整体转可选下载件 suvtk-db（提交 NCBI 本就
+    #     需联网；插件管理/模块自愈一键装，install_to 还原原位）；
+    #   · virusref_db/blast 预置 v4 索引不随包——assembly._rebuild_if_stale
+    #     缺失即就地重建（秒级，中文路径可建可用）；
+    #   · misc_db/viroids 的 v4 索引同理（acvirus.ensure_blast_db 自建），
+    #     fasta/注释表照发。
+    # 三元组第三项 = 本树额外 ignore 的文件/目录名（fnmatch）。
     _DB_TREES = (
-        ('virusref_db',      '← 病毒参考数据集（FASTA+ref_info，兼作分类库建库源）'
-                             ' + 预置 v4 blastn 库 + kv_index 鉴定库（引擎索引不随包，首跑自建）'),
+        ('virusref_db',      '← 病毒参考数据集（FASTA+ref_info，兼作分类库建库源；'
+                             'blast v4 索引首跑自建）',
+         ('blast',)),
         ('virus_ref',        '← RefSeq/RVDB 源 FASTA（通用病毒库建库数据集；本机有就随包）'),
-        ('annot_db/prot',    '← 功能注释层1：RefSeq 病毒蛋白（DIAMOND 库 + faa.gz + 元数据）'),
-        ('annot_db/hmm',     '← 功能注释层2：Pfam-A-Viruses（已 hmmpress）'),
+        ('annot_db/prot',    '← 功能注释层1：RefSeq 病毒蛋白 faa.gz（faa/dmnd/tax 索引'
+                             '首用自建）',
+         ('viral_prot.faa', 'viral_prot.dmnd', 'organism_tax.tsv')),
+        ('annot_db/hmm',     '← 功能注释层2：Pfam-A-Viruses（已 hmmpress，最小形态）'),
         ('tree_db',          '← 建树参考 plant / ictv 两套口径'),
-        ('misc_db/viroids',  '← 类病毒 blastn v4 库'),
-        ('misc_db/suvtk',    '← NCBI 提交 BFVD 功能注释库'),
+        ('misc_db/viroids',  '← 类病毒参考（fasta + 注释；v4 索引首用自建）',
+         ('viroids_v4.nhr', 'viroids_v4.nin', 'viroids_v4.nsq', 'viroids_v4.njs*')),
         ('misc_db/prob',     '← 宿主概率表'),
         # 2026-10-03 用户裁定：dsRNA 脱靶面板（~1.4GB 物种 RefSeq RNA）不再随
-        # 数据库包分发（软件体积瘦身）。功能保留：自备面板放 databases/dsrna/panel/
-        # 即自动参与脱靶扫描；小文件 lookup.db / 参数 / 致死清单仍随程序包。
+        # 数据库包分发。自备面板放 databases/dsrna/panel/ 即生效；小文件随程序包。
+        # 2026-10-25：misc_db/suvtk（212M）同口径转可选下载件 suvtk-db。
     )
     if _args.with_built_virusdb:
         # 2026-10-25 定案：随包只带 plant 库（改名为 virus_db，唯一默认病毒
@@ -647,7 +662,9 @@ if _args.with_db or _args.db_only:
               '构建页一键自建（开箱即用加 --with-built-virusdb）')
     # 上一版包可能残留旧命名的 kunpeng_db/{plant,ref}（_copy_tree 只清
     # 自己写的目标）——陈旧目录会连同新 virus_db 一起出现在用户库里。
-    for _stale in ('kunpeng_db/plant', 'kunpeng_db/ref'):
+    for _stale in ('kunpeng_db/plant', 'kunpeng_db/ref',
+                   'misc_db/suvtk',          # 转可选件 suvtk-db
+                   'virusref_db/blast'):     # v4 索引首跑自建
         _rmtree(os.path.join(target, 'databases', *_stale.split('/')))
     _db_files = _db_bytes = 0
     # Taxonomy（2026-10-25 定案）：不随包带 546M 解压态 dmp——只带官方
@@ -669,8 +686,11 @@ if _args.with_db or _args.db_only:
         print('  - 未找到 new_taxdump.tar.gz：运行 python main.py '
               'init-taxonomy --force 生成后再打包')
 
-    for _rel, _note in _DB_TREES:
-        _n, _s = _copy_tree(_rel, _note, ignore_fn=_skip_engine_index)
+    for _item in _DB_TREES:
+        _rel, _note = _item[0], _item[1]
+        _ig = _item[2] if len(_item) > 2 else ()
+        _n, _s = _copy_tree(_rel, _note, ignore=_ig,
+                            ignore_fn=_skip_engine_index)
         _db_files += _n
         _db_bytes += _s
     _n, _s = _copy_file('genus_lens.tsv', '← 属平均长度表（近完整基因组判据）')
@@ -930,9 +950,9 @@ if SPLIT and os.path.isdir(APP):
         '③ VirusPlatform-Database\\   数据库包（仅 --with-db 时生成）',
         '   - 原始数据集：病毒参考（FASTA+注释表）、NCBI Taxonomy、',
         '     RefSeq/RVDB 源 FASTA（若随包）',
-        '   - 第三方直接使用库：注释库（RefSeq 病毒蛋白 / Pfam HMM）、',
-        '     建树参考、类病毒库、SUVTK、宿主概率表、属平均长度表、',
-        '     预置 blastn 库',
+        '   - 随包：注释库（RefSeq 病毒蛋白 faa.gz / Pfam HMM press 件）、',
+        '     建树参考、类病毒参考、宿主概率表、属平均长度表；',
+        '     blast/diamond/blastn 派生索引首用自动重建（秒~分钟级）',
         '   - 派生库不预带、首跑/一键自建：鉴定库引擎索引首次运行自动',
         '     现建；kunpeng 病毒分类库（plant/ref）到「数据库构建」页',
         '     「原始数据集」区一键构建（开箱即用需求打包时加',

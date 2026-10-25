@@ -3483,3 +3483,28 @@ prepare_taxonomy 本就"有本地 tar 则纯解压零联网"。
   config.py，必须重打 exe 才进冻结版**（v14 已重打验证）。
 - --verify 增 taxonomy 验证步：exe --cli init-taxonomy 本地解压验证
   tar 完整性 → selfcheck → 清理验证用解压态，分发包只留 tar。
+
+### 2026-10-25 补⑦：数据库包冗余清除（1.2G→536M，用户裁定"不要冗余"）
+
+逐目录核查"数据集 vs 派生索引/可选场景"，四刀：
+
+1. **annot_db/prot 550M→103M**：只带 viral_prot.faa.gz（102M）。faa 是 gz
+   的解压态、dmnd 是 faa 的 DIAMOND 索引、organism_tax.tsv 由 faa 重建——
+   ensure_viral_prot_db 的自愈链全在（gz→gunzip 出 faa → 建 tax_tsv →
+   _ensure_search_db 建 dmnd；safe_open 读 gz 自动解压）。首用重建约
+   2~5 分钟，一次性。
+2. **misc_db/suvtk 212M→0（转可选件 suvtk-db）**：只有 NCBI 提交准备的
+   suvtk 注释阶段用它，而提交本就必须联网。dev_tools/build_suvtk_db_pack.py
+   打包（222M，11 文件，索引登记，GitHub Release 已传）；install_to=
+   databases/misc_db/suvtk（指本级，_swap_into_place 整目录替换不伤同级
+   viroids/prob——干测三断言验证）。
+3. **virusref_db/blast 预置 v4 索引 12M→0**：assembly._rebuild_if_stale
+   缺失即就地重建 v4（中文路径可建可用，秒级）。
+4. **misc_db/viroids v4 索引 5M→0**：acvirus.ensure_blast_db 同口径自建；
+   fasta/acc/注释表照发。
+
+不可再砍项：annot_db/hmm 119M 已是 press 产物最小形态（.hmm 主文件本就
+未随包）；plant_ref reference.fasta 43.7M 是唯一参考真相（gz 化需改多个
+读取方，收益 24M 不值）；prob/viroids 数据表本体保留。
+DB_TREES 升级为三元组（第三项=该树的 fnmatch ignore 清单）；陈旧清理
+清单扩 suvtk/blast。DB 包四轮轨迹：2.3G→1.6G→1.2G→536M（-77%）。
