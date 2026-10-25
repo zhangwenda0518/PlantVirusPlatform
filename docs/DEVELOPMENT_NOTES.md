@@ -3590,3 +3590,13 @@ exe 才进分发版（v18 已重打验证；_it_submit 集成测试通过）。
   （712M）+ suvtk-db-plugin.zip（222M）到 docs/plugins/。
 - Git 推送：origin main + tag v1.1.0（含全部 24+ 提交）。
 - Gitee：main 同步 index.json（仅源码镜像，>100MB addon 走镜像/GitHub）。
+
+### 2026-10-25 补⑬：GitHub 仓库收敛为一个（用户裁定）
+
+保留 **plant-virus-analysis-platform**（本次发布/34 插件资产/索引 URL/Gitee
+镜像同名的唯一主仓）；VirusPlatform 旧仓（9-28 独立历史 + 唯一 wiki）归档
+（archived=true，只读保留，不删历史）。
+- wiki 内容本就在主仓 wiki/ 目录（28 篇）——README/README_EN/全部 wiki 页
+  与 mcp_server 里的 VirusPlatform 链接统一改为主仓路径（页面级链接指向
+  blob/main/wiki/<Page>.md，目录链接指向 tree/main/wiki）。
+- 归档而非删除：旧仓 wiki/历史仍只读可访问；如确认彻底删除可再执行。
