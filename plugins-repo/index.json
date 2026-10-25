@@ -586,6 +586,21 @@
    "size": 9546463,
    "sha256": "b5bdeaeb5567ec170d6cfeed791a5c58b65b8f358407bf2ee857e393bea99d1f",
    "install_to": "3rd/tools/datasets"
+  },
+  {
+   "name": "ref-db",
+   "version": "2026-10.1",
+   "kind": "database",
+   "description": "RefSeq 通用病毒分类库（kunpeng/k2 格式，~680M）——可选下载件：安装后自动落位 databases/kunpeng_db/ref，数据库页与工具②/④病毒库下拉即会列出，选中即用；植物主库 virus_db 不受影响。",
+   "file": "ref-db-plugin.zip",
+   "url": "http://39.106.101.94/plugins/ref-db-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/ref-db-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/ref-db-plugin.zip"
+   ],
+   "size": 712489198,
+   "sha256": "489dd930a4bcec14812a6afc165e74dedc4bb2375fe41b089a8966f82d0d4f25",
+   "install_to": "databases/kunpeng_db/ref"
   }
  ],
  "modules": {

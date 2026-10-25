@@ -227,7 +227,7 @@ def check(to_dir):
     """只校验目标目录是否可用作数据库根。
 
     分两层报告：
-      ① 运行就绪：databases/{kunpeng_db/plant,tax_db} 与 host-db/ 下的宿主
+      ① 运行就绪：databases/{kunpeng_db/virus_db,tax_db} 与 host-db/ 下的宿主
          kunpeng 库文件、taxonomy dmp、databases/virusref_db/（病毒参考 +
          kv_index/ 鉴定库：reference.fasta（引擎索引是派生物，首次运行自建））—— 分类/宿主预测/建树/
          病毒识别定量直接依赖这些；

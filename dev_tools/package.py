@@ -561,7 +561,7 @@ if _args.with_db or _args.db_only:
     def _db_dst(rel, is_file=False):
         """databases/<rel> → 数据库包内的同构路径。
 
-        必须保留相对 `databases/` 的层级（databases/kunpeng_db/plant、
+        必须保留相对 `databases/` 的层级（databases/kunpeng_db/virus_db、
         databases/annot_db/prot…）——`Virus_Platform_Core/config.py` 的 `db_path()`
         按 `DB_LAYOUT` 解析这些路径；早先用 basename 展平（databases/plant/）
         会让打包后的平台一个库都找不到（实测 db-migrate --check 三项全 ✘）。
@@ -603,7 +603,7 @@ if _args.with_db or _args.db_only:
 
     # ---- 数据库清单 ----------------------------------------------------
     # 为什么从"逐个文件名"改成"整树"（2026-09-10）：
-    #   原先的手写清单只覆盖 kunpeng_db/plant + tax_db + palmdb（后者已随
+    #   原先的手写清单只覆盖 kunpeng_db/virus_db + tax_db + palmdb（后者已随
     #   Open-Virome 撤下、目录早就不存在），把 annot_db / tree_db / misc_db /
     #   virusref_db 整套漏掉了 —— 打出来的包缺功能注释库、CDD、HMM、建树参考、
     #   病毒参考与预置 blastn 库，装上去等于半个平台。
@@ -632,12 +632,23 @@ if _args.with_db or _args.db_only:
         # 即自动参与脱靶扫描；小文件 lookup.db / 参数 / 致死清单仍随程序包。
     )
     if _args.with_built_virusdb:
+        # 2026-10-25 定案：随包只带 plant 库（改名为 virus_db，唯一默认病毒
+        # 库槽位）；ref（RefSeq 通用库 680M）不再随包——改为可选下载件
+        # ref-db（插件源/GitHub Release），装到 kunpeng_db/ref 后在工具②/④
+        # 下拉/构建页选择使用。植物专用分发由此省 30%。
         _DB_TREES = _DB_TREES + (
-            ('kunpeng_db/plant', '← 病毒分类库（预建，开箱即用；数据集在 virusref_db 可重建）'),
-            ('kunpeng_db/ref',   '← RefSeq 通用 kraken2 库（预建，开箱即用）'),
+            ('kunpeng_db/virus_db',
+             '← 默认病毒分类库 virus_db（原 plant，预建，开箱即用；'
+             '数据集在 virusref_db 可重建）'),
         )
+        print('  - kunpeng_db/ref（RefSeq 通用库 680M）不入包：可选下载件'
+              'ref-db（插件源/GitHub Release），装后下拉即选')
+    # 上一版包可能残留旧命名的 kunpeng_db/{plant,ref}（_copy_tree 只清
+    # 自己写的目标）——陈旧目录会连同新 virus_db 一起出现在用户库里。
+    for _stale in ('kunpeng_db/plant', 'kunpeng_db/ref'):
+        _rmtree(os.path.join(target, 'databases', *_stale.split('/')))
     else:
-        print('  - kunpeng 预建分类库（plant/ref）不入包：分发数据集，'
+        print('  - kunpeng 预建分类库（virus_db/ref）不入包：分发数据集，'
               '构建页一键自建（开箱即用加 --with-built-virusdb）')
     _db_files = _db_bytes = 0
     for _rel, _note in _DB_TREES:

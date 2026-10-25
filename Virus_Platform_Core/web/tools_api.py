@@ -160,7 +160,7 @@ LIGHT_TOOLS = {'convert', 'genoplot', 'primer', 'mirna', 'beastexport'}
 
 # 工具②/④的病毒库内置键名。RVDB（databases/virus/rvdb）已于本会话移除，
 # 保留键名只会让 /api/dbs 的“可用内置库”提示与“库未就绪”报错指向不存在的目录。
-VIRUS_DB_PRESETS = {'virus': ('virus', 'plant'),
+VIRUS_DB_PRESETS = {'virus': ('virus', 'virus_db'),
                     'refvirus': ('virus', 'ref'),
                     'k2viral': None}
 

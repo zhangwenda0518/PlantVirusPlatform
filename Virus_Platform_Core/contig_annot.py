@@ -115,7 +115,7 @@ def _seqid2taxid():
     便于与原始参考 FASTA 头匹配。
     """
     m = {}
-    p = os.path.join(db_path('virus', 'plant'), 'seqid2taxid.map')
+    p = os.path.join(db_path('virus', 'virus_db'), 'seqid2taxid.map')
     if not os.path.isfile(p):
         return m
     with safe_open(p) as f:

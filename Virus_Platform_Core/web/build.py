@@ -902,11 +902,11 @@ def api_datasets():
         if not os.path.isfile(ref):
             continue                         # 无参考数据集的目录不进数据集卡
         # 同源 kunpeng 分类库：平台库（virusref_db 下）才有约定落点——
-        # kv_index ↔ 主库 kunpeng_db/plant，其余同名对应 kunpeng_db/<name>；
+        # kv_index ↔ 主库 kunpeng_db/virus_db，其余同名对应 kunpeng_db/<name>；
         # 其他位置的库不预设分类库落点。
         if lib.get('scope') == 'platform':
             if nm in ('kv_index', 'plant_ref'):   # 平台默认库（2026-09-29 更名）
-                kdir, kname = db_path('virus', 'plant'), 'plant'
+                kdir, kname = db_path('virus', 'virus_db'), 'virus_db'
             else:
                 kdir = os.path.join(DIRS['databases'], 'kunpeng_db', nm)
                 kname = nm

@@ -41,7 +41,7 @@ JOBS = [
         'input': EX + 'example_R1.fastq.gz',
         'input2': EX + 'example_R2.fastq.gz',
         'input_type': 'pe',
-        'db_virus': 'databases/kunpeng_db/plant'}),
+        'db_virus': 'databases/kunpeng_db/virus_db'}),
     ('hostremoval', 'hostremoval', '宿主去除与序列提取', {
         'r1': EX + 'example_R1.fastq.gz',
         'r2': EX + 'example_R2.fastq.gz',
@@ -72,7 +72,7 @@ JOBS = [
         'r2': EX + 'example_R2.fastq.gz', 'mode': 'rnaviral'}),
     ('contigs', 'contigs', 'contig 分类（组装结果再鉴定）', {
         'contigs': EX + 'example_viral_contigs.fasta',
-        'db_virus': 'databases/kunpeng_db/plant'}),
+        'db_virus': 'databases/kunpeng_db/virus_db'}),
     ('orfa', 'orfa', 'ORF 功能注释', {
         'fasta': EX + 'example_viral_contigs.fasta'}),
     ('verify', 'verify', '候选序列验证', {

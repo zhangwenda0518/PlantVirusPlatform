@@ -35,7 +35,7 @@ import app  # noqa: E402
 SEP = ('/', '\\')
 
 # 这些字段名装的是**给人看的标签/说明**，含斜杠也正常，不参与路径判定。
-# 例：/api/dbs 的 virus_libs[].name = 'kunpeng_db/plant'（下拉显示名，
+# 例：/api/dbs 的 virus_libs[].name = 'kunpeng_db/virus_db'（下拉显示名，
 # option 的 value 走的是同一对象的 path 字段，那里必须是绝对路径）；
 # /api/kv_index_list 的 manifest.layout 是一段中文说明；
 # manifest.notes / fix_script / original_broken_backup 是数据集的**来源记录**

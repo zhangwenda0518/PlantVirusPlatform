@@ -368,6 +368,11 @@ def uninstall(name, root=None):
     任务若正引用该插件工具会失败——与 PhyloSuite 同口径（直接删），
     安装器不替代任务中心的并发管理。"""
     root = root or PLUGIN_DIR
+    # install_to 的还原基准与 install_zip 同源：root 的上一级（平台根）。
+    # 此前硬编码 PLATFORM_ROOT——自定义 root 调用（打包预装/干测）会误删
+    # 开发机仓库里的同名目录（2026-10-25 实测误删 databases/kunpeng_db/ref，
+    # 靠 zip 包恢复）。
+    base = os.path.dirname(root)
     if not _NAME_RE.match(name or ''):
         raise PluginError(f'插件名非法: {name!r}')
     pdir = os.path.join(root, name)
@@ -378,11 +383,11 @@ def uninstall(name, root=None):
     rec = reg.get(name)
     if rec:
         it = (rec.get('manifest') or {}).get('install_to') or ''
-        target = os.path.join(PLATFORM_ROOT, it.replace('/', os.sep)) if it else ''
+        target = os.path.join(base, it.replace('/', os.sep)) if it else ''
         # 只删 install_to 指向的目录，且必须在平台根之内（防御清单被篡改）
         if target and os.path.isdir(target) and \
                 os.path.normpath(target).startswith(
-                    os.path.normpath(PLATFORM_ROOT) + os.sep):
+                    os.path.normpath(base) + os.sep):
             _rmtree_force(target)
         reg.pop(name, None)
         _write_registry(reg, root)

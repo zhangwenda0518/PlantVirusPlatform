@@ -3445,3 +3445,23 @@ kv_common/kv_variant、kv_stage 实测引用）；trimal 在 pipeline/phylo 主�
 两组升到全开箱。_MAINLINE_KEEP 同步；插件轴剩 RDP5CL / table2asn /
 iqtree3 / raxml-ng / lsd2 / pandepth / viral_consensus / dsRNAmax /
 srna-target / strawberry-perl / snpeff / jre-snpeff / snpgenie。
+
+### 2026-10-25 补⑤：病毒库命名统一 virus_db，ref 改可选下载件（用户裁定）
+
+- **命名**：kunpeng_db/{plant,ref} 双槽位取消——默认病毒库统一叫
+  **virus_db**（DB_LAYOUT 子键 + 目录 + platform.json + VIRUS_DB_PRESETS
+  + build 页 kv_index 配对名同步改名）；随包内置的植物库直接占用该槽位。
+- **ref（RefSeq 通用库 680M）不再随数据包分发**：改为可选下载件
+  **ref-db**（kind=database 插件，install_to=databases/kunpeng_db/ref，
+  712MB zip，sha256 校验）——插件源/GitHub Release 已上线
+  （gh release upload plugin-packs 完成；镜像站 docs/plugins/ 待用户自传）。
+  安装后数据库页扫描自动列出，工具②/④下拉/构建页选用；卸载只删 ref 本级。
+- 数据库包 2.3G→**1.6G**；包内陈旧 kunpeng_db/{plant,ref} 由打包脚本清除。
+- 连带修 **plugin_manager.uninstall 硬编码 PLATFORM_ROOT**：自定义 root
+  调用（打包预装/干测）会误删开发机仓库同名目录（本次实测误删
+  databases/kunpeng_db/ref，靠 ref-db zip 恢复）——改为 dirname(root)，
+  与 install_zip 的 install_to 基准同源；干测三断言全绿（落位/不伤
+  virus_db/只删 ref）。
+- ref-db 包构建器：dev_tools/build_ref_db_pack.py（--check 校验索引）。
+  布局坑：zip 内文件必须平铺插件根（install_to 平铺语义），包一层子目录
+  会嵌成 kunpeng_db/ref/ref/。

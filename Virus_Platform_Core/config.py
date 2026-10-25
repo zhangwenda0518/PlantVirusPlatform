@@ -128,7 +128,10 @@ LEGACY_MULTI_DIRS = {
 _ACTIVE_HOST_DB = ''
 DB_LAYOUT = {
     'virus': {
-        'plant': 'kunpeng_db/plant',
+        # 2026-10-25：plant/ref 命名取消——默认病毒库统一叫 virus_db
+        # （随包内置的就是植物库）；ref 改为可选下载件，装到 kunpeng_db/ref
+        # 后在工具②/④下拉/构建页选择使用。
+        'virus_db': 'kunpeng_db/virus_db',
         'ref':   'kunpeng_db/ref',
         # RVDB（C-RVDB 通用参考库）槽位：universal_ref 仍会按需建/取它
         'rvdb':  'kunpeng_db/rvdb',
@@ -180,7 +183,7 @@ def _resolve_host_db():
 
 
 def db_path(category, name):
-    """按分类取数据库路径（kunpeng_db/plant、annot_db/hmm 等）。
+    """按分类取数据库路径（kunpeng_db/virus_db、annot_db/hmm 等）。
 
     单一路径解析：注册表已是当前布局，不做旧目录兜底（目录不存在时也返回
     该路径，供建库落盘用）。
@@ -1069,7 +1072,7 @@ class Config:
         self.defaults = {k: v for k, _t, v, *_r in self.DEFAULT_FIELDS}
         self.databases = {
             'host':  db_path('host', 'classify'),
-            'virus': db_path('virus', 'plant'),
+            'virus': db_path('virus', 'virus_db'),
         }
         self.output_root = ''      # 自定义输出根（'' = 平台目录内）
         self.input_root = ''       # 自定义输入根（fastq / uploads）
@@ -1119,7 +1122,7 @@ class Config:
             apply_active_host_db('')
         self.databases = {
             'host':  db_path('host', 'classify'),
-            'virus': db_path('virus', 'plant'),
+            'virus': db_path('virus', 'virus_db'),
         }
         for k, v in (getattr(self, '_db_override', {}) or {}).items():
             if not v:
@@ -1339,7 +1342,7 @@ class Config:
         apply_active_host_db(self.active_host_db)
         self.databases = {
             'host':  db_path('host', 'classify'),
-            'virus': db_path('virus', 'plant'),
+            'virus': db_path('virus', 'virus_db'),
         }
         self.save()
 
