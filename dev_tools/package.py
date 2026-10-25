@@ -25,7 +25,8 @@
           virus_ref（RefSeq/RVDB 源 FASTA，本机有就随包）
   注释：annot_db/{prot,hmm}
   建树/其他：tree_db、misc_db/{viroids,prob}、genus_lens.tsv
-  可选下载件（不随包，插件管理一键装）：ref-db（RefSeq 通用库 712M）
+  可选下载件（不随包，插件管理一键装）：ref-db（RefSeq 通用库 712M）、
+                             suvtk-db（BFVD 功能注释库 222M）
 
 
 程序启动时按此顺序找示例目录（Virus_Platform_Core/config.py `_detect_examples_root`）：
@@ -623,9 +624,10 @@ if _args.with_db or _args.db_only:
     #     零重建，原始序列 faa/faa.gz 不随包——ensure_viral_prot_db 对
     #     "dmnd+organism_tax 在位"短路就绪；切引擎/库损坏时自动从 RefSeq
     #     下载重建）；
-    #   · misc_db/suvtk 不随包、不做可选件（2026-10-25 二调：bfvd 三处调用
-    #     点均优雅降级——⑥b 层2/③b BFVD 分支跳过+WARN，RefSeq 蛋白与 Pfam
-    #     两层注释不受影响；自备库经 platform.json databases.bfvd 登记）；
+    #   · misc_db/suvtk 不随包，转可选下载件 suvtk-db（2026-10-25 三调：
+    #     BFVD 的实用能力保留——装上后 ⑥b 层2 与 ③b 的 BFVD 证据自动启用，
+    #     走平台原生 bfvd_search，不需要 suvtk python 模块；未装时两层注释
+    #     优雅降级，自备库可经 platform.json databases.bfvd 登记）；
     #   · virusref_db/blast 预置 v4 索引不随包——assembly._rebuild_if_stale
     #     缺失即就地重建（秒级，中文路径可建可用）；
     #   · misc_db/viroids 的 v4 索引同理（acvirus.ensure_blast_db 自建），
@@ -646,8 +648,8 @@ if _args.with_db or _args.db_only:
         ('misc_db/prob',     '← 宿主概率表'),
         # 2026-10-03 用户裁定：dsRNA 脱靶面板（~1.4GB 物种 RefSeq RNA）不再随
         # 数据库包分发。自备面板放 databases/dsrna/panel/ 即生效；小文件随程序包。
-        # 2026-10-25：misc_db/suvtk（212M）不随包、不做可选件（bfvd 层
-        # 优雅降级；自备库经 platform.json databases.bfvd 登记）。
+        # 2026-10-25：misc_db/suvtk（212M）不随包，转可选件 suvtk-db
+        # （BFVD 原生能力随装随用；未装时 bfvd 层优雅降级）。
     )
     if _args.with_built_virusdb:
         # 2026-10-25 定案：随包只带 plant 库（改名为 virus_db，唯一默认病毒

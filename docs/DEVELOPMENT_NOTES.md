@@ -3544,3 +3544,17 @@ suvtk、无 bfvd 库）生成 .sqn 必失败。
 
 注意：改动在 suvtk_submit.py + web/submit.py（冻结在 PYZ）——必须重打
 exe 才进分发版（v18 已重打验证；_it_submit 集成测试通过）。
+
+### 2026-10-25 补⑩：suvtk-db 恢复为可选下载件（用户三调：实用能力要留）
+
+撤销上一轮"完全不提供"：suvtk-db（BFVD 222M）重新上架为**可选下载件**
+（索引 34 个包、GitHub Release plugin-packs、干测三断言过）。定位澄清：
+
+- **装 addon 即得（平台原生，无需 suvtk 模块）**：⑥b ORF 注释层2 的 BFVD
+  病毒域证据（bfvd_search 与 suvtk 提交链同库同命名）、③b 候选验证 BFVD
+  分支、提交准备用平台 tbl 时 product 含 BFVD 证据（merge_layer2 →
+  orf_annotation.tsv → generate_feature_tbl）。
+- **仍需 suvtk python 模块（开发机 editable，分发版没有）**：`suvtk
+  features`（其 tbl 由平台 generate_feature_tbl 等价承接）、`suvtk
+  comments`（.cmt 可自备后复用）。提交链保持上一轮解耦：缺模块跳过+WARN，
+  缺库自动回退平台 tbl，不阻塞 .sqn。

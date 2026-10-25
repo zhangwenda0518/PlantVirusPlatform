@@ -601,6 +601,21 @@
    "size": 712489198,
    "sha256": "489dd930a4bcec14812a6afc165e74dedc4bb2375fe41b089a8966f82d0d4f25",
    "install_to": "databases/kunpeng_db/ref"
+  },
+  {
+   "name": "suvtk-db",
+   "version": "2026-10.1",
+   "kind": "database",
+   "description": "BFVD 病毒域功能注释库（~212M）——可选下载件：安装后自动落位 databases/misc_db/suvtk，⑥b ORF 注释层2 与③b 候选验证的 BFVD 证据自动启用（平台原生 bfvd_search，无需 suvtk 模块）；提交准备用平台 tbl 时 product 亦含BFVD 证据。",
+   "file": "suvtk-db-plugin.zip",
+   "url": "http://39.106.101.94/plugins/suvtk-db-plugin.zip",
+   "urls": [
+    "http://39.106.101.94/plugins/suvtk-db-plugin.zip",
+    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/suvtk-db-plugin.zip"
+   ],
+   "size": 221651239,
+   "sha256": "963654e08c5927caf730b4fbece3e37d378cd919cf3ee204504ae309a8af6c51",
+   "install_to": "databases/misc_db/suvtk"
   }
  ],
  "modules": {
