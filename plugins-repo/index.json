@@ -16,7 +16,7 @@
    "urls": [
     "http://39.106.101.94/plugins/kunpeng-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/kunpeng-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/kunpeng-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/kunpeng-plugin.zip"
    ],
    "size": 1131476,
    "sha256": "fddd0ab406f6ce6ccb87e715be7fcc5256ae6fad532e79cf386013b2c247559c"
@@ -34,7 +34,7 @@
    "urls": [
     "http://39.106.101.94/plugins/seqkit-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/seqkit-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/seqkit-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/seqkit-plugin.zip"
    ],
    "size": 8740683,
    "sha256": "3371c0e332cbdc22b41de042b03b8f46f63e97380cf4c0ba40b2b64af036f4ea"
@@ -52,7 +52,7 @@
    "urls": [
     "http://39.106.101.94/plugins/crabz-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/crabz-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/crabz-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/crabz-plugin.zip"
    ],
    "size": 1163468,
    "sha256": "e06f9f19d1f43e5bb808666d849bd447e706488eef044d3231d7c5bf450fff90"
@@ -70,7 +70,7 @@
    "urls": [
     "http://39.106.101.94/plugins/aria2c-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/aria2c-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/aria2c-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/aria2c-plugin.zip"
    ],
    "size": 2450418,
    "sha256": "26bf09ecdbfee2826363a6c529498105acdb70a37282e2c59b16c1d10089d94f"
@@ -88,7 +88,7 @@
    "urls": [
     "http://39.106.101.94/plugins/minibwa-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/minibwa-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/minibwa-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/minibwa-plugin.zip"
    ],
    "size": 750757,
    "sha256": "35c6e731732b62a109b8b70c7c487d6e4f226add7237f9fde80156ad65532ae4"
@@ -106,7 +106,7 @@
    "urls": [
     "http://39.106.101.94/plugins/sracha-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/sracha-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/sracha-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/sracha-plugin.zip"
    ],
    "size": 3536216,
    "sha256": "5b8a9a4cd4087972e799a8e0afb457c7d7f7a4c3b844dc7609042b32836f120e"
@@ -127,7 +127,7 @@
    "urls": [
     "http://39.106.101.94/plugins/blast-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/blast-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/blast-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/blast-plugin.zip"
    ],
    "size": 26254213,
    "sha256": "419cccbef8ea0757cb4f9dbb9c4f5d46f95892f2a1277a5d6bbe9075225c1c67"
@@ -145,7 +145,7 @@
    "urls": [
     "http://39.106.101.94/plugins/spades-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/spades-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/spades-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/spades-plugin.zip"
    ],
    "size": 38248573,
    "sha256": "d937e74c46e86a487642f879e6df84864de4029c8039143271a6fbb5dc58be37"
@@ -163,7 +163,7 @@
    "urls": [
     "http://39.106.101.94/plugins/mafft-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/mafft-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/mafft-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/mafft-plugin.zip"
    ],
    "size": 27489533,
    "sha256": "0624886cf5368cf3c8b58ade9f34ab49daf19930947abb1dbce30a4a21e426b5"
@@ -181,7 +181,7 @@
    "urls": [
     "http://39.106.101.94/plugins/fasttree-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/fasttree-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/fasttree-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/fasttree-plugin.zip"
    ],
    "size": 140224,
    "sha256": "611185132c4ea4205c3d78b53b1c38c93b7afe5a579991955dfa9a40c300c998"
@@ -199,7 +199,7 @@
    "urls": [
     "http://39.106.101.94/plugins/raxml-ng-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/raxml-ng-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/raxml-ng-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/raxml-ng-plugin.zip"
    ],
    "size": 2999242,
    "sha256": "284cefe6bed62176b9ec1d5739a849c76175d5e1ac749a1438a2c9eb8a0c80c1"
@@ -217,7 +217,7 @@
    "urls": [
     "http://39.106.101.94/plugins/iqtree-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/iqtree-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/iqtree-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/iqtree-plugin.zip"
    ],
    "size": 5732371,
    "sha256": "4eb78a70512b9dc50538b7b9eae4e4dd129a928bab5b8e7f4cf23b4a63832362"
@@ -235,7 +235,7 @@
    "urls": [
     "http://39.106.101.94/plugins/trimal-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/trimal-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/trimal-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/trimal-plugin.zip"
    ],
    "size": 364820,
    "sha256": "1011a75e3dc11297c1ff0a521ad97a8867c4672e67d9e0f6796750981551318f"
@@ -253,7 +253,7 @@
    "urls": [
     "http://39.106.101.94/plugins/diamond-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/diamond-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/diamond-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/diamond-plugin.zip"
    ],
    "size": 3356729,
    "sha256": "263603953563aeb73d6b30a6e24774bb72aa71f13e5ee092a1d0c0d1ea78cbde"
@@ -270,7 +270,7 @@
    "url": "http://39.106.101.94/plugins/mmseqs-plugin.zip",
    "urls": [
     "http://39.106.101.94/plugins/mmseqs-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/mmseqs-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/mmseqs-plugin.zip"
    ],
    "size": 124693558,
    "sha256": "fd5a2d3d3fd7dfaaa1956c9c2e6ce415d8ba11e61b755a79c69ea35d962811eb"
@@ -288,7 +288,7 @@
    "urls": [
     "http://39.106.101.94/plugins/minimap2-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/minimap2-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/minimap2-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/minimap2-plugin.zip"
    ],
    "size": 619350,
    "sha256": "2382a3e459f537e62905d657ca7dc51229c2c4621089c0cf521576134cf9c244"
@@ -306,7 +306,7 @@
    "urls": [
     "http://39.106.101.94/plugins/samtools-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/samtools-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/samtools-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/samtools-plugin.zip"
    ],
    "size": 13235586,
    "sha256": "a3b0b993f46f6f5bf83c04e67d41755450e64e0853c54ab960237d99bf8cd545"
@@ -324,7 +324,7 @@
    "urls": [
     "http://39.106.101.94/plugins/bcftools-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/bcftools-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/bcftools-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/bcftools-plugin.zip"
    ],
    "size": 17353741,
    "sha256": "fd197a7bd00eefd5bd3de532a2458da96bc8376b47826e3578fa7e8d06ae6101"
@@ -342,7 +342,7 @@
    "urls": [
     "http://39.106.101.94/plugins/salmon-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/salmon-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/salmon-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/salmon-plugin.zip"
    ],
    "size": 4084757,
    "sha256": "2391d98ec271a12c44e8e62db1c32515af0d2c3c240a8c24203021eff0d0e976"
@@ -360,7 +360,7 @@
    "urls": [
     "http://39.106.101.94/plugins/fastp-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/fastp-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/fastp-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/fastp-plugin.zip"
    ],
    "size": 7158687,
    "sha256": "78a9578f12a59dbe8702761cea5347673d81ff24a61e557cdecafa3945da5510"
@@ -378,7 +378,7 @@
    "urls": [
     "http://39.106.101.94/plugins/table2asn-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/table2asn-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/table2asn-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/table2asn-plugin.zip"
    ],
    "size": 13584326,
    "sha256": "fa52f6adfeb3f78ec22f61455ece2fa8d5ed617b7d6ef99f2cfad9ba6092a32a"
@@ -396,7 +396,7 @@
    "urls": [
     "http://39.106.101.94/plugins/pandepth-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/pandepth-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/pandepth-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/pandepth-plugin.zip"
    ],
    "size": 9725198,
    "sha256": "a714a4d0a5ddb03d94470b111efb241b167d2bad7e39913acfa8bbc03d7676ba"
@@ -414,7 +414,7 @@
    "urls": [
     "http://39.106.101.94/plugins/viral-consensus-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/viral-consensus-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/viral-consensus-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/viral-consensus-plugin.zip"
    ],
    "size": 8167036,
    "sha256": "b542d86a315d0b006082bb7e0c9319023c9992393b237ec4d06d046df8ea3398"
@@ -432,7 +432,7 @@
    "urls": [
     "http://39.106.101.94/plugins/lsd2-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/lsd2-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/lsd2-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/lsd2-plugin.zip"
    ],
    "size": 965920,
    "sha256": "456cd48a64665e0f8d7de78ea38804810d17f8e1d2cd04c78992a96158aee8a9"
@@ -450,7 +450,7 @@
    "urls": [
     "http://39.106.101.94/plugins/dsrnamax-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/dsrnamax-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/dsrnamax-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/dsrnamax-plugin.zip"
    ],
    "size": 1848217,
    "sha256": "fb0b6ddafcd97df45d2246315ca7082b22a54c58f5e8d2aacdc0405224c3517b"
@@ -468,7 +468,7 @@
    "urls": [
     "http://39.106.101.94/plugins/rdp5-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/rdp5-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/rdp5-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/rdp5-plugin.zip"
    ],
    "size": 67901432,
    "sha256": "d353ebafc4bb940631d25b6cccbd6b6733df11a68b2b74e1a95b10b7ce9895d2"
@@ -486,7 +486,7 @@
    "urls": [
     "http://39.106.101.94/plugins/snpeff-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/snpeff-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/snpeff-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/snpeff-plugin.zip"
    ],
    "size": 27636386,
    "sha256": "4f8c670a630592d3d3865414915019152a493ae3e57e276aadba768b9999482f",
@@ -505,7 +505,7 @@
    "urls": [
     "http://39.106.101.94/plugins/jre-snpeff-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/jre-snpeff-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/jre-snpeff-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/jre-snpeff-plugin.zip"
    ],
    "size": 33928541,
    "sha256": "97f00852659650daa32e38b550af4d7f4088ea0b9dbdf669d8dcd5cee94056da",
@@ -524,7 +524,7 @@
    "urls": [
     "http://39.106.101.94/plugins/snpgenie-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/snpgenie-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/snpgenie-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/snpgenie-plugin.zip"
    ],
    "size": 245285,
    "sha256": "60607c9c6fbf2abcf21e13d58e5d74196cc44561a09dda7addb86f7e28d3d9fc",
@@ -543,7 +543,7 @@
    "urls": [
     "http://39.106.101.94/plugins/srna-target-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/srna-target-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/srna-target-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/srna-target-plugin.zip"
    ],
    "size": 32892408,
    "sha256": "32615104c674da3e2dac6b884b56f46e2b8fdca7d70f8286726418f1235f9329",
@@ -562,7 +562,7 @@
    "urls": [
     "http://39.106.101.94/plugins/strawberry-perl-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/strawberry-perl-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/strawberry-perl-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/strawberry-perl-plugin.zip"
    ],
    "size": 18394201,
    "sha256": "d0739fda966cb8ac2fc1e74dd4901a50143716dd8ad8b5c092dc3340d4ef6812",
@@ -581,7 +581,7 @@
    "urls": [
     "http://39.106.101.94/plugins/datasets-plugin.zip",
     "https://gitee.com/zhang-wenda/plant-virus-analysis-platform/releases/download/plugin-packs/datasets-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/datasets-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/datasets-plugin.zip"
    ],
    "size": 9546463,
    "sha256": "b5bdeaeb5567ec170d6cfeed791a5c58b65b8f358407bf2ee857e393bea99d1f",
@@ -596,7 +596,7 @@
    "url": "http://39.106.101.94/plugins/ref-db-plugin.zip",
    "urls": [
     "http://39.106.101.94/plugins/ref-db-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/ref-db-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/ref-db-plugin.zip"
    ],
    "size": 712489198,
    "sha256": "489dd930a4bcec14812a6afc165e74dedc4bb2375fe41b089a8966f82d0d4f25",
@@ -611,7 +611,7 @@
    "url": "http://39.106.101.94/plugins/suvtk-db-plugin.zip",
    "urls": [
     "http://39.106.101.94/plugins/suvtk-db-plugin.zip",
-    "https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/download/plugin-packs/suvtk-db-plugin.zip"
+    "https://github.com/zhangwenda0518/PlantVirusPlatform/releases/download/plugin-packs/suvtk-db-plugin.zip"
    ],
    "size": 221651239,
    "sha256": "c0497e116bb2bcc5d7b0d1b98136532c65dc281a9c1dcfc66dcd2d0329d2d5cf",

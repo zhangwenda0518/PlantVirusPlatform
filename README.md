@@ -118,56 +118,56 @@ mindmap
 
 ## 📦 功能模块总览
 
-> 每个模块的**详细说明（输入输出 · 参数 · CLI · 产物目录 · 注意事项）见 [Wiki](https://github.com/zhangwenda0518/plant-virus-analysis-platform/tree/main/wiki)**。
+> 每个模块的**详细说明（输入输出 · 参数 · CLI · 产物目录 · 注意事项）见 [Wiki](https://github.com/zhangwenda0518/PlantVirusPlatform/tree/main/wiki)**。
 
 ### 主分析管道（样品级，⓪ → ⑩）
 
 | 阶段 | Wiki | 引擎 | 输出 |
 |---|---|---|---|
-| ⓪ Fastp 质控（可选） | [Preprocess](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Preprocess.md) | fastp | clean reads、质控报告 |
+| ⓪ Fastp 质控（可选） | [Preprocess](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Preprocess.md) | fastp | clean reads、质控报告 |
 | ⓪b FASTQ→FASTA（可选） | 同上 | seqkit fq2fa | conv_R1/R2.fa.gz（分类提速） |
 | ① 宿主去除 | 同上 | kunpeng（宿主库） | kept_R1/R2、宿主占比 |
-| ②b 已知病毒识别与定量 | [Kvsuite](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Kvsuite.md) | salmon（EM 定量）/ minibwa | 鉴定表、定量表、BAM+深度、病毒 reads |
-| ③ 组装与分类 | [Assembly](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Assembly.md) | SPAdes metaviral/rna + BLAST | contigs、病毒 contig 注释表 |
+| ②b 已知病毒识别与定量 | [Kvsuite](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Kvsuite.md) | salmon（EM 定量）/ minibwa | 鉴定表、定量表、BAM+深度、病毒 reads |
+| ③ 组装与分类 | [Assembly](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Assembly.md) | SPAdes metaviral/rna + BLAST | contigs、病毒 contig 注释表 |
 | ③b 候选序列验证 | 同上 | 宿主筛选→长度分流→blastx/BFVD/类病毒 | 验证通过的候选集 |
 | ③c 共识序列与变异 | 同上 | reads 回贴参考 → 逐位置计数 | 共识序列、变异表 |
-| ④ 宿主预测 | [Host-Prediction](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Host-Prediction.md) | kunpeng + ICTV 宿主概率级联 | host_prediction.tsv、桑基/旭日图 |
-| ⑥ ORF 预测 | [ORF](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/ORF.md) | pyrodigal + pyrodigal-rv | faa/ffn/gff |
+| ④ 宿主预测 | [Host-Prediction](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Host-Prediction.md) | kunpeng + ICTV 宿主概率级联 | host_prediction.tsv、桑基/旭日图 |
+| ⑥ ORF 预测 | [ORF](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/ORF.md) | pyrodigal + pyrodigal-rv | faa/ffn/gff |
 | ⑥b ORF 功能注释 | 同上 | DIAMOND/MMseqs2/blastp × RefSeq 病毒蛋白 + Pfam HMM + BFVD 病毒域 | orf_annotation.tsv、GFF3、功能示意图 |
-| ⑦ 进化树与 SDT | [Phylo](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Phylo.md) | MAFFT + trimAl + FastTree/RAxML-NG/NJ；SDT 精确引擎 | tree.nwk、identity 矩阵+热图 |
-| ⑧ 引物设计 | [Primer](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Primer.md) | primer3（保守区/全长）+ 热力学评分 | primers.tsv |
-| ⑨ 基因组图 | [Genome-Plots](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Genome-Plots.md) | gbdraw / dna_features_viewer | 圈图 + 线图 SVG |
-| ⑩ 可视化报告 | [Report](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Report.md) | plotly + pycirclize + matplotlib | report.html |
+| ⑦ 进化树与 SDT | [Phylo](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylo.md) | MAFFT + trimAl + FastTree/RAxML-NG/NJ；SDT 精确引擎 | tree.nwk、identity 矩阵+热图 |
+| ⑧ 引物设计 | [Primer](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Primer.md) | primer3（保守区/全长）+ 热力学评分 | primers.tsv |
+| ⑨ 基因组图 | [Genome-Plots](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Genome-Plots.md) | gbdraw / dna_features_viewer | 圈图 + 线图 SVG |
+| ⑩ 可视化报告 | [Report](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Report.md) | plotly + pycirclize + matplotlib | report.html |
 
 ### 扩展分析（专项页签）
 
 | 模块 | Wiki | 说明 |
 |---|---|---|
-| 进化动力学工具组 | [Phylodynamics](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Phylodynamics.md) | TreeTime ML 分子钟/地理重构/天际线/祖先序列、RTT·DRT 回归、BSP、MCC 树解析、时空降采样、元数据治理、比对 QC |
-| BEAST 接口 | [BEAST](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/BEAST.md) | 服务器 BEAST 作业包生成/回读核验、Markov-jump XML 注入与日志解析、MCC 状态解析 |
-| 系统地理 | [Phylogeography](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Phylogeography.md) | 时间/地理元数据驱动的迁移重构 + 迁移弧线动画 GIF；RDP5 重组分析；重组前序列预筛 |
-| 公共数据检索与下载 | [Public-Data](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Public-Data.md) | SRA+GSA 双引擎检索、统一元数据 Core14/Full、SCI 级元数据图组、aria2c 批量下载 + 内置 sracha 转 FASTQ、宿主基因组三源下载（NCBI taxon / accession·染色体过滤 / gget·Ensembl Plants）、NCBI datasets CLI 全模式封装（genome/gene/taxonomy/virus+宿主过滤，virus 直通建库）|
-| 专项工具箱 | [Toolbox](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Toolbox.md) | dsRNA 全链路设计（选窗→效价→脱靶→引物）、miRNA 靶标预测（5 引擎）、NCBI 参考下载、GenBank 集合与 CDS/PEP 提取、MSA 查看、contig 深度注释、单步工具 |
-| NCBI 提交准备 | [Submission](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/NCBI-Submission.md) | unified_metadata.csv 一表驱动：在线编辑→校验→生成 source.src / miuvig / assembly / BioSample / template.sbt / 提交报告 |
-| LOGAN 溯源 | [Logan](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Logan.md) | 病毒 contig 提交 Logan-Search（覆盖 ~2340 万公开 SRA 样本），批量提交 + SSE 实时进度 + 溯源报告 |
+| 进化动力学工具组 | [Phylodynamics](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylodynamics.md) | TreeTime ML 分子钟/地理重构/天际线/祖先序列、RTT·DRT 回归、BSP、MCC 树解析、时空降采样、元数据治理、比对 QC |
+| BEAST 接口 | [BEAST](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/BEAST.md) | 服务器 BEAST 作业包生成/回读核验、Markov-jump XML 注入与日志解析、MCC 状态解析 |
+| 系统地理 | [Phylogeography](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylogeography.md) | 时间/地理元数据驱动的迁移重构 + 迁移弧线动画 GIF；RDP5 重组分析；重组前序列预筛 |
+| 公共数据检索与下载 | [Public-Data](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Public-Data.md) | SRA+GSA 双引擎检索、统一元数据 Core14/Full、SCI 级元数据图组、aria2c 批量下载 + 内置 sracha 转 FASTQ、宿主基因组三源下载（NCBI taxon / accession·染色体过滤 / gget·Ensembl Plants）、NCBI datasets CLI 全模式封装（genome/gene/taxonomy/virus+宿主过滤，virus 直通建库）|
+| 专项工具箱 | [Toolbox](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Toolbox.md) | dsRNA 全链路设计（选窗→效价→脱靶→引物）、miRNA 靶标预测（5 引擎）、NCBI 参考下载、GenBank 集合与 CDS/PEP 提取、MSA 查看、contig 深度注释、单步工具 |
+| NCBI 提交准备 | [Submission](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/NCBI-Submission.md) | unified_metadata.csv 一表驱动：在线编辑→校验→生成 source.src / miuvig / assembly / BioSample / template.sbt / 提交报告 |
+| LOGAN 溯源 | [Logan](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Logan.md) | 病毒 contig 提交 Logan-Search（覆盖 ~2340 万公开 SRA 样本），批量提交 + SSE 实时进度 + 溯源报告 |
 
 ### 平台设施
 
 | 模块 | Wiki | 说明 |
 |---|---|---|
-| 数据库与参考库 | [Databases](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Databases.md) | Taxonomy、kunpeng 分类库、病毒参考/鉴定库、注释库（RefSeq 蛋白/Pfam）、建树库（plant_tree.db / ictv VMR）、宿主概率表、宿主库构建 |
-| 分析流程编排 | [Pipeline](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Pipeline-Overview.md) | 依赖调度、断点续跑、加权进度与剩余时间自学习、资源预估、并发闸门 |
-| 设置·任务中心·运维 | [Settings-Ops](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Settings-Ops.md) | 中英双语、19 项默认参数、磁盘水位、环境自检、tool_runs 归档清理、数据库迁移 |
-| CLI 完整参考 | [CLI-Reference](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/CLI-Reference.md) | 40 个子命令全参数速查 |
-| FAQ 与已知事项 | [FAQ](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/FAQ.md) | 常见问题、中文路径兼容、大基因组建库、设计说明 |
+| 数据库与参考库 | [Databases](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Databases.md) | Taxonomy、kunpeng 分类库、病毒参考/鉴定库、注释库（RefSeq 蛋白/Pfam）、建树库（plant_tree.db / ictv VMR）、宿主概率表、宿主库构建 |
+| 分析流程编排 | [Pipeline](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Pipeline-Overview.md) | 依赖调度、断点续跑、加权进度与剩余时间自学习、资源预估、并发闸门 |
+| 设置·任务中心·运维 | [Settings-Ops](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Settings-Ops.md) | 中英双语、19 项默认参数、磁盘水位、环境自检、tool_runs 归档清理、数据库迁移 |
+| CLI 完整参考 | [CLI-Reference](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/CLI-Reference.md) | 40 个子命令全参数速查 |
+| FAQ 与已知事项 | [FAQ](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/FAQ.md) | 常见问题、中文路径兼容、大基因组建库、设计说明 |
 
 ## 🚀 快速开始
 
 ### 1. 安装
 
 ```bat
-git clone https://github.com/zhangwenda0518/plant-virus-analysis-platform.git
-cd plant-virus-analysis-platform
+git clone https://github.com/zhangwenda0518/PlantVirusPlatform.git
+cd PlantVirusPlatform
 python -m pip install -r requirements.txt   :: 装依赖（2026-10-11 起不再随仓库分发，省 ~700MB 克隆体积）
 :: 没装 Python 的机器：跳过第 3 行，直接双击「环境自检.bat」——
 :: 它会用内置解释器（3rd/python/）检测缺包并自动安装（清华镜像）
@@ -176,9 +176,9 @@ python -m pip install -r requirements.txt   :: 装依赖（2026-10-11 起不再�
 - 需要 **Windows 10+ 与 Python 3.12+**；**平台以源码形态发布（2026-10-11 定案），欢迎按需修改定制**。外部工具已预置在 `3rd/`（约 1.2GB：单文件工具 + 工具套件 + 内置 Python 解释器），克隆即用，**无需也不支持自行编译**（2026-10-11 起不再提供源码构建路线，历史实测记录见 `docs/归档记录_源码构建路线_20261011.md`）。
 - **没带 `3rd/` 的精简克隆**（如 [Gitee 镜像](https://gitee.com/zhang-wenda/plant-virus-analysis-platform)，861 个文件、28MB）：启动后到 **设置 → 插件管理 → 插件源**，点「检测」自动列出缺失工具，点「一键补齐缺失」从国内镜像下载解压（32 个工具包，逐包 sha256 校验）。下载源按序回退：自建镜像 `39.106.101.94` → Gitee Release → GitHub Release。
 - 基因组图首选 gbdraw：`pip install git+https://github.com/satoshikawato/gbdraw.git`（未装自动回退纯 Python 引擎 dna_features_viewer）。
-- 仅一个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/plant-virus-analysis-platform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
+- 仅一个文件超过 GitHub 单文件 100MB 硬限制、改经 [Release（external-tools）](https://github.com/zhangwenda0518/PlantVirusPlatform/releases/tag/external-tools) 分发，下载后放回对应路径即可：
   `3rd/tools/rdp5/3seqTable`（105MB）。Python 依赖一律 pip 安装（2026-10-11 起，含曾经的 `_polars_runtime.pyd` 168MB，均不再需要手动下载）。
-- 数据库（约 3.4GB）不进 git：从已有部署机器整体拷贝 `databases/`（跨盘用 `python main.py db-migrate --to D:\库目录`），预置库明细与自建方式见 [Wiki · Databases](https://github.com/zhangwenda0518/plant-virus-analysis-platform/wiki/Databases)。
+- 数据库（约 3.4GB）不进 git：从已有部署机器整体拷贝 `databases/`（跨盘用 `python main.py db-migrate --to D:\库目录`），预置库明细与自建方式见 [Wiki · Databases](https://github.com/zhangwenda0518/PlantVirusPlatform/wiki/Databases)。
 
 ### 2. 启动（两种模式）
 
@@ -279,7 +279,7 @@ VirusPlatform/
 
 ## 📚 文档
 
-- **[Wiki 首页](https://github.com/zhangwenda0518/plant-virus-analysis-platform/tree/main/wiki)** — 25 个页面逐模块详解（快速开始 / 各阶段 / 进化动力学 / BEAST / 系统地理 / 公共数据 / 工具箱 / 提交 / LOGAN / 数据库 / CLI / FAQ）。
+- **[Wiki 首页](https://github.com/zhangwenda0518/PlantVirusPlatform/tree/main/wiki)** — 25 个页面逐模块详解（快速开始 / 各阶段 / 进化动力学 / BEAST / 系统地理 / 公共数据 / 工具箱 / 提交 / LOGAN / 数据库 / CLI / FAQ）。
 - Wiki 源文件同步维护在本仓库 [`wiki/`](wiki/) 目录。
 - **[MCP 服务器](docs/mcp_server.md)** — 把工具箱 / 流水线 / 任务管理暴露为 22 个 `vp_*` 工具（工具箱+流水线+任务管理+全量 CLI+病毒预筛+OpenVirome 云端检索）（工具箱+流水线+任务管理+全量 CLI 能力），Claude Desktop、ZCode 等 MCP 客户端可直接驱动（stdio 与 streamable-HTTP 双模式，含逐参数 schema 与调用模型）。
 - 开发踩坑记录见 [`docs/DEVELOPMENT_NOTES.md`](docs/DEVELOPMENT_NOTES.md)。
@@ -310,7 +310,7 @@ FASTQ / FASTQ.gz（双端选 R1/R2，单端只选 R1）；FASTA / FASTA.gz；Gen
 已修复：建库时序列自动切成 ≤1MB 片段（相邻重叠 34bp 保留跨切口 k-mer），2GB 内存即可完成 1.8GB 基因组建库，k-mer 数与整条建库完全一致。
 </details>
 
-更多见 [Wiki FAQ](https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/FAQ.md)。
+更多见 [Wiki FAQ](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/FAQ.md)。
 
 ## 🙏 引用与致谢
 

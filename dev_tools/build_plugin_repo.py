@@ -28,7 +28,7 @@ DIST = os.path.join(ROOT, 'plugins-dist')
 INDEX_DIR = os.path.join(ROOT, 'plugins-repo')
 
 # Release 资产下载 URL 前缀（gh release create plugin-packs 上传后即生效）
-RELEASE_BASE = ('https://github.com/zhangwenda0518/plant-virus-analysis-platform'
+RELEASE_BASE = ('https://github.com/zhangwenda0518/PlantVirusPlatform'
                 '/releases/download/plugin-packs')
 # 国内镜像站：插件 zip 放在该站 docs/plugins/ 下，由 nginx 静态服务。
 # 环境变量 PVAP_PLUGIN_BASE 可覆盖（自建镜像/换域名时用）。

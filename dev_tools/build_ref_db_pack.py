@@ -82,8 +82,8 @@ def build():
         # Gitee 附件上限 100MB，超限不挂；镜像自传 + GitHub Release
         'url': f'http://39.106.101.94/plugins/{NAME}-plugin.zip',
         'urls': [f'http://39.106.101.94/plugins/{NAME}-plugin.zip',
-                 'https://github.com/zhangwenda0518/plant-virus-analysis-'
-                 'platform/releases/download/plugin-packs/'
+                 'https://github.com/zhangwenda0518/PlantVirusPlatform/'
+                 'releases/download/plugin-packs/'
                  f'{NAME}-plugin.zip'],
         'size': size, 'sha256': sha,
         'install_to': MANIFEST['install_to'],

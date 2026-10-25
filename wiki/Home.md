@@ -160,29 +160,29 @@ python main.py analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample DEMO
 
 ---
 
-*Wiki 源文件同步维护于仓库 [`wiki/`](https://github.com/zhangwenda0518/plant-virus-analysis-platform/tree/main/wiki) 目录。*
+*Wiki 源文件同步维护于仓库 [`wiki/`](https://github.com/zhangwenda0518/PlantVirusPlatform/tree/main/wiki) 目录。*
 
-[Quick-Start]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Quick-Start
-[Architecture]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Architecture
-[Pipeline-Overview]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Pipeline-Overview
-[Preprocess]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Preprocess
-[Kvsuite]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Kvsuite
-[Assembly]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Assembly
-[Host-Prediction]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Host-Prediction
-[ORF]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/ORF
-[Phylo]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Phylo
-[Primer]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Primer
-[Genome-Plots]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Genome-Plots
-[Report]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Report
-[Phylodynamics]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Phylodynamics
-[BEAST]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/BEAST
-[Phylogeography]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Phylogeography
-[Public-Data]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Public-Data
-[Toolbox]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Toolbox
-[Submission]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/NCBI-Submission
-[Logan]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Logan
-[Databases]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Databases
-[Settings-Ops]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/Settings-Ops
-[CLI-Reference]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/CLI-Reference
-[FAQ]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/FAQ
-[AI-Assistant]: https://github.com/zhangwenda0518/plant-virus-analysis-platform/blob/main/wiki/AI-Assistant
+[Quick-Start]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Quick-Start
+[Architecture]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Architecture
+[Pipeline-Overview]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Pipeline-Overview
+[Preprocess]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Preprocess
+[Kvsuite]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Kvsuite
+[Assembly]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Assembly
+[Host-Prediction]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Host-Prediction
+[ORF]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/ORF
+[Phylo]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylo
+[Primer]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Primer
+[Genome-Plots]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Genome-Plots
+[Report]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Report
+[Phylodynamics]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylodynamics
+[BEAST]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/BEAST
+[Phylogeography]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylogeography
+[Public-Data]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Public-Data
+[Toolbox]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Toolbox
+[Submission]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/NCBI-Submission
+[Logan]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Logan
+[Databases]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Databases
+[Settings-Ops]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Settings-Ops
+[CLI-Reference]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/CLI-Reference
+[FAQ]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/FAQ
+[AI-Assistant]: https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/AI-Assistant

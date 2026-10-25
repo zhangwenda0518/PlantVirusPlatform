@@ -56,7 +56,7 @@ KINDS = ('tool', 'database')
 DEFAULT_INDEX_URLS = [
     'http://39.106.101.94/plugins/index.json',
     'https://raw.githubusercontent.com/zhangwenda0518/'
-    'plant-virus-analysis-platform/main/plugins-repo/index.json',
+    'PlantVirusPlatform/main/plugins-repo/index.json',
     # 2026-10-25：Gitee raw 第三兜底（国内可达；镜像未更新 / GitHub raw
     # 被墙时仍能拿到索引。前提是 Gitee 仓库 main 已同步 index.json）。
     'https://gitee.com/zhang-wenda/plant-virus-analysis-platform/'

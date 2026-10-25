@@ -3600,3 +3600,15 @@ exe 才进分发版（v18 已重打验证；_it_submit 集成测试通过）。
   与 mcp_server 里的 VirusPlatform 链接统一改为主仓路径（页面级链接指向
   blob/main/wiki/<Page>.md，目录链接指向 tree/main/wiki）。
 - 归档而非删除：旧仓 wiki/历史仍只读可访问；如确认彻底删除可再执行。
+
+### 2026-10-25 补⑭：GitHub 主仓改名 PlantVirusPlatform
+
+`plant-virus-analysis-platform` → **PlantVirusPlatform**（GitHub PATCH name，
+web 链接自动 301；raw 不跟随重定向，必须同步改代码）：
+- plugin_manager.DEFAULT_INDEX_URLS 的 GitHub raw 索引（拆分字面量）；
+- 两个 addon 构建脚本的 Release 兜底 URL；plugins-repo/index.json 全量
+  GitHub 资产 URL；README/README_EN/wiki 全页/mcp_server UA/克隆指引；
+- 镜像站 index.json 需重传（含新 URL）；Gitee 仓库名不动（Gitee raw 索引
+  与资产 URL 仍指向 gitee.com/zhang-wenda/plant-virus-analysis-platform）；
+- 本地 git remote origin 切 SSH 新名；移除指向已归档旧仓的 virusplatform
+  remote。
