@@ -617,11 +617,20 @@ def _detect_database_root():
 
     程序/数据库分离打包后，两个目录同级放置即零配置可用。只在平台内
     databases/tax_db 尚无 nodes.dmp（新部署/未对接）时才探测，且探测结果
-    不写回 platform.json——配置文件保持零硬编码路径、跨机可移植。"""
+    不写回 platform.json——配置文件保持零硬编码路径、跨机可移植。
+    2026-10-25：Taxonomy 改为随包只带官方 new_taxdump.tar.gz（首启后台
+    解压），探测标记不能只认 nodes.dmp——否则新包永远探测不到（鸡生蛋），
+    exe 会回落程序内 databases 并重新联网下载。tar.gz / 预建病毒库 /
+    注释库任一在位即认定。"""
     cand = os.path.join(os.path.dirname(PLATFORM_ROOT),
                         'VirusPlatform-Database')
-    if os.path.isfile(os.path.join(cand, 'databases', 'tax_db', 'nodes.dmp')):
-        return cand
+    for marker in (
+            os.path.join('databases', 'tax_db', 'nodes.dmp'),
+            os.path.join('databases', 'new_taxdump.tar.gz'),
+            os.path.join('databases', 'kunpeng_db', 'virus_db', 'hash_1.k2d'),
+            os.path.join('databases', 'annot_db', 'hmm')):
+        if os.path.isfile(os.path.join(cand, *marker.split('/'))):
+            return cand
     return ''
 
 

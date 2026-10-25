@@ -617,7 +617,6 @@ if _args.with_db or _args.db_only:
     #   Taxid 列齐备）在建库页一键重建；ref 可由 virus_ref/ 下的 RefSeq
     #   源 FASTA 一键重建。需要开箱即用时加 --with-built-virusdb。
     _DB_TREES = (
-        ('tax_db',           '← NCBI Taxonomy（nodes/names/merged.dmp，原始数据集）'),
         ('virusref_db',      '← 病毒参考数据集（FASTA+ref_info，兼作分类库建库源）'
                              ' + 预置 v4 blastn 库 + kv_index 鉴定库（引擎索引不随包，首跑自建）'),
         ('virus_ref',        '← RefSeq/RVDB 源 FASTA（通用病毒库建库数据集；本机有就随包）'),
@@ -643,14 +642,33 @@ if _args.with_db or _args.db_only:
         )
         print('  - kunpeng_db/ref（RefSeq 通用库 680M）不入包：可选下载件'
               'ref-db（插件源/GitHub Release），装后下拉即选')
+    else:
+        print('  - kunpeng 预建分类库（virus_db/ref）不入包：分发数据集，'
+              '构建页一键自建（开箱即用加 --with-built-virusdb）')
     # 上一版包可能残留旧命名的 kunpeng_db/{plant,ref}（_copy_tree 只清
     # 自己写的目标）——陈旧目录会连同新 virus_db 一起出现在用户库里。
     for _stale in ('kunpeng_db/plant', 'kunpeng_db/ref'):
         _rmtree(os.path.join(target, 'databases', *_stale.split('/')))
-    else:
-        print('  - kunpeng 预建分类库（virus_db/ref）不入包：分发数据集，'
-              '构建页一键自建（开箱即用加 --with-built-virusdb）')
     _db_files = _db_bytes = 0
+    # Taxonomy（2026-10-25 定案）：不随包带 546M 解压态 dmp——只带官方
+    # new_taxdump.tar.gz（155M）。prepare_taxonomy() 本就优先查本地 tar
+    # （有则纯本地解压、零联网）；app.py 启动时会后台自动解压（约 1 分钟），
+    # 数据库页一键按钮同效。DB 包 1.6G → ~1.2G。
+    _tar_src = os.path.join('databases', 'new_taxdump.tar.gz')
+    if os.path.isfile(_tar_src):
+        _rmtree(os.path.join(target, 'databases', 'tax_db'))   # 陈旧解压态
+        shutil.copy2(_tar_src, os.path.join(target, 'databases',
+                                            'new_taxdump.tar.gz'))
+        _sz = os.path.getsize(os.path.join(target, 'databases',
+                                            'new_taxdump.tar.gz'))
+        _db_files += 1
+        _db_bytes += _sz
+        print(f'  + databases/new_taxdump.tar.gz  {_fmt(_sz)}  '
+              '← NCBI Taxonomy 官方压缩包（首启后台自动解压，无需联网）')
+    else:
+        print('  - 未找到 new_taxdump.tar.gz：运行 python main.py '
+              'init-taxonomy --force 生成后再打包')
+
     for _rel, _note in _DB_TREES:
         _n, _s = _copy_tree(_rel, _note, ignore_fn=_skip_engine_index)
         _db_files += _n
@@ -987,10 +1005,25 @@ if _args.verify:
     for _b in _verify_bad:
         print('  ✘ ' + _b)
     if os.path.isfile(os.path.join(APP, 'VirusPlatform.exe')):
+        # Taxonomy 验证（2026-10-25）：包内只带官方 tar.gz，先 exe --cli
+        # init-taxonomy 从本地 tar 解压（零联网）——既验证 tar 完整性，又让
+        # selfcheck 的 Taxonomy 项可判；验完删掉解压态，分发包恢复只带 tar。
+        if os.path.isfile(os.path.join(DB_DIR if SPLIT else APP, 'databases',
+                                       'new_taxdump.tar.gz')):
+            print('== 产物自检（taxonomy：本地 tar 解压验证）==')
+            r = subprocess.run([os.path.abspath(
+                                    os.path.join(APP, 'VirusPlatform.exe')),
+                                '--cli', 'init-taxonomy'],
+                               cwd=os.path.abspath(APP))
+            print('  init-taxonomy 退出码:', r.returncode)
         print('== 产物自检（exe --cli selfcheck）==')
         r = subprocess.run([os.path.abspath(os.path.join(APP, 'VirusPlatform.exe')),
                             '--cli', 'selfcheck'], cwd=os.path.abspath(APP))
         print('  selfcheck 退出码:', r.returncode)
+        _tax_dir = os.path.join(DB_DIR if SPLIT else APP, 'databases', 'tax_db')
+        if r.returncode == 0 and os.path.isdir(_tax_dir):
+            _rmtree(_tax_dir)
+            print('  （验证用 taxonomy 解压态已清理，分发包内只保留 tar.gz）')
     if _verify_bad:
         sys.exit(1)
 print('\n完成。')

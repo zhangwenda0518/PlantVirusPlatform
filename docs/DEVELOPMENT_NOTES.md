@@ -3465,3 +3465,21 @@ srna-target / strawberry-perl / snpeff / jre-snpeff / snpgenie。
 - ref-db 包构建器：dev_tools/build_ref_db_pack.py（--check 校验索引）。
   布局坑：zip 内文件必须平铺插件根（install_to 平铺语义），包一层子目录
   会嵌成 kunpeng_db/ref/ref/。
+
+### 2026-10-25 补⑥：tax_db 瘦身——随包只带官方 tar.gz（546M→155M，用户裁定）
+
+回答三个问题的落地方案：taxonomy **数据**不可省（宿主库只有一个宿主
+taxid，顶不了科/属谱系/旭日图/宿主预测统计/ICTV 对照/merged 修正，约
+10 模块在用）；但**解压态不必随包**——官方 new_taxdump.tar.gz（现为
+155M，README 旧文案 ~57MB 已校准）就是 nodes/names/merged 的源，且
+prepare_taxonomy 本就"有本地 tar 则纯解压零联网"。
+
+- 数据库包：tax_db 三件 546M → new_taxdump.tar.gz 155M（DB 包 1.6G→1.2G）
+- app.py 首启后台线程自解压（不阻塞启动；数据库页一键按钮兜底）
+- **修 `_detect_database_root` 鸡生蛋**：探测标记原本只认
+  tax_db/nodes.dmp——tar-only 新包永远探测不到，exe 回落程序内
+  databases 并重新联网下载（v13 --verify 实测复现）。标记扩展为
+  nodes.dmp / tar.gz / 预建 virus_db / annot_db 任一。**该修复在
+  config.py，必须重打 exe 才进冻结版**（v14 已重打验证）。
+- --verify 增 taxonomy 验证步：exe --cli init-taxonomy 本地解压验证
+  tar 完整性 → selfcheck → 清理验证用解压态，分发包只留 tar。

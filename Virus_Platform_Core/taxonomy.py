@@ -140,7 +140,7 @@ def prepare_taxonomy(logger=None, force=False):
 
     if not os.path.isfile(tar_path) or force:
         if logger:
-            logger.log(f"下载 NCBI new_taxdump (~57MB): {TAXDUMP_URL}")
+            logger.log(f"下载 NCBI new_taxdump (~160MB): {TAXDUMP_URL}")
         _download(TAXDUMP_URL, tar_path, logger)
 
     if logger:

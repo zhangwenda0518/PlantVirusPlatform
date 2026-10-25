@@ -576,6 +576,24 @@ def main():
         _release_instance_lock(lock_path if lock_status == 'ok' else None)
         _pause_before_exit()
         return
+    # Taxonomy 首启自解压（2026-10-25）：数据库包只随附官方 new_taxdump.tar.gz
+    # （155M）；检测到本地 tar 且未解压时，后台线程解压（约 1 分钟，纯本地
+    # 零联网——prepare_taxonomy 优先用本地 tar），不阻塞启动。失败静默：
+    # 数据库页的一键按钮仍是兜底出口。
+    try:
+        from Virus_Platform_Core.config import DIRS
+        from Virus_Platform_Core.taxonomy import (prepare_taxonomy,
+                                                  taxonomy_ready)
+        if not taxonomy_ready() and os.path.isfile(
+                os.path.join(DIRS['databases'], 'new_taxdump.tar.gz')):
+            def _bg_taxonomy():
+                try:
+                    prepare_taxonomy()
+                except Exception:                       # noqa: BLE001
+                    pass
+            threading.Thread(target=_bg_taxonomy, daemon=True).start()
+    except Exception:                                   # noqa: BLE001
+        pass
     try:
         if _open_window(url, mode):
             print('  桌面窗口已关闭，平台退出。')
