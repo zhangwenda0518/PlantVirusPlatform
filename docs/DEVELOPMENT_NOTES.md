@@ -3612,3 +3612,15 @@ web 链接自动 301；raw 不跟随重定向，必须同步改代码）：
   与资产 URL 仍指向 gitee.com/zhang-wenda/plant-virus-analysis-platform）；
 - 本地 git remote origin 切 SSH 新名；移除指向已归档旧仓的 virusplatform
   remote。
+
+### 2026-10-25 补⑮：插件下载源可选（用户裁定）
+
+新增「下载源偏好」设置（platform.json `plugin_source_pref`，取值
+auto / mirror / gitee / github）：
+- `plugin_manager.order_urls()`：稳定重排——指定源提到最前，其余按原顺序
+  兜底（auto = 原顺序不变）；作用于**索引拉取**（fetch_index/fetch_modules）
+  与**每个包的 urls 回退链**（install_url/install_urls，模块安装共用）。
+- 设置页「插件源」区新增下拉，onchange 即时保存并强制重取索引（缓存按
+  首地址区分，换源自动失效）；索引 URL 覆盖（plugin_index_url）仍可用。
+- 单测 test_order_urls_source_pref（auto/三源优先/兜底顺序/非法值回落）；
+  回归：插件单测 35 项、i18n 校验、JS 语法、设置页锚点全过。

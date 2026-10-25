@@ -1054,6 +1054,9 @@ class Config:
         # 插件源索引 URL（'' = 用 plugin_manager.DEFAULT_INDEX_URL，即本仓库
         # plugins-repo/index.json 的 raw 地址）；国内网络可换成镜像地址。
         self.plugin_index_url = ''
+        # 插件下载源偏好（2026-10-25）：auto=原顺序；mirror/gitee/github=
+        # 该源优先，其余按原顺序兜底。作用于索引拉取与每个包的 urls 回退链。
+        self.plugin_source_pref = 'auto'
         self.email = ''            # NCBI EUtils 联系邮箱（可选，礼貌性参数）
         self.language = 'zh'       # 界面语言: zh | en
         # AI 助手（对话驱动智能代理）：OpenAI 兼容端点配置。键结构与预设
@@ -1188,6 +1191,9 @@ class Config:
                 self.email = str(data['email'])
             if data.get('plugin_index_url') is not None:
                 self.plugin_index_url = str(data['plugin_index_url']).strip()
+            _pref = str(data.get('plugin_source_pref') or '').strip().lower()
+            if _pref in ('auto', 'mirror', 'gitee', 'github'):
+                self.plugin_source_pref = _pref
             for k, v in data.get('tools', {}).items():
                 if not v:
                     continue
@@ -1272,6 +1278,7 @@ class Config:
         # （外置库等）保持绝对，属用户显式登记的外部资源。
         data = {'threads': self.threads,
                 'plugin_index_url': self.plugin_index_url,
+                'plugin_source_pref': self.plugin_source_pref,
                 'tools': {k: _rel_if_under(v) for k, v in self.tools.items()},
                 # 插件提供的库不落盘（值与 plugin_databases 相同即为插件来源）：
                 # 卸载插件后 platform.json 里不能残留死路径

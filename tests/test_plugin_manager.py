@@ -502,3 +502,20 @@ def test_install_modules_skips_existing(tmp_path, monkeypatch):
     assert r['installed'] == []
     assert r['skipped'][0]['name'] == 'aaa'
     assert r['skipped'][0]['reason'] == '已安装'
+
+
+def test_order_urls_source_pref():
+    """下载源偏好：auto 保持原序；指定源提到最前，其余原序兜底。"""
+    from Virus_Platform_Core.plugin_manager import order_urls
+    urls = ['http://39.106.101.94/plugins/a.zip',
+            'https://gitee.com/x/a.zip',
+            'https://github.com/x/a.zip']
+    assert order_urls(urls, 'auto') == urls
+    assert order_urls(urls, 'mirror')[0] == urls[0]
+    assert order_urls(urls, 'gitee')[0] == urls[1]
+    assert order_urls(urls, 'github')[0] == urls[2]
+    # 非匹配组保持原顺序兜底
+    assert order_urls(urls, 'gitee')[1:] == [urls[0], urls[2]]
+    # 非法偏好回落 auto；空列表安全
+    assert order_urls(urls, 'bogus') == urls
+    assert order_urls([], 'gitee') == []

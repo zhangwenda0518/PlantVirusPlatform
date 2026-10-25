@@ -170,6 +170,8 @@ def api_settings_get():
         'database_root': cfg.database_root,
         'examples_root': getattr(cfg, 'examples_root', ''),
         'examples_effective': DIRS.get('examples', ''),
+        'plugin_index_url': getattr(cfg, 'plugin_index_url', ''),
+        'plugin_source_pref': getattr(cfg, 'plugin_source_pref', 'auto'),
         'dirs': {'results': DIRS['results'],
                  'tool_runs': tool_runs_root(),
                  'databases': DIRS['databases'],
@@ -226,6 +228,12 @@ def api_settings_set():
             pending['threads'] = max(1, int(body['threads']))
         except (TypeError, ValueError):
             abort(400, 'threads 必须是整数')
+    if 'plugin_source_pref' in body:
+        from Virus_Platform_Core.plugin_manager import SOURCE_PREFS
+        v = str(body['plugin_source_pref'] or 'auto').strip().lower()
+        if v not in SOURCE_PREFS:
+            abort(400, 'plugin_source_pref 仅支持 ' + ' / '.join(SOURCE_PREFS))
+        pending['plugin_source_pref'] = v
     if 'defaults' in body and isinstance(body['defaults'], dict):
         merged = dict(cfg.defaults)          # 基于现值合并，逐键覆盖
         for k, v in body['defaults'].items():

@@ -238,6 +238,13 @@
     <hr style="margin:14px 0 10px;border:none;border-top:1px solid var(--border,#ddd)">
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <b data-i18n="se.pluginsSrc">🛰 插件源（自动检测缺失工具）</b>
+      <select id="pluginSourcePref" onchange="savePluginSourcePref()"
+              style="font-size:12px" title="下载源偏好：优先从哪个源下载（失败自动按原顺序兜底）">
+        <option value="auto" data-i18n="se.srcAuto">自动（镜像 → GitHub → Gitee）</option>
+        <option value="mirror" data-i18n="se.srcMirror">镜像优先</option>
+        <option value="gitee" data-i18n="se.srcGitee">Gitee 优先</option>
+        <option value="github" data-i18n="se.srcGithub">GitHub 优先</option>
+      </select>
       <span class="hint" id="pluginSrcUrl" style="max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       <span style="flex:1"></span>
       <button class="btn" onclick="loadPluginsAvailable(true)">⟳ <span data-i18n="se.pluginsSrcRefresh">检测</span></button>
@@ -424,6 +431,7 @@ async function loadSettings() {
     const d = await (await fetch('/api/settings')).json();
     $('setThreads').value = d.threads || '';
     $('setEmail').value = d.email || '';
+    if ($('pluginSourcePref')) $('pluginSourcePref').value = d.plugin_source_pref || 'auto';
     $('outRoot').value = d.output_root || '';
     $('inRoot').value = d.input_root || '';
     $('dbRoot').value = d.database_root || '';
@@ -536,6 +544,22 @@ async function applyRoot(kind, path, msgId) {
 
 async function applyOutputRoot(path) {
   await applyRoot('output_root', path, 'outRootMsg');
+}
+
+async function savePluginSourcePref() {
+  const v = ($('pluginSourcePref') || {}).value || 'auto';
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({plugin_source_pref: v})});
+    if (!r.ok) {
+      alert(t('c.fail', '保存失败') + ': ' + ((await r.json()).error || ''));
+      return;
+    }
+    toast(t('se.saved', '✔ 已保存并生效'), '', {ttl: 2500});
+    // 立即按新顺序重新检测（索引缓存按首地址区分，会自动换源重取）
+    if (typeof loadPluginsAvailable === 'function') loadPluginsAvailable(true);
+  } catch (e) { setConnBanner(true); }
 }
 
 async function saveSettings() {

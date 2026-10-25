@@ -64,6 +64,44 @@ DEFAULT_INDEX_URLS = [
 ]
 DEFAULT_INDEX_URL = DEFAULT_INDEX_URLS[0]
 
+# 下载源偏好（2026-10-25）：auto=保持索引里的原顺序；其余=该源优先，
+# 不匹配的按原顺序兜底。设置页「插件源」下拉可切换（platform.json
+# plugin_source_pref 持久化）。
+SOURCE_PREFS = ('auto', 'mirror', 'gitee', 'github')
+
+
+def _url_kind(u):
+    """按域名粗分下载源：mirror / gitee / github / other。"""
+    u = str(u or '').lower()
+    if '39.106.101.94' in u:
+        return 'mirror'
+    if 'gitee.com' in u:
+        return 'gitee'
+    if 'github.com' in u or 'githubusercontent.com' in u:
+        return 'github'
+    return 'other'
+
+
+def _source_pref():
+    try:
+        from Virus_Platform_Core.config import get_config
+        p = (getattr(get_config(), 'plugin_source_pref', '') or 'auto')
+    except Exception:                       # 配置未就绪时按默认
+        p = 'auto'
+    p = str(p).strip().lower()
+    return p if p in SOURCE_PREFS else 'auto'
+
+
+def order_urls(urls, pref=None):
+    """按下载源偏好重排地址（稳定：同组保持原顺序，非匹配组兜底）。"""
+    urls = [u for u in (urls or []) if u]
+    pref = str(pref if pref is not None else _source_pref()).strip().lower()
+    if pref not in ('mirror', 'gitee', 'github'):
+        return urls
+    first = [u for u in urls if _url_kind(u) == pref]
+    rest = [u for u in urls if _url_kind(u) != pref]
+    return first + rest
+
 
 class PluginError(Exception):
     """安装/卸载失败（清单非法、zip 损坏、路径穿越等），消息直接展示给用户。"""
@@ -402,22 +440,28 @@ def uninstall(name, root=None):
 # ------------------------------------------------------------------
 # 下载安装（对齐 PhyloSuite 的镜像/URL 直装）
 # ------------------------------------------------------------------
-def install_url(url, root=None, progress=None, expected_sha256=None):
+def install_url(url, root=None, progress=None, expected_sha256=None,
+                source_pref=None):
     """下载 zip 到临时文件后走 install_zip。progress(done, total) 可选回调。"""
     return install_urls(url if isinstance(url, (list, tuple)) else [url],
                         root=root, progress=progress,
-                        expected_sha256=expected_sha256)
+                        expected_sha256=expected_sha256,
+                        source_pref=source_pref)
 
 
-def install_urls(urls, root=None, progress=None, expected_sha256=None):
+def install_urls(urls, root=None, progress=None, expected_sha256=None,
+                 source_pref=None):
     """按顺序尝试多个下载地址（国内镜像优先、GitHub 兜底），首个成功即返回。
+
+    source_pref（2026-10-25）：下载源偏好，见 order_urls；缺省读
+    cfg.plugin_source_pref（设置页可切）。
 
     每个地址失败后重试一次（实测镜像站偶发瞬时 502，重试即可恢复），
     仍失败才切下一个地址。全部失败时抛 PluginError，消息里带上每个地址的
     失败原因——用户能看出是网络问题还是地址失效。"""
     if isinstance(urls, str):
         urls = [urls]
-    urls = [u for u in (urls or []) if u]
+    urls = order_urls(urls, source_pref)
     if not urls:
         raise PluginError('未提供下载地址')
     errors = []
@@ -485,9 +529,9 @@ def _sha256_file(path):
 def fetch_index(url=None, force=False, timeout=30):
     """拉取插件源索引（进程内缓存 10 分钟）。返回 (plugins 列表, 错误或 None)。
 
-    url 为空时按 DEFAULT_INDEX_URLS 顺序回退（国内镜像 → GitHub raw）。
+    url 为空时按 DEFAULT_INDEX_URLS 顺序回退（受 plugin_source_pref 影响）。
     url 显式给出时只用该地址（platform.json 覆盖/调试用）。"""
-    urls = [url] if url else list(DEFAULT_INDEX_URLS)
+    urls = [url] if url else order_urls(DEFAULT_INDEX_URLS)
     now = time.time()
     if (not force and _index_cache['data'] is not None
             and _index_cache['url'] == urls[0]
@@ -550,7 +594,7 @@ def fetch_modules(index_url=None, force=False):
         return {}, err
     # fetch_index 只返回 plugins 数组；模块表从同一份缓存里取
     import urllib.request
-    urls = [index_url] if index_url else list(DEFAULT_INDEX_URLS)
+    urls = [index_url] if index_url else order_urls(DEFAULT_INDEX_URLS)
     for u in urls:
         try:
             req = urllib.request.Request(u, headers={'User-Agent': 'PVAP-Plugin/1.0'})
