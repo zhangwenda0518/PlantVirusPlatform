@@ -64,6 +64,7 @@ dist/VirusPlatform-Source 的内容并入 VirusPlatform 程序目录，双击
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -191,12 +192,52 @@ def _dir_stat(path):
     return n, total
 
 
+def _ascii_safe(text):
+    r"""兜底：写进 build_info.json 的文本必须是纯 ASCII（非 ASCII 转义保留）。
+
+    为什么（2026-10-26）：build_info.json 随包分发，中文标签与构建机的
+    中文绝对路径既不可读也泄露内部路径；转义后字面全 ASCII、信息不丢。
+    """
+    return (text or '').encode('ascii', 'backslashreplace').decode('ascii')
+
+
+def _clean_probe(text):
+    """把 `main.py tools` 的输出规整成英文 + 纯 ASCII + 不含构建机路径。
+
+    原文形如（main.py:588 cmd_tools）：
+        线程数: 19
+          blastn       ✔ D:<ROOT>\\3rd\\tools\\Blast\\bin\\blastn.exe
+          dsrnamax     ✘ 未找到
+        宿主库: D:<ROOT>\\host-db\\112863_genomes_host_db
+        病毒库: D:<ROOT>\\databases\\kunpeng_db\\virus_db
+    规整后：标签英文化（threads / host_db / virus_db）、✔ -> ok、
+    ✘ 未找到 -> missing、平台根换成 <build_root>/<dist_root>；每行一个工具，
+    顺序不变。
+    """
+    if not text:
+        return ''
+    roots = [(DIST, '<dist_root>'), (ROOT, '<build_root>')]
+    out = []
+    for raw in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
+        line = re.sub(r'^\s*线程数:\s*', 'threads: ', raw)
+        line = re.sub(r'^\s*宿主库:\s*', 'host_db: ', line)
+        line = re.sub(r'^\s*病毒库:\s*', 'virus_db: ', line)
+        line = line.replace('✔ ', 'ok ').replace('✔', 'ok')
+        line = line.replace('✘ 未找到', 'missing').replace('✘', 'missing')
+        line = line.replace('(空)', '(none)')
+        for a, b in roots:
+            line = line.replace(a, b)
+            line = line.replace(a.replace(os.sep, '/'), b)
+        out.append(line.rstrip())
+    return '\n'.join(out).strip('\n')
+
+
 def _build_info():
     """构建清单（build_info.json 内容）：发布包可追溯所需的元信息。
 
     动机：产物一旦离开本机（U 盘/网盘/他人电脑），"这是哪次提交、什么时候、
     哪套工具链打的"就无从查起，自检报告也无法回溯到对应版本。把 git rev +
-    构建时间 + `main.py tools` 探测原文 + 数据库目录统计固化进产物内部，
+    构建时间 + `main.py tools` 探测输出（已规整：英文标签 / 纯 ASCII / 去构建机路径） + 数据库目录统计固化进产物内部，
     无需外部记录即可追溯（2026-10-03）。
     """
     def _git(*a):
@@ -212,11 +253,13 @@ def _build_info():
         r = subprocess.run([sys.executable, 'main.py', 'tools'],
                            capture_output=True, text=True, encoding='utf-8',
                            errors='replace', timeout=300)
-        tools_probe = r.stdout or ''
+        tools_probe = _clean_probe(r.stdout or '')
         if not tools_probe.strip():
-            tools_probe = f'<tools 探测无输出, rc={r.returncode}> ' + (r.stderr or '')
+            tools_probe = (f'<tools probe produced no output, '
+                           f'rc={r.returncode}> ' + (r.stderr or ''))
     except Exception as e:
-        tools_probe = f'<tools 探测失败: {e!r}>'
+        tools_probe = f'<tools probe failed: {e!r}>'
+    tools_probe = _ascii_safe(tools_probe)
 
     db_dirs = {}
     for rel in ('databases', 'host-db'):
@@ -297,12 +340,94 @@ if _args.dedupe_only:
     raise SystemExit(0)
 
 
+# 启动方式（2026-10-26 补）：分发版里 exe 的默认双击是桌面窗口，浏览器模式
+# 需要 `--web`。用户改名的交付里没有入口，这里随包生成两个英文 .bat，
+# 内容与 `_audit/make_launchers.py` 生成的一致（纯 ASCII + CRLF）。
+_LAUNCH_WEB = """@echo off
+chcp 65001 >nul
+title Plant Virus Analysis Platform - Web mode (browser)
+cd /d "%~dp0"
+echo.
+echo   Plant Virus Analysis Platform -- web mode
+echo   ----------------------------------------
+echo   A browser tab opens automatically at 127.0.0.1.
+echo   The address is printed below as well, so it can be opened
+echo   in another browser or copied for reference.
+echo   Keep this window open; closing it stops the platform.
+echo.
+"%~dp0VirusPlatform.exe" --web
+if errorlevel 1 (
+  echo.
+  echo   The platform exited with an error. See the message above.
+  pause
+)
+"""
+
+_LAUNCH_DESK = """@echo off
+chcp 65001 >nul
+title Plant Virus Analysis Platform - Desktop window
+cd /d "%~dp0"
+echo.
+echo   Plant Virus Analysis Platform -- desktop window mode
+echo   ---------------------------------------------------
+echo   Opens in its own window (no address bar).
+echo   If pywebview / WebView2 is unavailable on this machine the
+echo   platform falls back to the system browser instead of failing.
+echo   Keep this window open; closing it stops the platform.
+echo.
+"%~dp0VirusPlatform.exe" --gui
+if errorlevel 1 (
+  echo.
+  echo   The platform exited with an error. See the message above.
+  pause
+)
+"""
+
+
+def _write_launchers(app_dir):
+    for name, text in (("Start-Web.bat", _LAUNCH_WEB),
+                       ("Start-Desktop.bat", _LAUNCH_DESK)):
+        dst = os.path.join(app_dir, name)
+        if os.path.exists(dst):
+            os.remove(dst)
+        with open(dst, "wb") as fh:
+            fh.write(text.replace("\n", "\r\n").encode("ascii"))
+        print(f"  + {name}（启动入口：浏览器 / 桌面窗口）")
+
+
+def _clean_run_state(app_dir):
+    """清掉 run/ 下的运行时状态（日志 / 结果 / 任务记录 / 下载件）。
+
+    完整打包会先 _rmtree(APP) 再重建，天然干净；但 `--no-exe` 复用既有
+    产物目录时，上一轮在本机跑过的样例会把 run/ 的日志、结果、任务记录
+    一起带进发布包（实测泄漏过构建机绝对路径），因此显式清理。
+    返回被移除的条目数。
+    """
+    run_dir = os.path.join(app_dir, 'run')
+    if not os.path.isdir(run_dir):
+        return 0
+    n = 0
+    for name in sorted(os.listdir(run_dir)):
+        p = os.path.join(run_dir, name)
+        try:
+            if os.path.isdir(p):
+                _rmtree(p)
+            else:
+                os.remove(p)
+            n += 1
+        except OSError:
+            pass
+    return n
+
+
 # ------------------------------------------------------------------
 # 1) PyInstaller
 # ------------------------------------------------------------------
 if not (_args.db_only or _args.source_only):
     if _args.no_exe:
         print('== 1/5 跳过 PyInstaller（--no-exe，沿用已有产物 VirusPlatform）==')
+        _n = _clean_run_state(APP)
+        print(f'  - 清理 run/ 运行时状态：{_n} 项（日志/结果/任务记录不入包）')
     else:
         print('== 1/5 PyInstaller 打包 ==')
         _rmtree(APP)
@@ -428,6 +553,8 @@ if not (_args.db_only or _args.source_only):
     if os.path.isfile(_tpn):
         shutil.copy2(_tpn, os.path.join(APP, 'THIRD_PARTY_NOTICES.md'))
         print('  + THIRD_PARTY_NOTICES.md（第三方组件许可索引）')
+
+    _write_launchers(APP)
 
     # primer3-py 包副本（2026-09-20）：分发版在非 ASCII 安装路径下跑 primer3，
     # 依赖「ASCII 镜像」机制 —— exe 启动时由 app.py 把程序包自带的
@@ -707,37 +834,61 @@ if _args.with_db or _args.db_only:
     # 库），收进数据库包会让分发体积无谓翻倍。宿主库留在 host-db/ 下，
     # 由用户在「数据库构建」页按自己的物种建库。
     print('  - 宿主分类库不入包（按物种而异，见 host-db/）')
+    # 空目录必须删：VirusPlatform-Database/host-db/ 空着会让买家以为宿主库
+    # 随包（实测默认管道跑到 ① 才报 FileNotFoundError）。拷贝过程会带出
+    # databases/virus_ref/universal 这类空叶子目录，统一剪掉。
+    _pruned = 0
+    for _dp, _dns, _fns in os.walk(target, topdown=False):
+        if not _dns and not _fns:
+            try:
+                os.rmdir(_dp)
+                _pruned += 1
+            except OSError:
+                pass
+    if _pruned:
+        print(f'  - 剪掉 {_pruned} 个空目录（空 host-db/ 会误导「随包带宿主库」）')
     print(f'  —— 数据库包合计 {_fmt(_db_bytes)} / {_db_files} 文件')
-    # 数据库包自带一份配置，指向自己（也可由用户改用「设置 → 数据库目录」）
-    with open(os.path.join(target, '数据库对接说明.txt'), 'w',
+    # 数据库包自带一份说明，指向自己（也可由用户改用「设置 → 数据库目录」）。
+    # 2026-10-26：面向英文分发的文档统一为 README-Database.txt，正文只允许
+    # 英文（审查口径：产物里不再出现中文说明文本），代码注释/日志仍可中文。
+    with open(os.path.join(target, 'README-Database.txt'), 'w',
               encoding='utf-8') as f:
         f.write(
-            '本目录是「数据库包」，与程序目录分离，可放在任意盘。\n'
-            '\n'
-            '内容口径（原始数据集为主，派生库不预建）：\n'
-            '  · 病毒参考数据集（reference.fasta + ref_info.tsv）——鉴定库\n'
-            '    引擎索引（salmon/minibwa）首次运行自动现建并全局复用；\n'
-            '  · kunpeng 病毒分类库（plant/ref）不预带：到「数据库构建」页\n'
-            '    「原始数据集」区一键构建（plant 由参考数据集直接构建，\n'
-            '    ref 需先放入 RefSeq 源 FASTA）\n'
-            '  · NCBI Taxonomy / 注释库（Pfam、RefSeq 蛋白）/ 建树参考 /\n'
-            '    blastn 库等为第三方直接使用库，随包即用\n'
-            '  · 宿主分类库按物种而异，用「数据库构建」页自建\n'
-            '\n'
-            '对接方式（零配置优先）：\n'
-            '  ① 与程序目录**同级放置**即被自动识别，无需任何设置\n'
-            '     （程序启动时自动探测同级 VirusPlatform-Database）\n'
-            '  ② 启动平台 → 设置 → 数据库目录 → 填本目录的绝对路径 → 应用\n'
-            '     （保存时会即时反馈宿主库/病毒库/Taxonomy 是否就绪）\n'
-            '  ③ 开发机执行：python main.py db-migrate --to <目标库目录>\n'
-            '\n'
-            '自备宿主库可放任意位置：构建页「📂 加载已构建宿主库」\n'
-            '选中即可，平台会自动登记该位置。\n'
-            '\n'
-            '校验：程序目录下执行\n'
-            '  VirusPlatform.exe --cli selfcheck\n'
-            '（源码模式：python main.py selfcheck）\n')
-    print('  + 数据库对接说明.txt')
+            '''This directory is the "database package". It is separate from the
+program directory and can be placed on any drive.
+
+What it contains (raw datasets first; derived libraries are not pre-built):
+  - Virus reference dataset (reference.fasta + ref_info.tsv) - the engine
+    indexes of the identification libraries (salmon/minibwa) are created
+    automatically on first run and then reused globally;
+  - the kunpeng virus classification library (plant/ref) is not shipped:
+    build it with one click in the "Raw datasets (shipped)" area of the
+    DB building page (plant is built directly from the reference dataset;
+    ref needs the RefSeq source FASTA put in place first)
+  - NCBI Taxonomy / annotation libraries (Pfam, RefSeq proteins) /
+    tree-building references / blastn databases and the like are third-party
+    libraries used as-is and work straight from the package
+  - the host classification library varies per species; build it yourself on
+    the DB building page
+
+Hook-up (zero configuration preferred):
+  (1) Placed at the same level as the program directory it is detected
+      automatically, no setting required (on start-up the program probes for
+      a sibling VirusPlatform-Database)
+  (2) Start the platform -> Settings -> Database directory -> enter the
+      absolute path of this directory -> Apply (saving immediately reports
+      whether the host library / virus library / Taxonomy are ready)
+  (3) On a development machine: python main.py db-migrate --to <target DB dir>
+
+A host library you already have can live anywhere: select it with
+"Load pre-built host DB" on the DB building page and the platform registers
+that location automatically.
+
+Verify: run in the program directory
+  VirusPlatform.exe --cli selfcheck
+(source mode: python main.py selfcheck)
+''')
+    print('  + README-Database.txt')
 else:
     print('== 4/5 数据库：跳过（软件与数据库分离分发）==')
     print('  需要数据库包时重跑：python dev_tools/package.py --with-db')
@@ -865,32 +1016,48 @@ if _args.with_source:
                   f, ensure_ascii=False, indent=2)
     print('  + platform.json（干净配置）')
 
-    _readme = '''本目录是「源码包」——让使用者以源码模式运行平台（区别于 exe 双击运行）。
+    # 英文分发口径（2026-10-26）：README-Source.txt，正文只允许英文。
+    # 「启动平台-网页.bat / 启动平台-桌面窗口.bat」是产物里的**真实文件名**，
+    # 照原样保留（文件名不算正文；改名要同时动 4b 的 _src_file 清单，不在
+    # 本次范围内）。
+    _readme = '''This directory is the "source package": it lets a user run the platform in
+source mode (as opposed to double-clicking the exe).
 
-内容：平台源码全树（Virus_Platform_Core / webapp / app.py / main.py）
-+ 3rd/python 绿色版 Python 3.12（全部依赖与 primer3 已装好）
-+ 源码模式启动脚本（bat）。
+Contents: the whole platform source tree (Virus_Platform_Core / webapp /
+app.py / main.py) + the portable Python 3.12 runtime under 3rd/python (all
+dependencies and primer3 already installed) + the source-mode launcher
+scripts (.bat).
 
-用法（叠加到程序包，推荐）：
-  ① 先拿到程序包 VirusPlatform/（exe + 3rd/bin + 3rd/tools 工具链）
-  ② 把本目录的全部内容复制进 VirusPlatform 目录内（同名目录合并）
-  ③ 双击「启动平台-网页.bat」（或桌面窗口版）→ 源码模式，改代码即时生效
-  数据库/示例仍由 VirusPlatform-Database / -Examples 两个包提供（同级自动识别）。
+Usage (merge into the program package - recommended):
+  1. Get the program package VirusPlatform/ first (exe + 3rd/bin + 3rd/tools
+     tool chain)
+  2. Copy all contents of this directory into the VirusPlatform directory
+     (directories with the same name are merged)
+  3. Double-click "启动平台-网页.bat" (or the desktop-window variant) -> the
+     platform starts in source mode and code changes take effect immediately;
+     database and example data still come from the VirusPlatform-Database /
+     -Examples packages (detected automatically when they sit at the same
+     level).
 
-独立放置（不并入程序包）也可以：
-  本目录自带解释器与全部依赖，「python app.py」即可启动；
-  但分析功能依赖外部工具（blastn/spades/kunpeng 等，在 3rd/tools、3rd/bin），
-  独立使用时需自行补齐，或到「设置 → 工具路径」指定。
+It can also be placed on its own (not merged into the program package):
+  this directory carries its own interpreter and all dependencies, so
+  "python app.py" is enough to start it; but the analysis features depend on
+  external tools (blastn/spades/kunpeng etc., in 3rd/tools and 3rd/bin), so a
+  standalone deployment must supply them separately or point to them under
+  Settings -> Tool paths.
 
-说明：
-  - 源码模式与 exe 模式共享同一套 platform.json / 数据库 / 示例配置；
-  - primer3 已随 3rd/python 携带，源码模式引物热力学开箱可用；
-  - 依赖清单见 requirements.txt / requirements.lock（重建环境用）。
+Notes:
+  - source mode and exe mode share the same platform.json / database /
+    example-data configuration;
+  - primer3 ships with 3rd/python, so primer thermodynamics works out of the
+    box in source mode;
+  - the dependency manifests are requirements.txt / requirements.lock (used to
+    rebuild the environment).
 '''
-    with open(os.path.join(SRC_DIR, '源码运行说明.txt'), 'w',
+    with open(os.path.join(SRC_DIR, 'README-Source.txt'), 'w',
               encoding='utf-8') as f:
         f.write(_readme)
-    print('  + 源码运行说明.txt')
+    print('  + README-Source.txt')
     _n, _sz = _dir_stat(SRC_DIR)
     print(f'  —— 源码包合计 {_fmt(_sz)} / {_n} 文件')
 
@@ -902,81 +1069,144 @@ if SPLIT and os.path.isdir(APP):
     # 用行列表拼说明文本：隐式字符串拼接里混入 `'=' * 60` 这类**表达式**
     # 会被 Python 解析成对前一整个字面量的重复（2026-10-24 前：首行
     # 「植物病毒分析平台 · 分发说明…」重复了 60 遍写进产物说明）。
+    # 英文分发口径（2026-10-26）：文件名 README-Distribution.txt，正文只允许
+    # 英文（产物里不再出现中文说明文本）。
     _notes = [
-        '植物病毒分析平台 · 分发说明（程序 / 数据库 / 示例 三分离）',
+        'Plant Virus Analysis Platform - Distribution Guide',
+        '(Program / Database / Examples are kept separate)',
         '=' * 60,
         '',
-        '① VirusPlatform\\            程序本体：双击 VirusPlatform.exe 启动',
-        '   - 内含 exe + webapp 前端 + bin/ tools/ 外部工具 + mcp_server.py',
-        '     （MCP 控制台在 exe 内经 --mcp-stdio 进程内拉起，开箱可用）',
+        '1) VirusPlatform\\            The program itself: double-click '
+        'VirusPlatform.exe to start',
+        '   - Contains the exe + the webapp front end + the external tools in',
+        '     bin/ and tools/ + mcp_server.py (the MCP console is launched',
+        '     in-process inside the exe via --mcp-stdio, ready out of the box)',
     ]
-    if _args.minimal_tools:
+    # 分版说明（2026-10-26）：01/02/03 三版内容不同，说明文字必须跟着
+    # 走——历史上一段通用的『Standalone edition, profile B』被写进了
+    # 全部产物，02/03 的 README 于是在数据库包旁写着『不含数据库』。
+    if _args.with_db and not _args.minimal_tools:
         _notes += [
-            '   - 独立版口径 B：只内置主流程最小集（质控 fastp / 宿主去除'
-            ' minibwa+blast /',
-            '     组装 spades / 鉴定 kunpeng / 比对 mafft+trimal / 建树'
-            ' fasttree / 定量',
-            '     共识 minimap2+samtools+bcftools+salmon / 候选验证 '
-            'diamond+mmseqs /',
-            '     datasets CLI + bin/ 小件）。重组分析(RDP5)、进化动力学'
-            '(iqtree/raxml/lsd2)、',
-            '     NCBI 提交(table2asn)、pandepth/viral_consensus/dsrnamax '
-            '等专项工具',
-            '     用到时到「设置 → 插件管理」一键在线补齐（国内镜像，逐包 '
-            'sha256',
-            '     校验），或离线导入插件 zip 包；模块运行前缺工具也会自动装。',
+            '   - Complete edition: every external tool is bundled (31 of 31), so',
+            '     nothing has to be installed on demand -- recombination analysis,',
+            '     evolutionary dynamics, NCBI submission and the',
+            '     consensus / pandepth tools all work out of the box.',
+            '   - Comes with the database package: NCBI Taxonomy',
+            '     (new_taxdump.tar.gz, extracted automatically on the first run),',
+            '     the virus reference library (virusref_db: BLAST reference plus the',
+            '     plant_ref FASTA and annotation table), the kunpeng virus',
+            '     classification library, annotation / tree / misc libraries, and the',
+            '     dsRNA + miRNA libraries. No host library is included (it depends on',
+            '     the host species): build one on the Database build page or load a',
+            '     prebuilt one with one click.',
         ]
-    elif _args.slim_tools:
+    elif _args.with_db:
         _notes += [
-            '   - 独立版口径：tools/ 已剔除 6 个大件进阶工具'
-            '（srna-target / strawberry-perl /',
-            '     snpeff / jre-snpeff / snpgenie / datasets）。用到时到'
-            '「设置 → 插件管理」',
-            '     一键在线补齐（国内镜像，逐包 sha256 校验），或离线导入'
-            '插件 zip 包。',
+            '   - VirusPlatform-Platform-and-Database bundles the same minimal external tool set',
+            '     as VirusPlatform-Standalone (23 of 31 tools: QC fastp / host removal',
+            '     minibwa+blast / assembly spades / identification kunpeng /',
+            '     alignment mafft+trimal / tree building fasttree / quantification',
+            '     and consensus minimap2+samtools+bcftools+salmon / candidate',
+            '     validation diamond+mmseqs). Specialized tools -- recombination',
+            '     analysis (RDP5), evolutionary dynamics (iqtree/raxml/lsd2), NCBI',
+            '     submission (table2asn), pandepth/viral_consensus/dsrnamax -- are',
+            '     installed on demand with one click in Settings -> Plugins or',
+            '     imported as an offline plugin zip.',
+            '   - Comes with the database package: NCBI Taxonomy',
+            '     (new_taxdump.tar.gz, extracted automatically on the first run),',
+            '     the virus reference library (virusref_db: BLAST reference plus the',
+            '     plant_ref FASTA and annotation table), the kunpeng virus',
+            '     classification library, annotation / tree / misc libraries, and the',
+            '     dsRNA + miRNA libraries. No host library is included (it depends on',
+            '     the host species): build one on the Database build page or load a',
+            '     prebuilt one with one click.',
         ]
     else:
         _notes += [
-            '   - 完整版口径：26 个外部工具全量内置，开箱即用。',
+            '   - Standalone edition: the minimal set the main workflow needs is',
+            '     bundled (QC fastp / host removal minibwa+blast / assembly spades /',
+            '     identification kunpeng / alignment mafft+trimal / tree building',
+            '     fasttree / quantification and consensus',
+            '     minimap2+samtools+bcftools+salmon / candidate validation',
+            '     diamond+mmseqs / datasets CLI + the small items in bin/).',
+            '     Specialized tools -- recombination analysis (RDP5), evolutionary',
+            '     dynamics (iqtree/raxml/lsd2), NCBI submission (table2asn),',
+            '     pandepth/viral_consensus/dsrnamax and the like -- are installed on',
+            '     demand with one click in Settings -> Plugins (domestic mirror,',
+            '     per-package sha256 verification) or imported as an offline plugin',
+            '     zip; a tool still missing when a module starts is installed',
+            '     automatically before the run.',
         ]
-    if _args.with_plugins and os.path.isdir(os.path.join(APP, 'plugins')):
-        _notes += [
-            '   - plugins/ 已预装全部工具插件包（完整版）：可在'
-            '「设置 → 插件管理」',
-            '     查看版本、按需卸载/重装；重装需联网（国内镜像优先）',
+    # section 3 must describe what THIS build ships: with --with-db the
+    # package folder is present (and its libraries are prebuilt), without it
+    # the folder is absent and the text must say so instead of advertising it.
+    if _args.with_db:
+        _db_section = [
+            '3) VirusPlatform-Database\\   Database package (shipped with '
+            'this edition)',
+            '   - Prebuilt reference libraries: the identification library',
+            '     (virusref_db: BLAST database, plant_ref/reference.fasta plus',
+            '     ref_meta.tsv / reference.ref_info.tsv), the kunpeng virus',
+            '     classification library (kunpeng_db/virus_db), the annotation',
+            '     libraries (annot_db: prebuilt RefSeq viral protein DIAMOND',
+            '     database and Pfam HMM press files), tree-building references',
+            '     (tree_db), misc_db (viroid references, host probability tables,',
+            '     genus mean length table) and the dsRNA / miRNA libraries',
+            '   - Raw datasets: NCBI Taxonomy (new_taxdump.tar.gz, unpacked',
+            '     automatically on the first run) and RefSeq / RVDB source FASTA',
+            '     (if bundled)',
+            '   - The BLAST indexes ship with virusref_db; anything else that is',
+            '     derived is generated on first use (seconds)',
+            '   - No host classification library: it depends on the host species.',
+            '     See host-db/README.txt -- build one on the DB building page or',
+            '     load a prebuilt one with one click',
+        ]
+    else:
+        _db_section = [
+            '3) VirusPlatform-Database\\   NOT included in this edition',
+            '   - This edition ships the program only. Everything the main',
+            '     workflow needs is inside VirusPlatform\\databases\\ (dsRNA and',
+            '     miRNA libraries, the annotation library and the kunpeng virus',
+            '     reference used by the assembly identification step).',
+            '   - NCBI Taxonomy, the virus reference library (virusref_db) and the',
+            '     host library are NOT included. Two ways to get them: place a',
+            '     VirusPlatform-Database folder next to VirusPlatform\\, or',
+            '     download / build them on the Database build page.',
+            '   - A VirusPlatform-Database placed next to the program is detected',
+            '     automatically (no configuration); for a folder somewhere else',
+            '     use Settings -> Database directory or',
+            '     VirusPlatform.exe --cli db-migrate --to <dir>',
+            '   - A host library you already have can live anywhere: select it',
+            '     with "Load pre-built Host DB" on the DB building page and the',
+            '     platform registers that location automatically',
         ]
     _notes += [
-        '   - 不含数据库，也不含示例数据',
         '',
-        '② VirusPlatform-Examples\\   示例数据（只读，约 1MB）',
-        '   - 各工具「✨ 示例」按钮与「示例结果」页用到的输入/产物',
-        '   - 与程序同级放置即可被自动识别；也可搬到别处后到',
-        '     「设置 → 示例数据目录」填绝对路径',
+        '2) VirusPlatform-Examples\\   Example data (read-only)',
+        '   - The inputs and products used by each tool\'s "Example" button '
+        'and by',
+        '     the "Example results" page',
+        '   - Placed next to the program it is detected automatically; if you',
+        '     move it elsewhere, fill in the absolute path under',
+        '     Settings -> Example data directory',
         '',
-        '③ VirusPlatform-Database\\   数据库包（仅 --with-db 时生成）',
-        '   - 原始数据集：病毒参考（FASTA+注释表）、NCBI Taxonomy、',
-        '     RefSeq/RVDB 源 FASTA（若随包）',
-        '   - 随包：注释库（RefSeq 病毒蛋白 DIAMOND 预置库 / Pfam HMM press 件）、',
-        '     建树参考、类病毒参考、宿主概率表、属平均长度表；',
-        '     blast/blastn 派生索引首用自建（秒级）；DIAMOND 蛋白库已预置',
-        '   - 派生库不预带、首跑/一键自建：鉴定库引擎索引首次运行自动',
-        '     现建；kunpeng 病毒分类库（plant/ref）到「数据库构建」页',
-        '     「原始数据集」区一键构建（开箱即用需求打包时加',
-        '     --with-built-virusdb）',
-        '   - 不含宿主分类库（按物种而异，见 host-db/，用「数据库构建」页自建）',
-        '   - 对接（零配置优先）：与本程序**同级放置**即被自动识别；',
-        '     也可启动平台 →「设置 → 数据库目录」填该目录，',
-        '     或 python main.py db-migrate --to <目录>',
-        '   - 自备宿主库可放任意位置：构建页「📂 加载已构建宿主库」',
-        '     选中即可，平台自动登记该位置',
+    ] + _db_section + [
+        '   - Hook-up (zero configuration preferred): placed at the same level',
+        '     as this program it is detected automatically; or start',
+        '     the platform and fill that directory in under',
+        '     Settings -> Database directory; or run',
+        '     VirusPlatform.exe --cli db-migrate --to <dir>',
+        '   - A host library you already have can live anywhere: select it',
+        '     with "Load pre-built host DB" on the DB building page and the',
+        '     platform registers that location automatically',
         '',
-        '自检：VirusPlatform.exe --cli selfcheck',
-        '（源码模式：python main.py selfcheck）',
+        'Self-check: VirusPlatform.exe --cli selfcheck',
+        '(source mode: python main.py selfcheck)',
     ]
-    with open(os.path.join(DIST, '程序与数据说明.txt'), 'w',
+    with open(os.path.join(DIST, 'README-Distribution.txt'), 'w',
               encoding='utf-8') as f:
         f.write('\n'.join(_notes) + '\n')
-    print('  + 打包产物/程序与数据说明.txt')
+    print('  + README-Distribution.txt')
 
 for d in (APP, EX_DIR, DB_DIR, SRC_DIR):
     if os.path.isdir(d):

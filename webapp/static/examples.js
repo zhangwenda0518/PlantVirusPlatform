@@ -258,7 +258,7 @@
           function () {
             var n = applyFor(sec);
             if (typeof toast === 'function') {
-              toast(n ? '已填入示例数据' : '该模块暂未配置示例', '', { ttl: 2200 });
+              toast(n ? t('ui.ex.fillOk', '已填入示例数据') : t('ui.ex.noCfg', '该模块暂未配置示例'), '', { ttl: 2200 });
             }
           }));
       }
@@ -276,15 +276,15 @@
       var h = document.querySelector('main h1, main h2, .card h2');
       if (h && !h.querySelector('.vp-ex-btn')) {
         if (pm) {
-          h.appendChild(mkBtn('✨ 示例', '一键填入内置示例数据', function () {
+          h.appendChild(mkBtn(t('ui.ex.btnFill', '✨ 示例'), t('ui.ex.btnFillTip', '一键填入内置示例数据'), function () {
             var n = applyFor('page');
             if (typeof toast === 'function') {
-              toast(n ? '已填入示例数据' : '该模块暂未配置示例', '', { ttl: 2200 });
+              toast(n ? t('ui.ex.fillOk', '已填入示例数据') : t('ui.ex.noCfg', '该模块暂未配置示例'), '', { ttl: 2200 });
             }
           }));
         }
         if (pmod) {
-          h.appendChild(mkBtn('👁 示例结果', '查看内置示例的运行结果（只读）',
+          h.appendChild(mkBtn(t('ui.ex.btnResult', '👁 示例结果'), t('ui.ex.btnResultTip', '查看内置示例的运行结果（只读）'),
             function () { showExampleResult(pmod); }));
         }
       }
@@ -590,14 +590,14 @@
       rendercs();
     }).catch(function (e) {
       if (box && box.isConnected) {
-        box.innerHTML = '<p class="hint">交互热图不可用: ' + esc(e.message || e) + '</p>';
+        box.innerHTML = '<p class="hint">' + esc(t('ui.ex.hmFail', '交互热图不可用: ')) + esc(e.message || e) + '</p>';
       }
     });
   }
 
   function showExampleResult(module) {
     if (!module) {
-      if (typeof toast === 'function') toast('该模块暂无示例结果', '', { ttl: 2200 });
+      if (typeof toast === 'function') toast(t('ui.ex.noEntry', '该模块暂无示例结果'), '', { ttl: 2200 });
       return;
     }
     var mask = document.createElement('div');
@@ -605,10 +605,10 @@
     mask.style.zIndex = 320;
     mask.innerHTML = '<div class="dlg" style="width:min(1120px,95vw);max-height:90vh;' +
       'display:flex;flex-direction:column">' +
-      '<div class="dlghead"><b id="vpExTitle">👁 示例结果</b>' +
+      '<div class="dlghead"><b id="vpExTitle">' + esc(t('ui.ex.btnResult', '👁 示例结果')) + '</b>' +
       '<button class="btn small" id="vpExClose">✕</button></div>' +
       '<div id="vpExBody" style="overflow:auto;padding:12px 16px;flex:1 1 auto">' +
-      '<p class="hint">⏳ 加载中…</p></div></div>';
+      '<p class="hint">⏳ ' + esc(t('c.loading', '加载中…')) + '</p></div></div>';
     document.body.appendChild(mask);
     mask.querySelector('#vpExClose').addEventListener('click', function () {
       mask.remove();
@@ -622,15 +622,16 @@
       return r.json();
     }).then(function (d) {
       mask.querySelector('#vpExTitle').textContent =
-        '👁 示例结果 · ' + (d.title || module) + '（' + d.files.length + ' 个产物）';
+        t('ui.ex.btnResult', '👁 示例结果') + ' · ' + t('ui.exr.' + module + '.t', d.title || module)
+        + t('ui.ex.countPre', '（') + d.files.length + t('ui.ex.countPost', ' 个产物）');
       var imgs = d.files.filter(function (f) { return f.kind === 'image'; });
       var pdfs = d.files.filter(function (f) { return f.kind === 'pdf'; });
       var htmls = d.files.filter(function (f) { return f.kind === 'html'; });
       var texts = d.files.filter(function (f) { return f.kind === 'text'; });
       var others = d.files.filter(function (f) { return f.kind === 'other'; });
-      var html = '<p class="hint">生成于 ' + esc(d.generated_at || '-') +
-        ' · 目录 examples/results/' + esc(module) +
-        '/（只读，与真实结果隔离）</p>';
+      var html = '<p class="hint">' + esc(t('ui.ex.genAt', '生成于 ')) + esc(d.generated_at || '-') +
+        esc(t('ui.ex.dir', ' · 目录 ')) + 'examples/results/' + esc(module) +
+        '/' + esc(t('ui.ex.roPre', '（只读，与真实结果隔离）')) + '</p>';
       if (imgs.length) {
         html += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:10px 0">';
         imgs.forEach(function (f) {
@@ -650,7 +651,7 @@
           renderMatrixHeatmapPanel(module, body.querySelector('#vpExMatrix'));
         }).catch(function (e) {
           var mb = body.querySelector('#vpExMatrix');
-          if (mb) mb.innerHTML = '<p class="hint">交互热图不可用: ' +
+          if (mb) mb.innerHTML = '<p class="hint">' + esc(t('ui.ex.hmFail', '交互热图不可用: ')) +
             esc(e.message || e) + '</p>';
         });
       }
@@ -658,7 +659,7 @@
       if (pdfs.length) {
         var pd = document.createElement('div');
         pd.style.marginTop = '10px';
-        pd.innerHTML = '<p class="hint">📄 PDF（内嵌预览）：</p>';
+        pd.innerHTML = '<p class="hint">' + esc(t('ui.ex.pdfSec', '📄 PDF（内嵌预览）：')) + '</p>';
         pdfs.forEach(function (f) {
           var url = '/api/examples/' + encodeURIComponent(module) + '/' + f.path;
           var bx = document.createElement('details');
@@ -666,12 +667,12 @@
           bx.open = pdfs.length === 1;
           bx.style.marginTop = '6px';
           bx.innerHTML = '<summary>' + esc(f.path) + ' <span class="hint">(' +
-            (f.size / 1024).toFixed(1) + ' KB · 内嵌预览)</span></summary>' +
+            (f.size / 1024).toFixed(1) + ' KB' + esc(t('ui.ex.embed', ' · 内嵌预览')) + ')</span></summary>' +
             '<div style="margin-top:6px"><iframe src="' + url +
             '" type="application/pdf" style="width:100%;height:64vh;border:1px solid ' +
             'var(--line-200,#e3e3e3);border-radius:8px;background:#fff"></iframe></div>' +
             '<p class="hint" style="margin:4px 0 0"><a href="' + url +
-            '" target="_blank">在新标签页打开 ↗</a></p>';
+            '" target="_blank">' + esc(t('ui.ex.newTab', '在新标签页打开 ↗')) + '</a></p>';
           pd.appendChild(bx);
         });
         textsBox.appendChild(pd);
@@ -684,12 +685,12 @@
         box.open = htmls.length === 1;
         box.style.marginTop = '8px';
         box.innerHTML = '<summary>' + esc(f.path) + ' <span class="hint">(' +
-          (f.size / 1024).toFixed(1) + ' KB · 在线预览)</span></summary>' +
+          (f.size / 1024).toFixed(1) + ' KB' + esc(t('ui.ex.inlinePreview', ' · 在线预览')) + ')</span></summary>' +
           '<div style="margin-top:6px"><iframe src="' + url +
           '" style="width:100%;height:70vh;border:1px solid var(--line-200,#e3e3e3);' +
           'border-radius:8px;background:#fff"></iframe></div>' +
           '<p class="hint" style="margin:4px 0 0"><a href="' + url +
-          '" target="_blank">在新标签页打开 ↗</a></p>';
+          '" target="_blank">' + esc(t('ui.ex.newTab', '在新标签页打开 ↗')) + '</a></p>';
         textsBox.appendChild(box);
       });
       texts.forEach(function (f) {
@@ -699,7 +700,7 @@
         card.style.marginTop = '8px';
         card.innerHTML = '<summary>' + esc(f.path) + ' <span class="hint">(' +
           (f.size / 1024).toFixed(1) + ' KB)</span></summary>' +
-          '<div class="rpt-sec-body" data-url="' + url + '"><p class="hint">展开后加载…</p></div>';
+          '<div class="rpt-sec-body" data-url="' + url + '"><p class="hint">' + esc(t('ui.ex.expandLoad', '展开后加载…')) + '</p></div>';
         card.addEventListener('toggle', function () {
           if (!card.open || card.dataset.loaded) return;
           card.dataset.loaded = '1';
@@ -726,7 +727,7 @@
         textsBox.appendChild(o);
       }
     }).catch(function (e) {
-      body.innerHTML = '<p class="hint">示例结果加载失败: ' + esc(e.message || e) + '</p>';
+      body.innerHTML = '<p class="hint">' + t('ui.ex.resFail') + esc(e.message || e) + '</p>';
     });
   }
 

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>公共病毒组 - 植物病毒分析平台</title>
+<title>{{ 'Public virome - Plant Virus Analysis Platform' if lang == 'en' else '公共病毒组 - 植物病毒分析平台' }}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 <style>
@@ -28,6 +28,7 @@
 </div>
 
 <script src="/static/i18n.js?v={{ asset_v }}"></script>
+<script src="/static/app.js?v={{ asset_v }}"></script>
 <script>
 (function () {
   var frame = document.getElementById('viromeFrame');

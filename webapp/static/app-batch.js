@@ -11,8 +11,9 @@
 //   queued = 待启动（入队初始态，点「▶ 启动」才开跑）
 //   ready  = 排队中（已点启动，等前面的跑完 / 等恢复）
 //   running/done/failed/cancelled 同旧语义
-const Q_ST = { queued: '待启动', ready: '排队中', running: '运行中',
-               done: '已完成', failed: '失败', cancelled: '已取消' };
+const Q_ST = { queued: t('stt.queued'), ready: t('stt.ready'),
+               running: t('stt.running'), done: t('stt.done'),
+               failed: t('stt.failed'), cancelled: t('stt.cancelled') };
 async function loadQueue() {
   const box = $('queueBox');
   if (!box) return;

@@ -303,6 +303,13 @@ class TaskLogger:
             self._fh = safe_open(log_file, 'at')
 
     def log(self, msg, level="INFO"):
+        # 2026-10-26：所有 logger 的唯一出口，中英切换在这里统一生效（CLI 与
+        # 网页任务消息都走这条路径）。未登记的动态串原样保留，不影响功能。
+        try:
+            from .i18n_cli import tr as _tr
+            msg = _tr(msg)
+        except Exception:
+            pass
         line = f"[{time.strftime('%H:%M:%S')}] [{level}] {msg}"
         with self._lock:
             if self._fh:

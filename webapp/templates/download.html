@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>数据下载 - 植物病毒分析平台</title>
+<title>{{ 'Data download - Plant Virus Analysis Platform' if lang == 'en' else '数据下载 - 植物病毒分析平台' }}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 <style>
@@ -416,8 +416,9 @@ async function refresh() {
       const a2 = d.tools && d.tools.aria2c;
       const sc = d.tools && d.tools.sracha;
       el.textContent =
-        (a2 ? '✔ aria2c 主引擎' : '⚠ aria2c 缺失（内置下载）') +
-        ' → 回退: ' + (sc ? '✔ sracha（仅 SRR/ERR/DRR）' : '内置 HTTP');
+        (a2 ? t('dl.engineAria2', '✔ aria2c 主引擎') : t('dl.engineMissing', '⚠ aria2c 缺失（内置下载）')) +
+        t('dl.fallback', ' → 回退: ') +
+        (sc ? t('dl.engineSracha', '✔ sracha（仅 SRR/ERR/DRR）') : t('dl.engineHttp', '内置 HTTP'));
     }
   } catch (e) {}
   refresh();

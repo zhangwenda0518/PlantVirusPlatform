@@ -143,6 +143,8 @@
     initGroups();
     initDrawer();
     initTitle();
+    // i18n 落地后再算一次标题（见 i18n.js 的 vp:i18n 广播）
+    document.addEventListener('vp:i18n', initTitle);
   }
 
   if (document.readyState === 'loading') {

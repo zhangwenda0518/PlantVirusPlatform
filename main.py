@@ -30,6 +30,51 @@ from Virus_Platform_Core.utils import TaskLogger, check_path
 from Virus_Platform_Core.pipeline import DEFAULT_ANALYZE_STAGES
 
 
+def _bootstrap_taxonomy():
+    """First-run extraction of the bundled NCBI taxonomy archive.
+
+    The database package ships NCBI's official new_taxdump.tar.gz (155 MB) and
+    app.py unpacks it in a background thread when the web UI starts.  Buyers are
+    told to run `VirusPlatform.exe --cli selfcheck` as their very first command,
+    so without this bootstrap that command reported "NCBI Taxonomy: not ready"
+    (exit 1) on a cold product until the web UI had been opened once.
+    Extraction is pure local work - no network access, about a minute.
+    """
+    try:
+        from Virus_Platform_Core.config import DIRS
+        from Virus_Platform_Core.taxonomy import prepare_taxonomy, taxonomy_ready
+        if taxonomy_ready():
+            return
+        tar = os.path.join(DIRS['databases'], 'new_taxdump.tar.gz')
+        if not os.path.isfile(tar):
+            return
+        _say('[init] extracting the bundled NCBI taxonomy archive '
+              '(first run only, about a minute)...')
+        prepare_taxonomy()
+        _say('[init] NCBI taxonomy is ready.')
+    except Exception as e:                              # noqa: BLE001
+        _say(f'[init] taxonomy bootstrap skipped: {e}')
+
+
+def _self_cmd(*parts):
+    """提示语里的自调用命令：分发版（冻结 exe）用 VirusPlatform.exe --cli，
+    源码树用 python main.py —— 否则买家照着提示跑会找不到 python。"""
+    base = ('VirusPlatform.exe --cli' if getattr(sys, 'frozen', False)
+            else 'python main.py')
+    return ' '.join((base,) + parts)
+
+
+def _say(*args, **kw):
+    """CLI 输出统一出口：en 模式下把消息翻成英文（zh 原样）。"""
+    try:
+        from Virus_Platform_Core.i18n_cli import tr as _tr
+        if args:
+            args = tuple(_tr(a) if isinstance(a, str) else a for a in args)
+    except Exception:
+        pass
+    print(*args, **kw)
+
+
 def make_logger(name, echo=True):
     log_file = os.path.join(DIRS['logs'], f'{name}_{__import__("time").strftime("%Y%m%d_%H%M%S")}.log')
     return TaskLogger(log_file, echo=echo)
@@ -39,7 +84,7 @@ def cmd_init_taxonomy(args):
     from Virus_Platform_Core.taxonomy import prepare_taxonomy, taxonomy_ready
     logger = make_logger('taxonomy')
     prepare_taxonomy(logger=logger, force=args.force)
-    print("\n✔ Taxonomy 就绪:", taxonomy_ready())
+    _say("\n✔ Taxonomy 就绪:", taxonomy_ready())
     logger.close()
 
 
@@ -59,16 +104,16 @@ def cmd_build_host_db(args):
     if db_ready(out):
         cfg.set_active_host_db(out)          # 建完即设为当前，避免建了不用
         info = host_db_info(out)
-        print(f"\n✔ 宿主库就绪: {out}")
-        print(f"  物种 = {info.get('species') or '(未查到学名)'} "
+        _say(f"\n✔ 宿主库就绪: {out}")
+        _say(f"  物种 = {info.get('species') or '(未查到学名)'} "
               f"(taxid={info.get('taxid')})")
         if info.get('conflicted'):
-            print(f"  ⚠ seqid2taxid.map 含多个 taxid {info.get('taxids_in_map')}"
+            _say(f"  ⚠ seqid2taxid.map 含多个 taxid {info.get('taxids_in_map')}"
                   f" —— 元数据被历史建库污染，建议换新目录重建")
-        print(f"  已设为当前宿主库（platform.json active_host_db = "
+        _say(f"  已设为当前宿主库（platform.json active_host_db = "
               f"{cfg.active_host_db}）")
     else:
-        print("\n✘ 建库失败")
+        _say("\n✘ 建库失败")
     logger.close()
 
 
@@ -78,7 +123,7 @@ def cmd_build_virus_db(args):
     build_virus_db(args.fasta, args.info,
                    hash_capacity=args.hash_capacity, threads=args.threads,
                    logger=logger, rebuild=args.rebuild)
-    print("\n✔ 病毒库就绪" if db_ready(get_config().databases['virus']) else "\n✘ 建库失败")
+    _say("\n✔ 病毒库就绪" if db_ready(get_config().databases['virus']) else "\n✘ 建库失败")
     logger.close()
 
 
@@ -115,11 +160,11 @@ def cmd_ncbi_dl(args):
     logger = make_logger(f'ncbi_dl_{args.name}')
     res = download_collection(args.term, args.name, db=args.db,
                               max_records=args.max, logger=logger)
-    print(f"\n✔ 集合 [{res['name']}]: 命中 {res['total_hits']}，"
+    _say(f"\n✔ 集合 [{res['name']}]: 命中 {res['total_hits']}，"
           f"新增 {res['downloaded']}，跳过 {res['skipped']}")
-    print("已下载集合：")
+    _say("已下载集合：")
     for c in list_collections():
-        print(f"  {c['name']:20s} {c['n_seqs']:6d} 条  {c['query'][:50]}")
+        _say(f"  {c['name']:20s} {c['n_seqs']:6d} 条  {c['query'][:50]}")
     logger.close()
 
 
@@ -127,10 +172,10 @@ def cmd_ncbi_list(args):
     from Virus_Platform_Core.ncbi_download import list_collections
     cols = list_collections()
     if not cols:
-        print("（无已下载集合，先用 ncbi-dl 下载）")
+        _say("（无已下载集合，先用 ncbi-dl 下载）")
         return
     for c in cols:
-        print(f"  {c['name']:20s} {c['n_seqs']:6d} 条  db={c['db']}  {c['date']}  "
+        _say(f"  {c['name']:20s} {c['n_seqs']:6d} 条  db={c['db']}  {c['date']}  "
               f"{c['query'][:60]}")
 
 
@@ -141,10 +186,10 @@ def cmd_gb_dl(args):
                                  accessions=args.acc, max_records=args.max,
                                  logger=logger)
     tail = f"，未找到 {len(res['missing'])}" if res['missing'] else ''
-    print(f"\n✔ 集合 [{res['name']}]: 命中 {res['total_hits']}，"
+    _say(f"\n✔ 集合 [{res['name']}]: 命中 {res['total_hits']}，"
           f"新增 {res['downloaded']}，跳过 {res['skipped']}{tail}")
     for c in list_gb_collections():
-        print(f"  {c['name']:22s} {c['n_records']:4d} 条  {c['date']}  "
+        _say(f"  {c['name']:22s} {c['n_records']:4d} 条  {c['date']}  "
               f"{c['source']}")
     logger.close()
 
@@ -153,7 +198,7 @@ def cmd_gb_import(args):
     from Virus_Platform_Core.gb_collection import import_local_gb
     logger = make_logger(f'gb_import_{args.name}')
     res = import_local_gb(args.name, args.files, logger=logger)
-    print(f"\n✔ 集合 [{res['name']}]: 导入 {res['imported']} 条，"
+    _say(f"\n✔ 集合 [{res['name']}]: 导入 {res['imported']} 条，"
           f"跳过 {res['skipped']} 条")
     logger.close()
 
@@ -162,7 +207,7 @@ def cmd_gb_list(args):
     from Virus_Platform_Core.gb_collection import list_gb_collections
     cols = list_gb_collections()
     if not cols:
-        print('（无 GenBank 集合，先用 gb-dl 下载或 gb-import 导入）')
+        _say('（无 GenBank 集合，先用 gb-dl 下载或 gb-import 导入）')
         return
     for c in cols:
         if c['source'] == 'query':
@@ -171,22 +216,22 @@ def cmd_gb_list(args):
             src = f"{c['accessions']} 个 accession"
         else:
             src = '本机导入'
-        print(f"  {c['name']:22s} {c['n_records']:4d} 条  {src[:52]:52s} "
+        _say(f"  {c['name']:22s} {c['n_records']:4d} 条  {src[:52]:52s} "
               f"{c['date']}")
 
 
 def cmd_gb_check(args):
     from Virus_Platform_Core.gb_collection import inspect_collection
     st = inspect_collection(args.name)
-    print(f"集合 [{st['name']}]（{st['dir']}）: {len(st['records'])} 条记录\n")
-    print(f"{'accession':18s}{'长度':>10s}{'CDS':>5s}{'成熟肽':>6s}  物种")
+    _say(f"集合 [{st['name']}]（{st['dir']}）: {len(st['records'])} 条记录\n")
+    _say(f"{'accession':18s}{'长度':>10s}{'CDS':>5s}{'成熟肽':>6s}  物种")
     for r in st['records']:
-        print(f"{r['acc'][:17]:18s}{r['length']:10d}{r['cds_count']:5d}"
+        _say(f"{r['acc'][:17]:18s}{r['length']:10d}{r['cds_count']:5d}"
               f"{r['mat_peptides']:6d}  {(r['organism'] or r['title'])[:44]}")
     if st['warnings']:
-        print('\n⚠ 警告:')
+        _say('\n⚠ 警告:')
         for w in st['warnings']:
-            print(f'  - {w}')
+            _say(f'  - {w}')
 
 
 def cmd_report(args):
@@ -207,12 +252,12 @@ def cmd_host_analysis(args):
     s = predict_hosts(sample_dir, logger=logger, force=args.force,
                       min_confidence=args.min_confidence)
     logger.close()
-    print(f"宿主预测完成: {s['n_contigs']} 条 contigs")
+    _say(f"宿主预测完成: {s['n_contigs']} 条 contigs")
     if s.get('min_confidence') is not None:
-        print(f"置信度门槛 {s['min_confidence']}: "
+        _say(f"置信度门槛 {s['min_confidence']}: "
               f"{s.get('n_low_confidence', 0)} 条标注 Low_confidence")
     for cat, n in s['categories'].items():
-        print(f"  {cat:15s}: {n}")
+        _say(f"  {cat:15s}: {n}")
 
 
 def cmd_orfa(args):
@@ -229,12 +274,12 @@ def cmd_orfa(args):
                            min_qcov=args.min_qcov)
     logger.close()
     used = s.get('libs') or []
-    print("启用注释层: " + '、'.join(LIB_LABELS.get(l, l) for l in used))
+    _say("启用注释层: " + '、'.join(LIB_LABELS.get(l, l) for l in used))
     eng = s.get('engine') or '（层1 未启用）'
-    print(f"ORF 功能注释完成: {s['n_annotated']}/{s['n_orfs']} 个 ORF 获得"
+    _say(f"ORF 功能注释完成: {s['n_annotated']}/{s['n_orfs']} 个 ORF 获得"
           f"有效注释，覆盖 {s['n_families']} 个病毒科（引擎 {eng}）")
     for c, n in list(s['categories'].items())[:10]:
-        print(f"  {c:20s}: {n}")
+        _say(f"  {c:20s}: {n}")
 
 
 def cmd_logan_create(args):
@@ -242,34 +287,35 @@ def cmd_logan_create(args):
     d = create_job(args.name, sample=args.sample or None,
                    contig_ids=(args.contigs.split(',') if args.contigs else None),
                    pasted=args.fasta, n_seg=args.segments)
-    print(f"查询任务已创建: {d['name']}（{d['n_segments']} 个片段）")
-    print("请把每个片段的序列提交到 https://logan-search.org/dashboard"
+    _say(f"查询任务已创建: {d['name']}（{d['n_segments']} 个片段）")
+    _say("请把每个片段的序列提交到 https://logan-search.org/dashboard"
           "（Groups 建议 All_No_viral_human，建议填邮箱拿下载链接）：")
     for s in d['segments']:
         _h, seq = get_segment_fasta(d['name'], s['index'])
         fa = os.path.join(DIRS['logan'], d['name'], s['file'])
-        print(f"  s{s['index']}  {s['contig']} {s['start']}-{s['end']}  → {fa}")
-    print("拿到结果表后：python main.py logan-import --name "
-          f"{d['name']} --segment 1 --result 结果.tsv")
+        _say(f"  s{s['index']}  {s['contig']} {s['start']}-{s['end']}  → {fa}")
+    _say('拿到结果表后：' + _self_cmd('logan-import --name '
+                                         f"{d['name']}")
+          + ' --segment 1 --result 结果.tsv')
 
 
 def cmd_logan_import(args):
     from Virus_Platform_Core.logan_trace import import_result
     raw = open(check_path(args.result, must_exist=True), 'rb').read()
     d = import_result(args.name, args.segment, args.result, raw)
-    print(f"已导入片段 s{args.segment}（{args.result}）；"
+    _say(f"已导入片段 s{args.segment}（{args.result}）；"
           f"任务状态: {d['status']}（{d['n_imported']}/{d['n_segments']} 片段）")
-    print(f"溯源报告: {os.path.join(DIRS['logan'], d['name'], 'trace_report.html')}")
+    _say(f"溯源报告: {os.path.join(DIRS['logan'], d['name'], 'trace_report.html')}")
 
 
 def cmd_logan_jobs(args):
     from Virus_Platform_Core.logan_trace import list_jobs
     jobs = list_jobs()
     if not jobs:
-        print("暂无 LOGAN 溯源查询任务")
+        _say("暂无 LOGAN 溯源查询任务")
         return
     for j in jobs:
-        print(f"{j['name']:30s} 样品={j['sample'] or '—':12s} "
+        _say(f"{j['name']:30s} 样品={j['sample'] or '—':12s} "
               f"片段 {j['n_imported']}/{j['n_segments']} 已导入  "
               f"{'报告✔' if j['has_report'] else ''}")
 
@@ -283,7 +329,7 @@ def cmd_logan_batch(args):
                      first_wait=args.first_wait, max_wait=args.max_wait,
                      logger=logger)
     logger.close()
-    print(f"批量完成: 待提交 {r['n_pending']} 片段, 回收导入 {r['n_imported']} 个"
+    _say(f"批量完成: 待提交 {r['n_pending']} 片段, 回收导入 {r['n_imported']} 个"
           f"（未落定的片段可再次运行补漏）")
 
 
@@ -291,11 +337,12 @@ def cmd_submit_list(args):
     from Virus_Platform_Core.ncbi_submit import store
     tabs = store.list_tables()
     if not tabs:
-        print("暂无提交项目（submissions/ 为空）。新建：python main.py submit-init --name demo --demo")
+        _say('暂无提交项目（submissions/ 为空）。新建：'
+          + _self_cmd('submit-init --name demo --demo'))
         return
     for t in tabs:
         extra = [f for f in t['files'] if f != 'unified_metadata.csv']
-        print(f"{t['name']:30s} {t['rows']:4d} 行  产物: "
+        _say(f"{t['name']:30s} {t['rows']:4d} 行  产物: "
               f"{', '.join(extra) if extra else '—（submit-export 生成）'}")
 
 
@@ -305,12 +352,12 @@ def cmd_submit_init(args):
     from Virus_Platform_Core.ncbi_submit import unified_metadata as _um_path
     if args.demo:
         store.create_table(args.name, sample='demo')
-        print(f"提交项目已创建（示例数据）: submissions/{args.name}/")
+        _say(f"提交项目已创建（示例数据）: submissions/{args.name}/")
         return
     if args.import_csv:
         _, n = store.import_table(args.name, check_path(args.import_csv,
                                                         must_exist=True))
-        print(f"提交项目已创建（导入 {n} 行）: submissions/{args.name}/")
+        _say(f"提交项目已创建（导入 {n} 行）: submissions/{args.name}/")
         return
     if not args.taxonomy:
         raise SystemExit("需要 --taxonomy <taxonomy.tsv>（contig<TAB>taxonomy），"
@@ -329,34 +376,34 @@ def cmd_submit_init(args):
             cmd += [flag, val]
     r = _sp.run(cmd)
     if r.returncode == 0:
-        print(f"提交项目已创建: submissions/{args.name}/（unified_metadata.csv + source.src 等）")
-        print(f"继续: python main.py submit-validate --name {args.name} && "
-              f"python main.py submit-export --name {args.name}")
+        _say(f"提交项目已创建: submissions/{args.name}/（unified_metadata.csv + source.src 等）")
+    _say('继续: ' + _self_cmd(f'submit-validate --name {args.name}')
+          + ' && ' + _self_cmd(f'submit-export --name {args.name}'))
 
 
 def cmd_submit_validate(args):
     from Virus_Platform_Core.ncbi_submit import store
     issues = store.validate_table(args.name)
     if not issues:
-        print("✓ 所有必填字段已填写，可以提交")
+        _say("✓ 所有必填字段已填写，可以提交")
         return
     # validate_table 的 issue 形状：{column, kind, count, desc, examples}
     # kind ∈ missing_col / placeholder / format / duplicate / blank
     _KIND_LABEL = {'missing_col': '缺少列', 'placeholder': '必填未填',
                    'format': '格式', 'duplicate': '重复'}
-    print(f"校验：{len(issues)} 个问题")
+    _say(f"校验：{len(issues)} 个问题")
     for it in issues:
         kind = it.get('kind', '')
         n = it.get('count')
         label = _KIND_LABEL.get(kind, kind or '问题')
         if kind == 'missing_col' or n == -1:
-            print(f"  [{label}] {it['column']} — {it['desc']}")
+            _say(f"  [{label}] {it['column']} — {it['desc']}")
             continue
         ex = ', '.join(repr(e) for e in (it.get('examples') or [])[:3])
-        print(f"  [{label} {n} 条] {it['column']} — {it['desc']}")
+        _say(f"  [{label} {n} 条] {it['column']} — {it['desc']}")
         if ex:
-            print(f"      例: {ex}")
-    print("修复占位符后再提交 GenBank（Web 端「提交准备」页可在线编辑）")
+            _say(f"      例: {ex}")
+    _say("修复占位符后再提交 GenBank（Web 端「提交准备」页可在线编辑）")
     # 有未解决问题时以退出码 1 结束（main() 对返回 False 统一 sys.exit(1)），
     # 供脚本/CI 串联 `submit-validate && submit-export` 时正确短路。
     return False
@@ -365,7 +412,7 @@ def cmd_submit_validate(args):
 def cmd_submit_fill(args):
     from Virus_Platform_Core.ncbi_submit import store
     n = store.batch_fill(args.name, args.column, args.value, old_value=args.old)
-    print(f"已更新 '{args.column}' 列 {n} 个单元格")
+    _say(f"已更新 '{args.column}' 列 {n} 个单元格")
 
 
 def cmd_submit_export(args):
@@ -373,10 +420,10 @@ def cmd_submit_export(args):
     out = store.export_files(args.name, assembler=args.assembler,
                              sequencer=args.sequencer,
                              enrichment=args.enrichment)
-    print("产物已生成：")
+    _say("产物已生成：")
     for k, v in out.items():
-        print(f"  {k:20s} {v}")
-    print("提交：NCBI BankIt 上传 source.src / .fsa+.tbl，或 Sequin 导入；"
+        _say(f"  {k:20s} {v}")
+    _say("提交：NCBI BankIt 上传 source.src / .fsa+.tbl，或 Sequin 导入；"
           "BioSample 用 biosample_template.tsv 批量注册。")
 
 
@@ -412,7 +459,7 @@ def cmd_submit_sbt(args):
         if args.extra_authors else []
     tpl, path = store.generate_sbt(fields, extra_authors=extra,
                                    title=args.title or '', out_name=args.name)
-    print(f"template.sbt 已生成: {path}（{1 + len(extra)} 位作者）")
+    _say(f"template.sbt 已生成: {path}（{1 + len(extra)} 位作者）")
 
 
 def _subproc_env(deepseek_api=None, ncbi_api=None):
@@ -439,7 +486,7 @@ def cmd_meta_search(args):
                        args.ncbi_api or os.environ.get('NCBI_API_KEY'))
     r = _sp.run(cmd, env=env)
     if r.returncode == 0:
-        print("下一步: python main.py meta-info --runs <输出目录>/sra.list")
+        _say('下一步: ' + _self_cmd('meta-info --runs <输出目录>/sra.list'))
 
 
 def cmd_meta_info(args):
@@ -512,14 +559,14 @@ def cmd_ref_status(args):
     from Virus_Platform_Core import virus_ref
     st = virus_ref.status()
     if not st['dir']:
-        print("✘ 参考库未部署（databases/virus_ref 已移除）")
+        _say("✘ 参考库未部署（databases/virus_ref 已移除）")
         return
-    print(f"参考库目录 : {st['dir']}")
-    print(f"版本       : {st['version']}（最后增量 {st['last_incremental']}）")
-    print(f"数据来源   : ICTV {st['source_ictv']} / NCBI {st['source_ncbi']}")
-    print(f"非冗余参考 : {st['n_ref']} 条")
-    print(f"完整基因组 : {st['n_complete']} 条")
-    print(f"规范化元数据: {'✔' if st['meta_ready'] else '✘（首次使用时自动构建）'}")
+    _say(f"参考库目录 : {st['dir']}")
+    _say(f"版本       : {st['version']}（最后增量 {st['last_incremental']}）")
+    _say(f"数据来源   : ICTV {st['source_ictv']} / NCBI {st['source_ncbi']}")
+    _say(f"非冗余参考 : {st['n_ref']} 条")
+    _say(f"完整基因组 : {st['n_complete']} 条")
+    _say(f"规范化元数据: {'✔' if st['meta_ready'] else '✘（首次使用时自动构建）'}")
 
 
 def cmd_ictv_update(args):
@@ -534,16 +581,16 @@ def cmd_ictv_status(args):
     from Virus_Platform_Core import ictv_db
     st = ictv_db.status()
     if not st['dir']:
-        print("✘ 未找到 databases/tree_db/ictv_tree.db/（ICTV 参考库未部署）")
+        _say("✘ 未找到 databases/tree_db/ictv_tree.db/（ICTV 参考库未部署）")
         return
-    print(f"ICTV 库目录 : {st['dir']}")
+    _say(f"ICTV 库目录 : {st['dir']}")
     if not st['taxa_ready']:
-        print("  ✘ taxa.txt 未生成（用 ictv-update 更新 VMR 后自动解析）")
+        _say("  ✘ taxa.txt 未生成（用 ictv-update 更新 VMR 后自动解析）")
         return
-    print(f"MSL 版本    : {st['msl'] or '?'}（VMR: {st['xlsx'] or '?'}）")
-    print(f"解析时间    : {st['parsed'] or '?'}")
-    print(f"accession   : {st['n_rows']} 条（{st['n_genus']} 属 / {st['n_family']} 科）")
-    print(f"本地覆盖    : 本地已有 {st['n_in_acvirus']} 条，"
+    _say(f"MSL 版本    : {st['msl'] or '?'}（VMR: {st['xlsx'] or '?'}）")
+    _say(f"解析时间    : {st['parsed'] or '?'}")
+    _say(f"accession   : {st['n_rows']} 条（{st['n_genus']} 属 / {st['n_family']} 科）")
+    _say(f"本地覆盖    : 本地已有 {st['n_in_acvirus']} 条，"
           f"gb 缓存已下 {st['n_gb_cache']} 条")
 
 
@@ -562,36 +609,36 @@ def cmd_ictv_refs(args):
         genus=args.genus, family=args.family, species=args.species,
         limit=args.limit, genome='any' if args.any else 'complete', db=db)
     scope = args.genus or args.family or args.species
-    print(f"[{scope}] 命中 {total} 条 库={db}"
+    _say(f"[{scope}] 命中 {total} 条 库={db}"
           + ('' if args.any else '（仅 Complete genome）')
           + f"，按本地优先显示前 {len(rows)} 条:\n")
-    print(f"{'accession':12s}{'来源':11s}{'基因组':22s}{'物种':40s}宿主组")
+    _say(f"{'accession':12s}{'来源':11s}{'基因组':22s}{'物种':40s}宿主组")
     for r in rows:
-        print(f"{r['Genbank']:12s}{r['Source']:11s}"
+        _say(f"{r['Genbank']:12s}{r['Source']:11s}"
               f"{(r['Genome_Coverage'] or '')[:20]:22s}"
               f"{(r['Species'] or '')[:38]:40s}{(r['Host_Source'] or '')[:16]}")
     need = [r['Genbank'] for r in rows if r['Source'] == 'ncbi']
     if not need:
         return
-    print(f"\n其中 {len(need)} 条本地没有（本地缓存未命中）")
+    _say(f"\n其中 {len(need)} 条本地没有（本地缓存未命中）")
     if not args.download:
-        print("预览模式未下载；加 --download 执行按需下载（需联网）")
+        _say("预览模式未下载；加 --download 执行按需下载（需联网）")
         return
     logger = make_logger('ictv_refs')
     res = ictv_db.ensure_gb(need, logger=logger)
     tail = f"，未找到 {len(res['missing'])}" if res['missing'] else ''
-    print(f"✔ 下载 {res['downloaded']} 条，本地已有跳过 {res['skipped']} 条{tail}")
-    print(f"缓存 fasta: {res['fasta']}")
+    _say(f"✔ 下载 {res['downloaded']} 条，本地已有跳过 {res['skipped']} 条{tail}")
+    _say(f"缓存 fasta: {res['fasta']}")
     logger.close()
 
 
 def cmd_tools(args):
     cfg = get_config()
-    print(f"线程数: {cfg.threads}")
+    _say(f"线程数: {cfg.threads}")
     for name, path in sorted(cfg.tool_status().items()):
-        print(f"  {name:12s} {'✔ ' + path if path else '✘ 未找到'}")
-    print(f"宿主库: {cfg.databases['host']}")
-    print(f"病毒库: {cfg.databases['virus']}")
+        _say(f"  {name:12s} {'✔ ' + path if path else '✘ 未找到'}")
+    _say(f"宿主库: {cfg.databases['host']}")
+    _say(f"病毒库: {cfg.databases['virus']}")
 
 
 def cmd_db_migrate(args):
@@ -600,14 +647,14 @@ def cmd_db_migrate(args):
     from Virus_Platform_Core.db_migrate import migrate, check
     if args.check:
         r = check(args.to)
-        print(('\n✔ ' if r.get('ok') else '\n✘ ') + (r.get('detail')
+        _say(('\n✔ ' if r.get('ok') else '\n✘ ') + (r.get('detail')
               or r.get('error', '')))
         return None if r.get('ok') else False
     r = migrate(args.to, mode=args.mode, dry_run=args.dry_run)
     if r.get('dry_run'):
-        print('\n' + r['detail'])
+        _say('\n' + r['detail'])
         return None
-    print(('\n✔ ' if r.get('ok') else '\n✘ 迁移失败: ') + (r.get('detail')
+    _say(('\n✔ ' if r.get('ok') else '\n✘ 迁移失败: ') + (r.get('detail')
           or r.get('error', '')))
     return None if r.get('ok') else False
 
@@ -625,15 +672,15 @@ def cmd_samples_backfill(args):
     get_config()  # 确保 DIRS 已按 platform.json（含自定义输出根）就绪
     from Virus_Platform_Core.pipeline import backfill_all_manifests
     r = backfill_all_manifests(dry_run=args.dry_run, only=args.sample)
-    print(f"扫描样品 {r['total']} 个，需回填 {r['backfilled']} 个，"
+    _say(f"扫描样品 {r['total']} 个，需回填 {r['backfilled']} 个，"
           f"已有清单跳过 {r['skipped']} 个"
           + ('（预演，未写盘）' if r['dry_run'] else ''))
     for it in r['items']:
         flag = '将写入' if r['dry_run'] else ('已写入' if it['wrote'] else '无需写')
-        print(f"  [{flag}] {it['sample']:32s} 项目={it['project'] or '-'} "
+        _say(f"  [{flag}] {it['sample']:32s} 项目={it['project'] or '-'} "
               f"已完成阶段={it['stages_done']}")
     if not r['items']:
-        print('  没有需要回填的样品')
+        _say('  没有需要回填的样品')
     return None
 
 
@@ -644,36 +691,36 @@ def cmd_tool_runs(args):
     act = args.action
     if act == 'status':
         info = tra.status()
-        print(f"根目录: {info['root']}")
+        _say(f"根目录: {info['root']}")
         act_sz = sum(a['size'] for a in info['active'])
-        print(f"\n活动区（动态运行，最新在前，共 {len(info['active'])} 个，"
+        _say(f"\n活动区（动态运行，最新在前，共 {len(info['active'])} 个，"
               f"{tra._fmt(act_sz)}）:")
         for a in info['active'][:15]:
-            print(f"  {a['name']:44s} {a['size_h']:>10s}  {a['files']} 文件")
+            _say(f"  {a['name']:44s} {a['size_h']:>10s}  {a['files']} 文件")
         if len(info['active']) > 15:
-            print(f"  … 另有 {len(info['active']) - 15} 个，详见 GUI 运行目录页")
-        print('\n固定区:')
+            _say(f"  … 另有 {len(info['active']) - 15} 个，详见 GUI 运行目录页")
+        _say('\n固定区:')
         for d, f in info['fixed'].items():
-            print(f"  {d:12s} {f['dirs']:>3d} 子目录  {f['files']:>4d} 文件  "
+            _say(f"  {d:12s} {f['dirs']:>3d} 子目录  {f['files']:>4d} 文件  "
                   f"{f['size_h']}")
         return None
     if act == 'organize':
         r = tra.organize(dry_run=args.dry_run)
-        print(f"\n{'预演' if args.dry_run else '完成'}: 归位 {r['moved']} 项，"
+        _say(f"\n{'预演' if args.dry_run else '完成'}: 归位 {r['moved']} 项，"
               f"跳过 {r['skipped']} 项")
         return None
     if act == 'archive':
         r = tra.archive(before=args.before, older_days=args.older_days,
                         dry_run=args.dry_run)
-        print(f"\n{'预演' if args.dry_run else '完成'}: 归档 {r['archived']} 个运行")
+        _say(f"\n{'预演' if args.dry_run else '完成'}: 归档 {r['archived']} 个运行")
         return None
     if act == 'clean':
         if args.active_days is None and args.archive_days is None:
-            print('✘ clean 需至少给一个期限: --active-days N 和/或 --archive-days N')
+            _say('✘ clean 需至少给一个期限: --active-days N 和/或 --archive-days N')
             return False
         r = tra.clean(active_days=args.active_days,
                       archive_days=args.archive_days, dry_run=args.dry_run)
-        print(f"\n{'预演' if args.dry_run else '完成'}: 删除 {r['removed']} 项，"
+        _say(f"\n{'预演' if args.dry_run else '完成'}: 删除 {r['removed']} 项，"
               f"释放 {r['freed_h']}")
         return None
 
@@ -703,20 +750,20 @@ def cmd_crispr_design(args):
         params['product_max'] = args.product_max
 
     def _prog(stage, frac, msg=''):
-        print(f'  [{stage:8s}] {int(frac * 100):3d}%  {msg}')
+        _say(f'  [{stage:8s}] {int(frac * 100):3d}%  {msg}')
 
     summary, _report = cd.run_chain(args.input, params, out_dir,
                                     logger, _prog)
     logger.close()
-    print(f"CRISPR 设计完成: {summary['n_sets_output']} 组合"
+    _say(f"CRISPR 设计完成: {summary['n_sets_output']} 组合"
           f"（候选 {summary['n_sets_total']}，最优评分 "
           f"{summary['best_score']}，耗时 {summary['elapsed_sec']}s）")
     for seg, d in summary['segments'].items():
-        print(f"  {seg:12s}: {d['n_isolates']} 株 / 共识 {d['consensus_len']}bp"
+        _say(f"  {seg:12s}: {d['n_isolates']} 株 / 共识 {d['consensus_len']}bp"
               f" / PAM {d['n_pam_sites']} → 漏斗后 {d['n_after_funnel']}"
               f" → 组合 {d['n_designed']}")
-    print(f"产物目录: {summary['out_dir']}")
-    print("⚠ " + summary['evidence_note'])
+    _say(f"产物目录: {summary['out_dir']}")
+    _say("⚠ " + summary['evidence_note'])
     return None
 
 
@@ -767,7 +814,7 @@ def cmd_selfcheck(args):
 
     # 1) 模块导入（遍历 Virus_Platform_Core 下**全部**子模块；
     #    枚举实现在 Virus_Platform_Core.selfcheck，web API 共用同一份）
-    print('── ① 模块导入 ──')
+    _say('── ① 模块导入 ──')
     t0 = _t.time()
     mods, walk_errs = _iter_platform_modules()
     if not mods:                       # 遍历不可用时的兜底，别让自检失去意义
@@ -781,26 +828,26 @@ def cmd_selfcheck(args):
     for n in walk_errs:                # 遍历阶段就导不进来的子包（如缺依赖）
         fails.append((n + '.*', '子包导入失败，其下模块未能枚举'))
     total = len(mods) + len(walk_errs)
-    print(f'  {"✔" if not fails else "✘"} {total - len(fails)}/{total} '
+    _say(f'  {"✔" if not fails else "✘"} {total - len(fails)}/{total} '
           f'({_t.time() - t0:.1f}s)')
     for m, e in fails:
-        print(f'    ✘ {m}: {e}')
+        _say(f'    ✘ {m}: {e}')
     ok_all &= not fails
 
     # 2) 外部工具
-    print('── ② 外部工具 ──')
+    _say('── ② 外部工具 ──')
     cfg = get_config()
     missing = [k for k, v in sorted(cfg.tool_status().items()) if not v]
     total = len(cfg.tool_status())
-    print(f'  {"✔" if not missing else "△"} {total - len(missing)}/{total} 可用'
+    _say(f'  {"✔" if not missing else "△"} {total - len(missing)}/{total} 可用'
           + (f'（缺: {", ".join(missing)}）' if missing else ''))
     if missing:
-        print('    缺失工具只影响对应步骤（可选步骤自动降级）；'
+        _say('    缺失工具只影响对应步骤（可选步骤自动降级）；'
 
               '必装件 kunpeng/SPAdes/BLAST 缺失时对应管道无法运行。')
 
     # 3) 数据库
-    print('── ③ 数据库 ──')
+    _say('── ③ 数据库 ──')
     from Virus_Platform_Core.kunpeng import db_ready
     from Virus_Platform_Core.taxonomy import taxonomy_ready
     from Virus_Platform_Core.config import host_db_info
@@ -818,11 +865,16 @@ def cmd_selfcheck(args):
         ('病毒库 virus_db', db_ready(cfg.databases['virus']), False),
     ]
     for name, ok, warn in checks:
-        print(f'  {"✔" if ok else "✘"} {name}'
+        _say(f'  {"✔" if ok else "✘"} {name}'
               + ('（未配置——分发版默认不带，属预期；到「数据库构建」页自建，'
                  '或「📂 加载已构建宿主库」）' if warn else ''))
         if not warn:
             ok_all &= ok
+        if name.startswith('NCBI Taxonomy') and not ok:
+            # 单独版不含数据库包：✘ 之外必须给出口，否则买家只看到一个红叉
+            _say('      提示: 「数据库构建」页可一键下载；离线时把 '
+                  'new_taxdump.tar.gz 放到 databases/ 下，'
+                  '任一条命令首次运行会自动解压')
         if name.startswith('宿主库'):
             # 宿主库"是谁"必须可见：库本体不记录物种，历史上出过
             # "目录名是枸杞、库却按 4081 番茄建"的事故，用错宿主是静默的。
@@ -830,38 +882,38 @@ def cmd_selfcheck(args):
             if h:
                 who = (f"{h.get('species')} (taxid={h.get('taxid')})"
                        if h.get('taxid') else '身份未记录（无 host_db.json 清单）')
-                print(f'      目录 = {h.get("name")} | 物种 = {who}')
+                _say(f'      目录 = {h.get("name")} | 物种 = {who}')
                 if h.get('conflicted'):
-                    print(f'      ⚠ 元数据冲突: seqid2taxid.map 含多个 taxid '
+                    _say(f'      ⚠ 元数据冲突: seqid2taxid.map 含多个 taxid '
                           f'{h.get("taxids_in_map")}（历史建库污染）')
                 if h.get('legacy'):
-                    print('      提示: 这是旧布局固定槽位 host/classify；'
+                    _say('      提示: 这是旧布局固定槽位 host/classify；'
                           '重建后会自动迁到 host-db/<物种>_host_db/')
 
     # 4) 磁盘空间
-    print('── ④ 磁盘空间 ──')
+    _say('── ④ 磁盘空间 ──')
     import shutil
     for key, d in (('平台根', PLATFORM_ROOT), ('结果', DIRS['results'])):
         try:
             free = shutil.disk_usage(d).free
-            print(f'  {"✔" if free > 10e9 else "△"} {key}: 剩余 {free / 1e9:.1f} GB'
+            _say(f'  {"✔" if free > 10e9 else "△"} {key}: 剩余 {free / 1e9:.1f} GB'
                   + ('' if free > 10e9 else '（建议保留 >10GB）'))
         except OSError as e:
-            print(f'  ✘ {key}: {e}')
+            _say(f'  ✘ {key}: {e}')
 
     # 5) 结果目录里的样品
-    print('── ⑤ 样品 ──')
+    _say('── ⑤ 样品 ──')
     try:
         samples = sorted(os.listdir(DIRS['results']))
         samples = [s for s in samples
                    if os.path.isdir(os.path.join(DIRS['results'], s))]
-        print(f'  共 {len(samples)} 个样品: {", ".join(samples[:8])}'
-              + ('…' if len(samples) > 8 else ''))
+        _lst = ", ".join(samples[:8]) + ('…' if len(samples) > 8 else '')
+        _say(f'  共 {len(samples)} 个样品: {_lst}')
     except OSError:
-        print('  （results/ 目录尚不存在）')
+        _say('  （results/ 目录尚不存在）')
 
     # 6) 第三方依赖（对照 requirements.txt；缺必需依赖会影响打包分发）
-    print('── ⑥ 第三方依赖 ──')
+    _say('── ⑥ 第三方依赖 ──')
     try:
         from dev_tools.audit_deps import analyze as _dep_analyze
         dep = _dep_analyze()
@@ -871,46 +923,53 @@ def cmd_selfcheck(args):
             # （2026-09-11 实测：打包版扫到 0 个却报"全部就绪"，而当时 polars
             #  正因漏声明被 spec 排除、整个「已知病毒识别与定量」静默失效）。
             # 如实说明不适用，别给假信心。
-            print('  – 不适用：冻结分发无源码树可扫描'
+            _say('  – 不适用：冻结分发无源码树可扫描'
                   '（依赖已在打包环节固化，请以 ① 模块导入 为准）')
         elif not dep['hard_missing']:
-            print(f"  ✔ 全部依赖就绪（扫描 {len(dep['third'])} 个）")
+            _say(f"  ✔ 全部依赖就绪（扫描 {len(dep['third'])} 个）")
             # uncovered = 代码在用、但 requirements.txt 没声明。原先这里无条件
             # 打"requirements 已覆盖"，而 uncovered 从不展示 —— 正是这个盲区
             # 让 polars 漏声明了很久，最终演变成打包版整段功能静默失效
             # （2026-09-11）。如实列出来。
             if dep['uncovered']:
                 _unc = dep['uncovered']
-                print(f"  △ requirements.txt 未声明 {len(_unc)} 个: "
+                _say(f"  △ requirements.txt 未声明 {len(_unc)} 个: "
                       + ', '.join(m for m, _pip in _unc))
             if dep['missing']:
-                print(f"  △ 可选依赖缺失（对应功能降级）: "
+                _say(f"  △ 可选依赖缺失（对应功能降级）: "
                       f"{', '.join(dep['missing'])}")
         else:
             for m in dep['hard_missing']:
-                print(f'  ✘ 必需依赖未装: {m}')
-            print('  安装: python -m pip install -r requirements.txt')
+                _say(f'  ✘ 必需依赖未装: {m}')
+            _say('  安装: python -m pip install -r requirements.txt')
         ok_all &= not dep['hard_missing']
     except Exception as e:
-        print(f'  ✘ 依赖审计失败: {e}')
+        _say(f'  ✘ 依赖审计失败: {e}')
 
-    print('════════════════════════')
-    print('✔ 自检通过' if ok_all else '△ 存在未就绪项（见上），按需处理后重跑本命令')
+    _say('════════════════════════')
+    _say('✔ 自检通过' if ok_all else '△ 存在未就绪项（见上），按需处理后重跑本命令')
     return ok_all
 
 
-def main():
-    cfg = get_config()
-    # 退出前把 AI 审计队列排空：CLI 跑管道同样会发布事件（note_stage_*），
-    # 而 Windows 下 SIGTERM 不触发 atexit（实测）。信号处理器只能在主线程装。
-    try:
-        from Virus_Platform_Core.ai_agent import audit as _ai_audit
-        _ai_audit.install_signals()
-    except Exception:
-        pass
-    p = argparse.ArgumentParser(description="植物病毒分析平台 CLI",
-                                formatter_class=argparse.RawDescriptionHelpFormatter,
-                                epilog=__doc__)
+def build_parser(cfg):
+    """构建 CLI 参数解析器。
+
+    2026-10-26：从 main() 内联迁出——CLI 中英双语需要在 parse_args 之前
+    就地改写 description/help（i18n_cli.localize_parser），测试也需要
+    直接拿到解析器对象做锚点比对。
+    """
+    _frozen = bool(getattr(sys, 'frozen', False))
+    _epilog = __doc__.replace('python main.py', _self_cmd())
+    if _frozen:
+        _epilog = _epilog.replace('双击 启动平台-桌面窗口.bat',
+                                  '双击 VirusPlatform.exe')
+    p = argparse.ArgumentParser(
+        description="植物病毒分析平台 CLI",
+        prog='VirusPlatform.exe --cli' if _frozen else None,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_epilog)
+    p.add_argument('--lang', choices=['zh', 'en'], default=None,
+                   help='输出语言：zh=中文，en=English（默认跟随「设置 → 语言」，也可用环境变量 VP_CLI_LANG）')
     sub = p.add_subparsers(dest='cmd', required=True)
 
     sp = sub.add_parser('init-taxonomy', help='下载/准备 NCBI taxonomy（首次必做）')
@@ -946,8 +1005,8 @@ def main():
     sp.add_argument('--sample', required=True)
     sp.add_argument('--stages',
                     default=','.join(DEFAULT_ANALYZE_STAGES),
-                    help='阶段: fastp,fq2fa,host,kvsuite,assembly,hostana,'
-                         'orf,orfa,phylo,primer,gbdraw,report')
+                    help='阶段（逗号分隔）: '
+                         + ','.join(DEFAULT_ANALYZE_STAGES))
     sp.add_argument('--db-host', default=cfg.databases['host'])
     sp.add_argument('--db-virus', default=cfg.databases['virus'])
     sp.add_argument('--threads', type=int, default=cfg.threads)
@@ -1372,20 +1431,46 @@ def main():
     sp = sub.add_parser('importprobe', help='内部命令：逐模块导入探测（供 selfcheck 子进程调用）')
     sp.add_argument('modules', help='逗号分隔的模块名清单')
     sp.set_defaults(func=cmd_importprobe)
+    return p
 
+
+def main():
+    cfg = get_config()
+    # 退出前把 AI 审计队列排空：CLI 跑管道同样会发布事件（note_stage_*），
+    # 而 Windows 下 SIGTERM 不触发 atexit（实测）。信号处理器只能在主线程装。
+    try:
+        from Virus_Platform_Core.ai_agent import audit as _ai_audit
+        _ai_audit.install_signals()
+    except Exception:
+        pass
+    # 用法横幅随运行形态变化（冻结分发版没有 python / main.py），见 build_parser。
+    p = build_parser(cfg)
+    try:
+        from Virus_Platform_Core import i18n_cli as _i18n
+        _i18n.set_lang(None)          # 先按环境变量/配置定语言
+        _i18n.install_print_hook()   # 核心模块里的直接 print 也跟随语言
+        _i18n.localize_parser(p)     # help/description 就地英文化（zh 时不动）
+    except Exception:
+        _i18n = None
     args = p.parse_args()
+    if _i18n is not None and getattr(args, "lang", None):
+        _i18n.set_lang(args.lang)    # --lang 覆盖本次运行
+    # 首次运行把随包的 new_taxdump.tar.gz 解压出来（网页端是后台线程做的，
+    # CLI 先跑 selfcheck/analyze 时也必须就绪，否则首条命令就报 Taxonomy ✘）
+    if args.cmd != 'init-taxonomy':
+        _bootstrap_taxonomy()
     # 顶层异常包装（2026-10-04 审查 E5）：此前 cmd_* 异常裸抛 traceback，
     # 脚本化批处理难以区分「参数/运行失败」与解释器崩溃。统一为
     # 一行可读错误 + 退出码 2（1 保留给 selfcheck 的「存在未就绪项」）。
     try:
         rc = args.func(args)
     except KeyboardInterrupt:
-        print('\n[中断] 用户取消', file=sys.stderr)
+        _say('\n[中断] 用户取消', file=sys.stderr)
         sys.exit(130)
     except SystemExit:
         raise
     except Exception as e:
-        print(f'[错误] {type(e).__name__}: {e}\n'
+        _say(f'[错误] {type(e).__name__}: {e}\n'
               f'       （完整回溯: python -c "import traceback, '
               f'sys; sys.argv=...；或加环境变量 VP_CLI_TRACEBACK=1 重跑）',
               file=sys.stderr)

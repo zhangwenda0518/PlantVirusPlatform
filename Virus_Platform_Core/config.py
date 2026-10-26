@@ -897,11 +897,14 @@ def detect_tools():
         'crabz':    [which('crabz'), which('crabz.exe'),
                      _glob_first(os.path.join(BIN, 'crabz*.exe')),
                      _glob_first(os.path.join(R, 'crabz*.exe'))],
-        'gbdraw':   [which('gbdraw'), which('gbdraw.exe'),
-                     os.path.join(os.path.dirname(sys.executable), 'Scripts',
+        # gbdraw 与 spades/blast/mafft 同口径：随包副本优先，PATH 兜底。
+        # 当前运行解释器自己的 Scripts 排最前（源码环境 = 3rd\python\Scripts，
+        # 版本与打包时一致；构建机 PATH 上的别版 gbdraw 不再抢先）。
+        'gbdraw':   [os.path.join(os.path.dirname(sys.executable), 'Scripts',
                                   'gbdraw.exe'),
                      _glob_first(os.path.join(BIN, 'gbdraw*', 'gbdraw*.exe')),
-                     _glob_first(os.path.join(R, 'gbdraw*', 'gbdraw*.exe'))],
+                     _glob_first(os.path.join(R, 'gbdraw*', 'gbdraw*.exe')),
+                     which('gbdraw'), which('gbdraw.exe')],
         'orfipy':   [which('orfipy'),
                      # 打包运行时 Scripts 不一定在 PATH：按当前 Python 推断
                      os.path.join(os.path.dirname(sys.executable), 'Scripts', 'orfipy.exe')],
@@ -975,8 +978,15 @@ def detect_tools():
         # tools/snpgenie/snpgenie.pl 定位，不放进本探测表（避免"jar 当 exe"）。
     }
     out = {name: _first_exist(lst) for name, lst in cands.items()}
-    if getattr(sys, 'frozen', False) and not out.get('gbdraw'):
-        out['gbdraw'] = 'bundled:gbdraw'     # 随包 Python 引擎，进程内调用
+    # 冻结分发：gbdraw 随包的是 Python 引擎（_internal/gbdraw，进程内调用），
+    # 不是独立 exe。构建机 PATH 上若装着别版 gbdraw.exe，上面的 which() 会先
+    # 命中它 —— 实测取到旧版后 3 张基因组图里有 2 张因编码/参数差异报错，而
+    # 买家机器上根本没有那个 exe，行为随机器漂移。所以只要随包引擎在，就一律
+    # 用随包副本；随包不存在时才退回探测到的外部 exe（再没有则留空）。
+    if getattr(sys, 'frozen', False):
+        _meipass = getattr(sys, '_MEIPASS', '') or ''
+        if os.path.isdir(os.path.join(_meipass, 'gbdraw')) or not out.get('gbdraw'):
+            out['gbdraw'] = 'bundled:gbdraw'     # 随包 Python 引擎，进程内调用
     return out
 
 

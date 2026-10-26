@@ -485,10 +485,13 @@ def _acquire_instance_lock():
             except (OSError, ValueError, IndexError):
                 old_pid = 0
             if old_pid and _pid_alive(old_pid):
-                print(f'  [错误] 检测到平台已在运行（pid={old_pid}）。')
+                # 走 stderr：脚本/安装器据此判断「被拒绝」，退出码见 main()
+                print(f'  [错误] 检测到平台已在运行（pid={old_pid}）。',
+                      file=sys.stderr)
                 print('  同一份 run/ 数据不允许两个实例同时读写，请先关闭'
-                      '已运行平台的窗口/控制台。')
-                print(f'  确认该进程已不存在后，可删除锁文件再启动: {path}')
+                      '已运行平台的窗口/控制台。', file=sys.stderr)
+                print(f'  确认该进程已不存在后，可删除锁文件再启动: {path}',
+                      file=sys.stderr)
                 _pause_before_exit()
                 return ('busy', None)
             # 残留锁（上次异常退出，pid 已不存在）：覆盖接管
@@ -534,7 +537,8 @@ def main():
     # 共享 run/ 目录把状态与结果互相覆盖。
     lock_status, lock_path = _acquire_instance_lock()
     if lock_status == 'busy':
-        return
+        # 退出码 3：让脚本/安装器能区分「已启动」与「被单实例锁拒绝」
+        raise SystemExit(3)
     mode = _gui_mode()
     try:
         port = _pick_port()

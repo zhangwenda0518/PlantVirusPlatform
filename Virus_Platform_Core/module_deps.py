@@ -187,12 +187,23 @@ def ensure_tools(cfg, module, auto_install=True, log=None, timeout_s=600):
     # 有指引的键（插件源里没有）先记下，避免白跑一趟下载
     hints = {k: _NO_PLUGIN_HINT[k] for k in miss if k in _NO_PLUGIN_HINT}
 
+    # log 可能是 TaskLogger（有 .log）也可能是普通 callable（CLI/测试传进来
+    # 的函数），2026-10-26：此前一律当 callable 调用，传 TaskLogger 时
+    # 抛 TypeError: 'TaskLogger' object is not callable，并把原始错误盖住。
+    def _emit(msg):
+        if not log:
+            return
+        try:
+            _f = getattr(log, 'log', None) or log
+            _f(msg)
+        except Exception:
+            pass
+
     if auto_install:
         try:
             items, err = pm.available_from_index(cfg, force=True)
             if err:
-                if log:
-                    log(f'插件源不可用（{err}），跳过自动安装')
+                _emit(f'插件源不可用（{err}），跳过自动安装')
             else:
                 # 键 → 提供它的插件（一个插件可能提供多个键，如 blast 4 个）
                 need_plugins = []
@@ -204,18 +215,15 @@ def ensure_tools(cfg, module, auto_install=True, log=None, timeout_s=600):
                     if p.get('installed') and not p.get('needed'):
                         continue
                     try:
-                        if log:
-                            log(f'自动安装插件 {p["name"]}'
-                                f'（{p.get("size", 0)/1048576:.1f}MB）…')
+                        _emit(f'自动安装插件 {p["name"]}'
+                              f'（{p.get("size", 0)/1048576:.1f}MB）…')
                         pm.install_urls(p.get('urls') or [p.get('url')],
                                         expected_sha256=p.get('sha256'))
                         result['installed'].append(p['name'])
                     except Exception as e:      # 单包失败不拦其他包
-                        if log:
-                            log(f'插件 {p["name"]} 安装失败: {e}')
+                        _emit(f'插件 {p["name"]} 安装失败: {e}')
         except Exception as e:
-            if log:
-                log(f'自动安装流程异常: {e}')
+            _emit(f'自动安装流程异常: {e}')
 
     # 装完重扫（refresh_plugins 会更新 Cfg.tools 的填缺层）
     if result['installed']:

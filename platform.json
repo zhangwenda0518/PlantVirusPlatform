@@ -60,7 +60,7 @@
     "force": false,
     "do_trim": true
   },
-  "language": "zh",
+  "language": "en",
   "ai": {
     "enabled": true,
     "provider": "deepseek",

@@ -374,6 +374,33 @@ async function fillExample(inputId, path) {
   }
 }
 
+/* 提交前把「相对示例路径」换成服务端给出的绝对路径。
+   浏览器会持久化页面状态（同一 profile 跨运行/跨机器），旧会话里存的
+   `examples/example_genome.gb` 会在新部署上复活；直接 POST 会让后端按
+   平台根拼接 → 400「路径不存在」。这里就地纠正并写回输入框。 */
+async function _resolveExamplePathInput(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return s;
+  const parts = s.split(',').map(function (x) { return x.trim(); })
+    .filter(Boolean);
+  if (!parts.length) return s;
+  const needAbs = parts.some(function (p) {
+    return !(/^[A-Za-z]:[\\/]/.test(p) || p.startsWith('/')
+             || p.startsWith('\\\\') || p.startsWith('//'));
+  });
+  if (!needAbs) return s;
+  return await _exampleAbs(s);
+}
+
+/* 后端路径类报错 → 英文（其余错误原样透出，避免吞掉细节） */
+function trPathMsg(x) {
+  let v = String(x == null ? '' : x);
+  if (typeof _langIsEn !== 'function' || !_langIsEn()) return v;
+  v = v.replace(/^\s*路径不存在[:：]\s*/, 'file not found: ');
+  v = v.replace(/^\s*文件不存在[:：]\s*/, 'file not found: ');
+  return v;
+}
+
 /* 「参考序列获取」卡「✨ 示例」：预填递进选择（界→科→属）+ 集合名 */
 function seqPrepExample() {
   var name = $('s_name');
@@ -419,17 +446,26 @@ async function ictvCascadeRefetch() {
     const r = await fetch('/api/ictv/cascade?' + qsAll);
     if (!r.ok) { box.innerHTML = '<p class="hint" style="color:#b91c1c">' + esc((await r.json()).error || '加载失败') + '</p>'; return; }
     const d = await r.json();
+    if (d && d.available === false) {
+      const sc = $('spScope');
+      if (sc) sc.textContent = '';
+      box.innerHTML = '<p class="hint">'
+        + esc(t('ictv.notReady', 'ICTV 分类库未就绪——可在「数据库构建」页建库后，'
+               + '在此按界→科→属逐级下钻'))
+        + '</p>';
+      return;
+    }
     ictvRankMeta = d.ranks.map(x => ({ col: x.col, zh: x.zh }));
     const deepestSel = ICTV_RANK_MAIN.filter(c => _v('sp_c_' + c)).pop();
     $('spScope').textContent = deepestSel
-      ? `当前最深选择：${deepestSel} = ${_v('sp_c_' + deepestSel)}`
-      : '（尚未选择，先从「界」开始逐级下钻）';
+      ? t('ictv.deepest', '当前最深选择：') + `${deepestSel} = ${_v('sp_c_' + deepestSel)}`
+      : t('ictv.none', '（尚未选择，先从「界」开始逐级下钻）');
     box.innerHTML = ICTV_RANK_MAIN.map(col => {
       const meta = d.ranks.find(x => x.col === col);
       const opts = (meta && meta.options) || [];
-      return `<div class="gp-item"><label>${esc(col === 'Realm' ? '界 Realm' : meta ? meta.zh + ' ' + col : col)}</label>` +
+      return `<div class="gp-item"><label>${esc(col === 'Realm' ? t('ictv.realm', '界 Realm') : meta ? meta.zh + ' ' + col : col)}</label>` +
         `<select id="sp_c_${col}" onchange="ictvCascadeChanged('${col}')">` +
-        `<option value="">（全部）</option>` +
+        `<option value="">${esc(t('ictv.all', '（全部）'))}</option>` +
         opts.slice(0, 600).map(o => `<option value="${esc(o.name)}">${esc(o.name)}（${o.n}）</option>`).join('') +
         `</select></div>`;
     }).join('');
@@ -911,7 +947,7 @@ function pagerHtml(page, totalPages, fnExpr) {
     prev = n;
   }
   html += `<button class="btn small" ${page >= totalPages ? 'disabled' : ''} onclick="${call(page + 1)}">▶</button>`
-    + `<span class="hint" style="margin-left:4px">第 ${page} / ${totalPages} 页</span></div>`;
+    + `<span class="hint" style="margin-left:4px">${t('c.page', '第 ')}${page} / ${totalPages}${t('c.pageTail', ' 页')}</span></div>`;
   return html;
 }
 
@@ -2341,3 +2377,247 @@ function _peParams(nm, d) {
   return d.r2 ? { r1: d.r1, r2: d.r2 } : { r1: d.r1 };
 }
 
+// ---------------- 任务名 / 任务消息的英文呈现 ----------------
+// 服务端按平台语言生成任务名（如「工具·格式转换 20261025_222610」）与状态消息。
+// 英文界面下做纯前端前缀/词条映射；未登记的条目原样返回——宁可保留中文数据，
+// 也不误译。映射表与 /api/tasks 的真实命名对齐（2026-10-26 按实际历史任务核过）。
+function _langIsEn() {
+  try { return (typeof VP_LANG !== 'undefined' ? VP_LANG : 'zh') === 'en'; }
+  catch (e) { return false; }
+}
+
+// 任务名前缀（按长度从长到短匹配，避免「CDS/PEP 提取」被「CDS」抢先吃掉）
+const TASK_PREFIX_EN = [
+  ['提交 .sqn 生成·', 'Submission .sqn generation · '],
+  ['物种名校验·', 'Species-name validation · '],
+  ['完整性校验·', 'Integrity check · '],
+  ['CDS/PEP 导出·', 'CDS/PEP export · '],
+  ['CDS/PEP 提取·', 'CDS/PEP extraction · '],
+  ['AI 总结·', 'AI summary · '],
+  ['LOGAN 批量 ', 'LOGAN batch '],
+  ['LOGAN 作业 ', 'LOGAN job '],
+  ['公共检索 ', 'Public search '],
+  ['GenBank巡检 ', 'GenBank sweep '],
+  ['GenBank导入 ', 'GenBank import '],
+  ['集合建树 ', 'Tree from collection '],
+  ['完整性校验 ', 'Integrity check '],
+  ['CDS/PEP 提取 ', 'CDS/PEP extraction '],
+  ['工具·', 'Tool · '],
+  ['下载·', 'Download · '],
+];
+
+const TASK_SUFFIX_EN = [
+  ['（服务重启前的任务记录）', '(record from before the service restarted)'],
+];
+
+function _trPrefix(s) {
+  for (const [zh, en] of TASK_PREFIX_EN) {
+    if (s.indexOf(zh) === 0) return [en, s.slice(zh.length)];
+  }
+  return [null, s];
+}
+
+function _trLabel(rest) {
+  // 复用 /tasks、/jobs 页既有的中英对照表（TOOL_LABELS / STAGE_LABELS）
+  const maps = [];
+  if (typeof TOOL_LABELS !== 'undefined' && TOOL_LABELS) maps.push(TOOL_LABELS);
+  if (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS) maps.push(STAGE_LABELS);
+  for (const mp of maps) {
+    for (const k in mp) {
+      const pair = mp[k];
+      if (!pair || !pair[0] || !pair[1]) continue;
+      if (rest.indexOf(pair[0]) === 0) return [pair[1], rest.slice(pair[0].length)];
+    }
+  }
+  return [null, rest];
+}
+
+function trTaskName(name) {
+  if (!name || !_langIsEn()) return name;
+  let s = String(name);
+  for (const [zh, en] of TASK_SUFFIX_EN) s = s.split(zh).join(en);
+  const [p, rest] = _trPrefix(s);
+  if (p) {
+    const [lab, tail] = _trLabel(rest);
+    s = p + (lab || rest);
+    if (lab) s += tail;
+  }
+  return s;
+}
+
+const TASK_MSG_EXACT = {
+  '失败': 'failed', '已完成': 'done', '已取消': 'cancelled', '已停止': 'stopped',
+  '运行中': 'running', '排队中': 'queued', '待启动': 'not started',
+  '（服务重启前的任务记录）': '(record from before the service restarted)',
+  '排队中 · 等待空闲名额': 'Queued · waiting for a free slot',
+  '任务已停止（排队中取消）': 'Task stopped (cancelled while queued)',
+};
+
+// 管道各阶段的实时进度语（task.msg）。这些串由 Python 侧拼好后经 /api/tasks
+// 下发，模板无法用 data-i18n 覆盖，只能在这里按词表翻译；日志正文保持原样。
+var PROG_MSG_EN = {
+  '转换完成': 'conversion done',
+  '参考库就绪': 'reference library ready',
+  '构建搜索引擎库': 'building search index',
+  '识别完成，二次过滤（定量）': 'identification done, abundance filter',
+  '抽病毒 reads（供 ③组装）': 'extracting viral reads (for ③ assembly)',
+  '③ kunpeng 分类 contigs': '③ kunpeng contig classification',
+  '③ contig 长度过滤': '③ contig length filter',
+  '③ contig 级 BLASTN 最近参考': '③ contig-level BLASTN nearest reference',
+  '解析命中 + 类别投票': 'parsing hits + class voting',
+  '① 宿主去除：写统计': '① host removal: writing stats',
+  '① 宿主去除：过滤 FASTQ（seqkit 多线程反选）':
+    '① host removal: filtering FASTQ (seqkit)',
+  'ICTV 宿主概率级联预测': 'ICTV host-probability cascade',
+  'DIAMOND blastx vs 病毒蛋白库': 'DIAMOND blastx vs viral protein DB',
+  'diamond 蛋白搜索（RefSeq viral）': 'diamond protein search (RefSeq viral)',
+  '生成氨基酸序列': 'building protein sequences',
+  '读取核苷酸序列': 'reading nucleotide sequences',
+  '读取氨基酸序列': 'reading amino-acid sequences',
+  '核苷酸同一性矩阵': 'nucleotide identity matrix',
+  '氨基酸同一性矩阵': 'amino-acid identity matrix',
+  '写矩阵 + 聚类排序 + 出图': 'matrix + clustering + plots',
+  '写同一性表 + 出图': 'identity table + plots',
+  'SDT 逐对精确比对': 'SDT pairwise exact comparison',
+  'BFVD 病毒域搜索（mmseqs2）': 'BFVD domain search (mmseqs2)',
+  'ORF 预测完成': 'ORF prediction done',
+  'ORF 功能注释完成': 'ORF annotation done',
+  '21-mer 自动定向': '21-mer auto-orientation',
+  '生成注释表与示意图': 'annotation table + map',
+  '生成可视化报告': 'rendering report',
+  '完成': 'done',
+  '什么都没跑也没报错': 'nothing ran and nothing failed',
+  '假想蛋白（功能未定）': 'hypothetical protein (function unknown)',
+  '回退独立最长 ORF（移码/远缘保护）':
+    'fallback: longest standalone ORF (frameshift / distant homolog)',
+  '蛋白输入：按 AA 同一性计算（跳过 21-mer 定向）':
+    'protein input: AA identity (21-mer orientation skipped)',
+  '没有可渲染的帧（MOTP 分箱为空）': 'no frames to render (empty MOTP bins)',
+  '未写出 molecular_clock.txt': 'molecular_clock.txt was not written',
+  '收到取消请求，已终止批量提交进程': 'cancel requested; batch submitter stopped',
+  '近缘参考比对建树 + SDT 矩阵': 'near-reference alignment + tree + SDT matrix',
+  'primer3 引物设计 (conserved)': 'primer3 design (conserved)',
+  'primer3 引物设计 (plain)': 'primer3 design (plain)',
+  '②b 已知病毒识别与定量': '②b known-virus identification and quantification',
+  '③b 候选序列验证': '③b candidate-sequence verification',
+  '⑥b ORF 功能注释': '⑥b ORF functional annotation',
+  '⑦ 系统发育与比较基因组': '⑦ phylogenetics and comparative genomics',
+  '⑧ 引物 / CRISPR 检测设计': '⑧ primer / CRISPR assay design',
+  '⑨ 基因组图谱': '⑨ genome plots',
+  '⑩ 可视化报告': '⑩ visualization report'
+};
+
+// 参数类固定词（出现在括号里，如 `(rnaviral, 输入=raw)`）
+var PROG_WORD_EN = [
+  ['输入=', 'input='], ['输出=', 'output='], ['模式=', 'mode='],
+  ['线程=', 'threads='], ['内存=', 'memory='], ['参考=', 'reference='],
+  ['阈值=', 'threshold='], ['深度=', 'depth='], ['版本=', 'version='],
+  ['未就绪', 'not ready'], ['完成', 'done'], ['跳过', 'skipped']
+];
+
+// 阶段 id → 英文名（任务卡 meta 尾部的 `· <stage>`）
+var STAGE_EN = {
+  fq2fa: 'conversion', prep: 'preprocessing', host: 'host removal',
+  kvsuite: 'virus identification', kvchain: 'variant analysis',
+  assembly: 'assembly', contigs: 'contig classification',
+  hostana: 'host prediction', verify: 'verification',
+  consensus: 'consensus / variants', orf: 'ORF prediction',
+  orfa: 'ORF annotation', phylo: 'phylogenetics', primer: 'primer design',
+  crispr: 'CRISPR design', dsrna: 'dsRNA design', mirna: 'miRNA targets',
+  gbdraw: 'genome plots', sdt: 'SDT analysis', phylogeo: 'phylogeography',
+  phylodyn: 'phylodynamics', rdp: 'recombination', report: 'report',
+  align: 'alignment', tree: 'tree building', identify: 'identification',
+  dsrna_design: 'dsRNA design', submit: 'submission', logan: 'LOGAN trace'
+};
+
+var PROG_MSG_RULES = [
+  [/^验证\s*(\d+)\s*条[：:]\s*known\s*(\d+)/, 'verified $1 · known $2'],
+  [/^验证\s*(\d+)\s*条[：:]\s*novel\s*(\d+)/, 'verified $1 · novel $2'],
+  [/^功能注释\s*(\d+)\/(\d+)\s*个 ORF[，,]\s*(\d+)\s*科$/,
+   'annotated $1/$2 ORFs, $3 families'],
+  [/^出图\s*(.+?)（(\d+)\/(\d+)）$/, 'plotting $1 ($2/$3)'],
+  [/^SPAdes 组装\s*\((.+)\)$/, 'SPAdes assembly ($1)'],
+  [/^SPAdes 产物\s*(.+?)\s*共\s*(\d+)/, 'SPAdes output $1 · $2 contigs'],
+  [/^bootstrap 复本\s*(\d+)\/(\d+)$/, 'bootstrap replicate $1/$2'],
+  [/^LSD2 定年（(\d+) 条时间约束）$/, 'LSD2 dating ($1 time constraints)'],
+  [/^① 过滤：(.+)$/, '① filter: $1'],
+  [/^③ 分类：(.+)$/, '③ classify: $1'],
+  [/^参考\s*(\d+)\s*条[，,]\s*共\s*([\d,]+)\s*bp$/, '$1 references, $2 bp'],
+  [/^阶段④ 完成$/, 'stage ④ done'],
+  [/^\/[\d,]+\/([\d,]+)\s*对$/, 'pairwise $1 comparisons'],
+  [/(\d+)\/(\d+) 条 contigs/, '$1/$2 contigs'],
+  [/(\d+)\/(\d+) 条序列/, '$1/$2 sequences'],
+  [/条 contigs/, 'contigs'],
+  [/ 条序列/, ' sequences'],
+  [/个 ORF/, 'ORFs'],
+  [/ 条 reads/, ' reads']
+];
+
+function trTaskMsg(msg) {
+  if (!msg || !_langIsEn()) return msg;
+  let s = String(msg).trim();
+  if (TASK_MSG_EXACT[s]) return TASK_MSG_EXACT[s];
+  if (PROG_MSG_EN[s]) return PROG_MSG_EN[s];
+  if (STAGE_EN[s]) return STAGE_EN[s];
+  for (const [re, rep] of PROG_MSG_RULES) {
+    if (re.test(s)) s = s.replace(re, rep);
+  }
+  for (const [zh, en] of TASK_SUFFIX_EN) s = s.split(zh).join(en);
+  s = s.replace(/^已下载\s*(.*?)·\s*(\d+)\/(\d+)\s*文件\s*·\s*(\d+)\s*失败$/,
+                'Downloaded $1· $2/$3 files · $4 failed');
+  s = s.replace(/^已下载\s*(.*?)·\s*(\d+)\/(\d+)\s*文件$/,
+                'Downloaded $1· $2/$3 files');
+  s = s.replace(/^排队中(.*)$/, 'Queued$1');
+  s = s.replace(/·\s*已完成/g, '· done').replace(/·\s*失败/g, '· failed')
+       .replace(/·\s*已取消/g, '· cancelled').replace(/·\s*已停止/g, '· stopped');
+  s = s.replace(/(\d+)\s*失败/g, '$1 failed').replace(/(\d+)\s*文件/g, '$1 files');
+  s = s.replace(/未知来源/g, 'unknown source');
+  for (const [zh, en] of PROG_WORD_EN) s = s.split(zh).join(en);
+  return s;
+}
+
+/* ── 环境自检文案翻译（2026-10-26）────────────────────────────────────────
+   /api/selfcheck 的 title / summary / detail 是后端拼好的中文字符串（模块导入、
+   外部工具、数据库、磁盘空间、宿主库、病毒库、平台根、剩余 …）。这些是运行时
+   数据、不是静态文案，i18n 字典覆盖不到，所以在渲染前统一过一遍。 */
+const SC_TITLE_EN = {
+  '模块导入': 'Module imports', '外部工具': 'External tools',
+  '数据库': 'Databases', '磁盘空间': 'Disk space',
+};
+/* 自检里由后端拼出的整句文案：逐词替换会留下中文碎片，这里先整句映射。
+   顺序即优先级（长句在前），都是 selfcheck.py 的现行原文。 */
+const SC_PHRASE_EN = [
+  ['（含未配置宿主库提示）', ' (optional host database not configured)'],
+  ['未配置——「数据库构建」页可一键下载；离线时把 new_taxdump.tar.gz 放到 '
+   + 'databases/ 下，任一条命令首次运行会自动解压',
+   'not set up — download it on the Database build page; offline, drop '
+   + 'new_taxdump.tar.gz into databases/ and any command extracts it on '
+   + 'first run'],
+  ['未配置宿主库——分发版默认不带，属预期；到「数据库构建」页自建，'
+   + '或「📂 加载已构建宿主库」',
+   'not configured — the distribution ships without it by design; build one '
+   + 'on the Database build page, or 📂 load a prebuilt library'],
+  ['身份未记录', 'identity not recorded'],
+  ['无 host_db.json 清单', 'no host_db.json manifest'],
+];
+const SC_WORD_EN = [
+  ['未就绪', 'not ready'], ['就绪', 'ready'],
+  ['宿主库', 'host database'], ['病毒库', 'virus database'],
+  ['平台根', 'platform root'], ['物种', 'species'],
+  ['剩余', 'free'], ['结果', 'results'], ['数据库', 'databases'],
+  /* 磁盘空间条：'剩余 6.2 GB（建议保留 >10GB）' —— 括号是中文全角，
+     英文里要收成全角→半角并补上冒号，否则读起来像混排。 */
+  ['建议保留', 'recommended: keep'],
+];
+function trSc(x) {
+  if (x == null) return '';
+  let v = String(x);
+  if (typeof _langIsEn === 'function' && !_langIsEn()) return v;
+  if (SC_TITLE_EN[v]) return SC_TITLE_EN[v];
+  for (const [zh, en] of SC_PHRASE_EN) v = v.split(zh).join(en);
+  for (const [zh, en] of SC_WORD_EN) v = v.split(zh).join(en);
+  if (typeof _langIsEn === 'function' && _langIsEn()) {
+    v = v.replace(/\s*（/g, ' (').replace(/）/g, ')');
+  }
+  return v;
+}

@@ -128,7 +128,7 @@ async function refreshTasks() {
         ${task.status === 'running' ? `<button class="btn small danger" onclick="cancelTask('${task.id}')">${t('c.cancel')}</button>` : ''}
         </span>
       </div>
-      <div class="tmsg">${esc(task.msg || '')}</div>
+      <div class="tmsg">${esc(trTaskMsg(task.msg || ''))}</div>
       <div class="bar"><div style="width:${pct}%"></div></div>
       ${err}${preview}
       <button class="btn small" onclick="toggleLog('${task.id}')">${taskLogOpen.has(task.id) ? t('c.collapseLog') : t('c.expandLog')}</button>
@@ -214,6 +214,18 @@ const TOOL_LABELS = {
   gbdown:   ['GenBank下载', 'GenBank download'],
   gbimport: ['GenBank导入', 'GenBank import'],
   mirna:    ['miRNA 靶标预测', 'miRNA target'],
+  // 以下条目 2026-10-26 补齐：/tasks 里这些任务名一直没有英文对照，
+  // 英文界面下会原样漏出中文。
+  prepchain: ['一键前处理', 'One-click prep'],
+  pdprep:   ['进化动力学数据接入', 'Phylodynamics data prep'],
+  phylodyn: ['⚡ 一键分析（定年 → 地理迁移 → 汇总溯源）',
+             '⚡ One-click analysis (dating → migration → synthesis)'],
+  phylogeo: ['系统地理分析', 'Phylogeography'],
+  quicktree:['快速建树', 'Quick tree'],
+  identity: ['NT+AA 同一性表', 'NT+AA identity table'],
+  sdt:      ['SDT 精确分析', 'SDT exact analysis'],
+  structcmp:['结构比较', 'Structure comparison'],
+  align:    ['序列比对', 'Sequence alignment'],
 };
 
 // 数据库构建页：建库任务名 → 卡片内嵌日志容器（buildrun-<key>）。

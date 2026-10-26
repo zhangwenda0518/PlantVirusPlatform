@@ -31,18 +31,18 @@
    · 注意：2026-09-06 那次「侧栏 → 顶部横条」改的是**组内二级导航**
      （_group_nav.html），与本次一级导航无关，两者互不影响。
 #}
-{%- set _groups = nav_groups or [] -%}
+{% import '_nav_i18n.html' as NI with context %}{%- set _groups = nav_groups or [] -%}
 {%- set _cur_gid = current_group.id if current_group else '' -%}
 
-<aside class="sidenav" id="sideNav" aria-label="主导航">
+<aside class="sidenav" id="sideNav" aria-label="{{ 'Main navigation' if lang != 'zh' else '主导航' }}">
   <div class="sn-head">
     <a class="sn-brand" href="/">
       <span class="sn-brand-leaf">🌿</span>
-      <span class="sn-brand-txt">植物病毒分析平台</span>
+      <span class="sn-brand-txt">{{ NI.brand() }}</span>
     </a>
     {# 窄屏抽屉展开时，顶栏的 ☰ 会被侧栏盖住；这里给一个自己的关闭钮 #}
     <button class="sn-close" id="snClose" type="button"
-            aria-label="收起导航">✕</button>
+            aria-label="{{ 'Collapse navigation' if lang != 'zh' else '收起导航' }}">✕</button>
   </div>
 
   <nav class="navlinks sn-links">
@@ -71,11 +71,11 @@
       <div class="nav-menu sn-sub">
         <a class="sn-subhome{{ ' active' if (request.path == '/tools'
              and request.args.get('g') == g.id) else '' }}"
-           href="/tools?g={{ g.id }}">🏠 组概览</a>
+           href="/tools?g={{ g.id }}">{{ NI.ghome() }}</a>
         {%- for it in g['items'] %}
         {%- set _href = it.href or ('/tools?g=' ~ g.id ~ '#' ~ it.id) %}
-        <a href="{{ _href }}"{% if it.desc %} title="{{ it.desc }}"{% endif %}
-           class="{{ 'active' if (it.href and request.path == it.href) else '' }}">{{ it.title }}</a>
+        <a href="{{ _href }}"{% if it.desc %} title="{{ NI.desc(it) }}"{% endif %}
+           class="{{ 'active' if (it.href and request.path == it.href) else '' }}">{{ NI.title(it) }}</a>
         {%- endfor %}
       </div>
     </div>
@@ -87,7 +87,7 @@
     <a class="sn-link{{ ' active' if request.path == '/tasks' }}" href="/tasks"
        data-i18n="nav.tasks">任务中心<span
        id="navTasksBadge" class="navbadge" style="display:none"
-       title="运行中任务数"></span></a>
+       title="{{ 'Running tasks' if lang != 'zh' else '运行中任务数' }}"></span></a>
     <a class="sn-link{{ ' active' if request.path == '/results' }}"
        href="/results" data-i18n="nav.results">结果中心</a>
     <a class="sn-link{{ ' active' if request.path == '/settings' }}"
@@ -100,11 +100,11 @@
 
 <header class="topbar">
   <button class="sn-toggle" id="snToggle" type="button"
-          aria-label="展开或收起导航" aria-expanded="false">☰</button>
+          aria-label="{{ 'Expand or collapse navigation' if lang != 'zh' else '展开或收起导航' }}" aria-expanded="false">☰</button>
   <span class="tb-title" id="tbTitle"></span>
   <span class="navctx-host" id="navCtxHost"></span>
   <span class="navtail">
-    <a href="#" class="iconbtn" title="打开平台目录"
+    <a href="#" class="iconbtn" title="{{ 'Open the platform folder' if lang != 'zh' else '打开平台目录' }}"
        onclick="event.preventDefault();fetch('/api/open_platform_dir')">📂</a>
   </span>
 </header>
@@ -114,7 +114,7 @@
      不代替任何分析动作。事件流：/api/ai/events（SSE 常驻）；
      提问：/api/ai/chat（POST + fetch 流）。闸门待决时自动弹出本坞。 -->
 <button id="aiFab" class="ai-fab" onclick="AI.toggle()"
-        data-i18n-title="ai.dock.open" title="AI 助手"><img class="ai-logo-img" alt="" src="/static/ai-logo.png?v={{ asset_v }}"><span
+        data-i18n-title="ai.dock.open" title="{{ 'AI assistant' if lang != 'zh' else 'AI 助手' }}"><img class="ai-logo-img" alt="" src="/static/ai-logo.png?v={{ asset_v }}"><span
         id="aiFabBadge" class="ai-fab-badge" hidden></span></button>
 <div id="aiDock" class="ai-dock" hidden>
   <div class="ai-dock-head">
@@ -150,3 +150,5 @@
 </div>
 <script src="/static/app-nav.js?v={{ asset_v }}"></script>
 <script src="/static/app-ai.js?v={{ asset_v }}"></script>
+
+

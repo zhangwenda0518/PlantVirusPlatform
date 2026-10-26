@@ -8,7 +8,9 @@
 
 口径：本文件是**索引**而非法律意见——每个组件的权威许可证以其目录内随附的
 LICENSE/COPYING 与上游声明为准；Python 包以 dist-info METADATA 的 License
-字段为准（截断展示）。每次 3rd/ 或 requirements 变更后重跑一次：
+字段为准（截断展示）。每次 3rd/ 或 requirements 变更后重跑一次。
+
+2026-10-26：输出正文改为英文（面向英文分发），本模块注释仍保留中文。
 
 用法:
     python dev_tools/third_party_notices.py           # 写 THIRD_PARTY_NOTICES.md
@@ -46,7 +48,8 @@ def _fmt_lic(meta_lic):
     """METADATA 的 License 字段常带整段许可证文本，取首行截断。"""
     lic = (meta_lic or '').strip().splitlines()
     lic = lic[0].strip() if lic else ''
-    return (lic[:97] + '…') if len(lic) > 100 else (lic or '（元数据未声明）')
+    return (lic[:97] + '...') if len(lic) > 100 else (
+        lic or '(not declared in metadata)')
 
 
 def _tools_rows():
@@ -55,7 +58,8 @@ def _tools_rows():
     for fn in sorted(glob.glob(os.path.join(ROOT, '3rd', 'bin', '*'))):
         if os.path.isfile(fn):
             rows.append((os.path.relpath(fn, ROOT).replace(os.sep, '/'),
-                         ['3rd/bin/（单文件工具，许可见上游 Release 说明）']))
+                         ['3rd/bin/ (single-file tool; license in the '
+                          'upstream Release notes)']))
     # 3rd/tools：工具套件目录
     tools_dir = os.path.join(ROOT, '3rd', 'tools')
     for name in sorted(os.listdir(tools_dir)):
@@ -63,8 +67,9 @@ def _tools_rows():
         if not os.path.isdir(d):
             continue
         lics = _license_files(d)
-        rows.append((f'3rd/tools/{name}/', lics or ['（目录内未随附许可'
-                                                    '文件，见上游项目）']))
+        rows.append((f'3rd/tools/{name}/', lics or [
+            '(no license file bundled in this directory; see the upstream '
+            'project)']))
     return rows
 
 
@@ -94,47 +99,59 @@ def build_md():
     t_rows = _tools_rows()
     py_rows = _python_rows()
     lines = [
-        '# 第三方组件清单（THIRD PARTY NOTICES）',
+        '# Third-Party Component Notices (THIRD PARTY NOTICES)',
         '',
-        '本文件是**索引**而非法律意见：各组件的权威许可证以其目录内随附的',
-        'LICENSE/COPYING 与上游声明为准；Python 包以安装元数据（dist-info',
-        'METADATA）的 License 字段为准。重新生成：',
-        '`python dev_tools/third_party_notices.py`。',
+        'This file is an **index**, not legal advice: the authoritative license',
+        'for each component is the LICENSE/COPYING file bundled in its',
+        'directory together with the upstream notice; for Python packages the',
+        'License field of the installed metadata (dist-info METADATA) is',
+        'authoritative (shown truncated). Regenerate with',
+        '`python dev_tools/third_party_notices.py`.',
         '',
-        f'## 一、随包分发的第三方工具（{len(t_rows)} 项，3rd/bin + 3rd/tools）',
+        f'## 1. Third-party tools shipped with the package '
+        f'({len(t_rows)} items, 3rd/bin + 3rd/tools)',
         '',
-        '| 组件（随包路径） | 目录内随附的许可/说明文件 |',
+        '| Component (path in package) | License/notice files bundled in the '
+        'component directory |',
         '|---|---|',
     ]
     for path, lics in t_rows:
         lines.append(f'| {path} | {"; ".join(lics)} |')
     lines += [
         '',
-        '例外：`3rd/tools/rdp5/3seqTable`（105MB，超 GitHub 单文件限制）经',
-        'Release（tag: external-tools）分发；RDP5 会话运行态文件'
-        '（LastSave.rdp5 / tempfile）',
-        '不随版本库与插件包分发。',
+        'Exception: `3rd/tools/rdp5/3seqTable` (105 MB, above the GitHub',
+        'single-file limit) is distributed through Releases (tag:',
+        'external-tools); RDP5 session runtime files (LastSave.rdp5 /',
+        'tempfile) are not shipped in the repository or in plugin packages.',
         '',
-        f'## 二、内置 Python 运行时的第三方包（{len(py_rows)} 项，3rd/python）',
+        f'## 2. Third-party packages in the bundled Python runtime '
+        f'({len(py_rows)} items, 3rd/python)',
         '',
-        '完整版本快照见 `requirements.lock`；下表为包名 / 版本 / 元数据声明的许可证。',
+        'The full version snapshot is in `requirements.lock`; the table below',
+        'lists package name / version / license as declared in the metadata.',
         '',
-        '| 包 | 版本 | 许可证（元数据） |',
+        '| Package | Version | License (metadata) |',
         '|---|---|---|',
     ]
     for name, ver, lic in py_rows:
         lines.append(f'| {name} | {ver} | {lic} |')
     lines += [
         '',
-        '## 三、分发口径备注',
+        '## 3. Distribution notes',
         '',
-        '- 平台自身代码随仓库分发；第三方工具本体**克隆即用**（3rd/ 全量纳管，',
-        '  例外见上），或经「设置 → 插件管理」从插件源按需安装（32 个工具包，',
-        '  逐包 sha256 校验）。',
-        '- GPL 系组件（RDP5、SPAdes、snpEff、snipit、svguest 等）以**独立进程/'
-        '  独立文件**形式随包，不与其源码链接；其许可证文本随各自目录分发。',
-        '- 本清单由构建脚本扫描生成，**不构成法律意见**；商用再分发前请按',
-        '  各组件许可证自行核对（尤其 GPL 系的传染条款与商标条款）。',
+        '- The platform code itself ships with the repository; the third-party',
+        '  tool bodies are usable right after cloning (`3rd/` is tracked in',
+        '  full, exceptions above), or can be installed on demand from the',
+        '  plugin source in Settings -> Plugins (32 tool packages, per-package',
+        '  sha256 verification).',
+        '- GPL-family components (RDP5, SPAdes, snpEff, snipit, svguest and',
+        '  others) ship as **separate processes / separate files**, not linked',
+        '  against their sources; their license texts ship in their own',
+        '  directories.',
+        '- This list is generated by the build script and **does not constitute',
+        '  legal advice**; before commercial redistribution, verify each',
+        "  component's license yourself (especially the GPL copyleft and",
+        '  trademark terms).',
         '',
     ]
     return '\n'.join(lines)
@@ -143,7 +160,8 @@ def build_md():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--check', action='store_true',
-                    help='只校验现有文件是否为最新（不写入）')
+                    help='only validate that the existing file is up to date '
+                         '(do not write)')
     a = ap.parse_args()
     md = build_md()
     if a.check:
@@ -153,16 +171,16 @@ def main():
         except OSError:
             cur = ''
         if cur != md:
-            print('THIRD_PARTY_NOTICES.md 已过期：重跑 '
+            print('THIRD_PARTY_NOTICES.md is stale: re-run '
                   'python dev_tools/third_party_notices.py')
             return 1
-        print('THIRD_PARTY_NOTICES.md 最新')
+        print('THIRD_PARTY_NOTICES.md is up to date')
         return 0
     with open(OUT, 'w', encoding='utf-8') as f:
         f.write(md)
     n_t = len(_tools_rows())
     n_py = len(_python_rows())
-    print(f'已写 {OUT}（工具 {n_t} 项 / Python 包 {n_py} 项）')
+    print(f'wrote {OUT} ({n_t} tools / {n_py} Python packages)')
     return 0
 
 

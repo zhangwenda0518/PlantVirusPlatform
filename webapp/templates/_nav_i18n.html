@@ -1,0 +1,156 @@
+{#- ==========================================================================
+    导航英文标签表（服务端渲染，lang=='en' 时生效）
+
+    为什么放在模板里：NAV_GROUPS 的 title/desc 来自 Virus_Platform_Core/web/pages.py
+    的中文数据；前端 i18n.js 只能改写带 data-i18n 锚点的静态文本，改不了 Jinja
+    循环出来的数据文本。语言切换本身是「POST /api/settings + 刷新」，刷新后
+    服务端按 {{ lang }} 重新选词，因此这里用查表最省事：zh 分支原样输出中文，
+    en 分支查表，不做任何客户端替换。
+
+    用法（在 _nav.html / _group_nav.html 里）：
+      {% import '_nav_i18n.html' as NI with context %}
+      {{ NI.title(it) }} / {{ NI.desc(it) }} / {{ NI.group(gid, g.label) }} / {{ NI.ghome() }}
+
+    键 = item.id（工具台条目，如 t-prepchain）或 item.href（独立页面，如 /meta）。
+    注意：新增导航项时记得在这里补英文，否则英文界面会回落成中文标题（可接受
+    但不一致）。
+   ========================================================================== -#}
+{%- set E = {
+  '/meta':        ('Public data search',
+                   'Search public samples / metadata'),
+  '/prescreen':   ('Virus sample pre-screen',
+                   'No read downloads: precomputed classification decides which runs may contain viruses, producing a pass list and an undecided list for the download step'),
+  '/virome':      ('Open-Virome',
+                   'Browse / export the public virome'),
+  '/download':    ('Public data downloads',
+                   'Run / URL / SRA → FASTQ, wired into samples and modules'),
+  '/refdata':     ('Genome query & download',
+                   'Host genomes (gget·Ensembl / NCBI taxon·accession) plus every NCBI datasets mode (genome/gene/taxonomy/virus + host filtering)'),
+  '/build':       ('Database build',
+                   'Taxonomy / host DB / virus DB'),
+
+  't-prepchain':  ('⚡ One-click prep (SRA / FASTQ adaptive)',
+                   'SRA / FASTQ adaptive: convert → QC → convert (FASTA) → host removal; host removal is skipped automatically when the host DB is not ready, and kept reads feed the ②→③→④ one-click chain'),
+  '/samples':     ('Sample creation / batch import',
+                   'Sample name + R1/R2, or TSV batch import'),
+  't-convert':    ('Format conversion',
+                   'sra2fastq / sra2fasta / fastq2fasta'),
+  't-fastp':      ('Sequence QC',
+                   'fastp adapter trimming / filtering / deduplication'),
+  '/hostremoval': ('Host removal & sequence extraction',
+                   'kunpeng host-DB classification'),
+
+  't-kvchain':    ('⚡ One-click analysis (full pipeline)',
+                   'Identify → filter → consensus → depth plots → variant annotation in one run; products collected into a summary folder'),
+  't-kvsuite':    ('🦠 Known virus identification and quantification',
+                   'minibwa alignment against the virus DB → identification/quantification + filtering (two stages by default; consensus / plots / variants live in downstream modules)'),
+  't-consensus':  ('Consensus sequence analysis',
+                   'Align to the reference → build a consensus sequence (minibwa + viral_consensus)'),
+  't-variant':    ('🧬 Viral variant analysis',
+                   'BAM / VCF input → bcftools caller (optional) → SnpEff annotation → 8 variant plots + SNPGenie'),
+
+  't-virchain':   ('⚡ One-click analysis (②→③→④)',
+                   'Extract sequences → assemble → re-identify assemblies → verify candidates, optionally starting with ① virus extraction'),
+  't-identify':   ('Virus identification, classification & extraction',
+                   'FASTQ / FASTA / host-removed reads → classification + viral sequence extraction'),
+  't-assemble':   ('Sequence assembly',
+                   'SPAdes rnaviral / contig filtering'),
+  't-contigs':    ('Re-identify assemblies',
+                   'Second-pass contig classification + lineage annotation'),
+  't-verify':     ('🛡 Candidate sequence verification',
+                   'Host screening → length routing → blastx/BFVD dual filtering + virus-like blastn'),
+
+  't-annochain':  ('⚡ One-click annotation (ORF→function→plot)',
+                   'FASTA input: ORF prediction → functional annotation → genome plot in one run; the products can be linked and turned into a featuretable from the Submissions page'),
+  '/orf':         ('🧬 ORF prediction',
+                   'pyrodigal / pyrodigal-rv gene prediction (standalone module)'),
+  '/annotation':  ('🧾 Functional annotation',
+                   'DIAMOND / MMseqs2 / blastp against the RefSeq viral protein DB + category voting + ICTV mapping (standalone module)'),
+  't-hom':        ('🎯 Homology search (BLASTN · BLASTX)',
+                   'NCBI nt / nr homology search restricted to viruses: evidence for GenBank submission annotation'),
+  '/genome':      ('Genome visualization',
+                   'gbdraw / DFV circular + linear plots (standalone module)'),
+
+  '/primer':      ('Primer design',
+                   'primer3 full-length windowing / conserved-region design (standalone module) for PCR / qPCR detection'),
+  't-crispr':     ('CRISPR detection reagent design',
+                   'Cas12a crRNA × RPA/PCR primer co-design: multi-isolate MSA conservation → TTTV PAM scan + funnel filtering → dual-DB specificity screen (host + close relatives) → composite score × population coverage → ordering table + L1–L5 validation checklist'),
+  't-conan':      ('CONAN-SWIFT detection design (Cas3)',
+                   'Cas3 / type I-E crRNA design (RT-LAMP + lateral flow): multi-isolate targets + merged negative set via MAFFT → AAG PAM + 32 nt spacer duplex scanning → dual-mismatch scoring at homologous negative-set sites (leak / coverage) → end / GC / seed filtering → candidate table + site inspection'),
+  't-dsrna':      ('dsRNA design',
+                   'Full chain: dsRNAmax deterministic window selection (maximin over candidates) → dsRIP potency → panel off-target scan (lethal-gene weighting + zero-mismatch veto) → T7 primers (best window only) → amplicon QC (drop a panel FASTA into databases/dsrna/panel/ to enable the off-target panel)'),
+  't-mirna':      ('🧬 miRNA target prediction (PAmiRDB)',
+                   'miRNA × viral sequence input → Smith-Waterman alignment + psRNATarget / RNAhybrid re-implemented engines with consensus voting (full mode adds RNA22 / TAPIR / psRobot) → binding sites / colour alignment / duplex SVG / secondary-structure arc plot; pure Python, no external dependencies'),
+
+  't-seqprep':    ('Reference sequence retrieval',
+                   'Pick an ICTV family/genus, or use an accession / query expression → download whole-family or whole-genus sequences (GenBank set + FASTA reference set)'),
+  '/cds-export':  ('🧬 CDS / PEP extraction products',
+                   'CDS detail within a collection → manual selection / renaming → export CDS + PEP grouped by gene name (standalone module)'),
+  't-align':      ('🧬 Sequence alignment (MAFFT + trimAl)',
+                   'MAFFT alignment + trimAl trimming; the colour alignment viewer supports viewing and editing, and the result feeds tree building / SDT'),
+  't-treebuild':  ('Phylogenetic tree building (family/genus level)',
+                   'GenBank set (whole genome / CDS / PEP) or FASTA → MAFFT alignment + NJ / FastTree / IQ-TREE; in-page tree viewer'),
+  't-sdt':        ('📐 SDT identity analysis (genus level)',
+                   'Pairwise MAFFT exact alignment → identity matrix / heatmap / distribution plot; NT+AA identity table + composite heatmap'),
+
+  't-pdprep':     ('🧬 Phylodynamics data intake',
+                   'Build a standard dataset (alignment FASTA + metadata) from three sources: file pair / manual entry (time and place together) / online download; metadata column names are auto-detected and preferred (Collection_Date↔Release_Date, Geo_Location↔Country). Includes timeline, location distribution and map summary'),
+  't-rdp':        ('🔁 RDP5 recombination analysis',
+                   'RDP5 nine-method detection with per-method p-values; exports a clean alignment with recombined regions masked'),
+  't-rtt':        ('⏱ Temporal signal & dating',
+                   'Root-to-tip regression: high R² = strong temporal signal, slope = substitutions per site per year'),
+  't-phylogeo':   ('🌍 Phylogeographic analysis',
+                   'Fitch migration reconstruction + three-way distance classification (haversine) / MOTP time binning / weighted bands / migration GIF export'),
+  't-phylodyn':   ('⚡ One-click analysis (dating → migration → provenance)',
+                   'A0 data prep → A1 dating → A2 geographic migration → A3 skyline → A4 ancestral sequences → A5 provenance summary; run everything at once, a single stage, or continue from the previous run. Fully local, no MCMC'),
+
+  '/results':     ('Sample results / specialized results',
+                   'Reports / specialized runs / SDT / MSA / tree / sequence viewer'),
+  '/svguest/':    ('🎨 Result figure composer (svguest)',
+                   'Local SVG editor: merge figures / layout / annotate / add scale bars, export PNG · SVG · PDF; files are never uploaded'),
+
+  '/logan':       ('LOGAN tracing / batch submission',
+                   'Public sample tracing'),
+  '/submit':      ('Data submission',
+                   'NCBI submission preparation')
+} -%}
+
+{%- set G = {
+  'resource':  'Data resources',
+  'sample':    'Sample processing',
+  'kvsuite':   'Virus quant & consensus',
+  'virus':     'Virus ID & classification',
+  'annotate':  'Virus annotation',
+  'detect':    'Detection & control',
+  'compare':   'Comparative genomics',
+  'phylodyn':  'Phylodynamics',
+  'result':    'Result center',
+  'trace':     'Tracing & submission'
+} -%}
+
+{#- 条目显示标题：en 查表，zh 原样 -#}
+{%- macro title(it) -%}
+{%- set e = E.get(it.id or it.href) -%}
+{{- e[0] if (lang != 'zh' and e and e[0]) else it.title -}}
+{%- endmacro -%}
+
+{#- 条目提示（title 属性）：en 查表，缺表则回落到中文 desc -#}
+{%- macro desc(it) -%}
+{%- set e = E.get(it.id or it.href) -%}
+{{- e[1] if (lang != 'zh' and e and e[1]) else (it.desc or '') -}}
+{%- endmacro -%}
+
+{#- 组名：en 查表，缺表回落到 NAV_GROUPS 的中文 label -#}
+{%- macro group(gid, fallback) -%}
+{{- G.get(gid) if lang != 'zh' and G.get(gid) else fallback -}}
+{%- endmacro -%}
+
+{#- 组概览入口（侧栏 / 顶部条共用） -#}
+{%- macro ghome(gid) -%}
+{{- '🏠 Group overview' if lang != 'zh' else '🏠 组概览' -}}
+{%- endmacro -%}
+
+{%- macro brand() -%}
+{{- 'Plant Virus Analysis Platform' if lang != 'zh' else '植物病毒分析平台' -}}
+{%- endmacro -%}
+

@@ -832,20 +832,24 @@ def _stage_primer(C):
     """⑧ 引物设计。"""
     st = C.st
     st.begin('primer')
-    # conserved 模式依赖 ⑦系统发育产物：缺了必然 FileNotFoundError，
-    # 提前给出可操作的中文原因（无断点续跑时最容易踩）
-    if C.primer_mode == 'conserved' and not (
+    # conserved 模式依赖 ⑦系统发育产物。没有数据库包的版本上 ⑦ 会被前置守卫
+    # 跳过，此时若直接 raise，用户会在最后一步看到"先完成 ⑦"这种无解提示；
+    # 改为自动降级到 plain 模式（对靶序列直接设计），并在日志里说明原因。
+    _primer_mode = getattr(C, 'primer_mode', 'plain') or 'plain'
+    if _primer_mode == 'conserved' and not (
             not C.force and is_step_done(os.path.join(C.sample_dir, '06_primer'),
                                          'primer')):
         _ps = os.path.join(C.sample_dir, '05_phylo', 'summary.json')
         if not os.path.isfile(_ps):
-            raise RuntimeError(
-                '⑧ 引物设计为 conserved 模式，需要 ⑦系统发育产物 '
-                '05_phylo/summary.json（提供组内保守区）；请先完成 ⑦，'
-                '或在参数中改用 plain 模式（按靶序列设计）')
-    st.prog('primer', 0.1, f'primer3 引物设计 ({C.primer_mode})')
+            _lgp = getattr(C.logger, 'log', None) or C.logger
+            if _lgp:
+                _lgp('⑦ 系统发育产物缺失（05_phylo/summary.json）→ ⑧ 引物设计'
+                     '降级为 plain 模式（对靶序列直接设计，不做跨参考保守区）',
+                     'WARN')
+            _primer_mode = 'plain'
+    st.prog('primer', 0.1, f'primer3 引物设计 ({_primer_mode})')
     from .primer import design_primers
-    pr = design_primers(C.sample_dir, mode=C.primer_mode, logger=C.logger,
+    pr = design_primers(C.sample_dir, mode=_primer_mode, logger=C.logger,
                         force=C.force, do_specificity=C.do_specificity)
     st.prog('primer', 1.0, f"引物 {pr.get('n_primers', 0)} 对")
     st.end('primer')
@@ -1013,9 +1017,8 @@ def _write_tool_versions(sample_dir, stages, logger=None):
         json.dump(vers, f, ensure_ascii=False, indent=1)
     if logger:
         if vers:
-            logger.log('外部工具版本记录: '
-                       + '，'.join(f'{k} {v}' for k, v in vers.items())
-                       + '（tool_versions.json）')
+            _vs = '，'.join(f'{k} {v}' for k, v in vers.items())
+            logger.log(f'外部工具版本记录: {_vs}（tool_versions.json）')
         else:
             logger.log('外部工具版本记录: 本次将用到的工具均未探测到可执行文件'
                        '（tool_versions.json 为空）', 'WARN')
@@ -1095,12 +1098,116 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
                            'WARN')
             stages = [s for s in stages if s != 'verify']
 
+    # 数据库可用性预筛（2026-10-26）：分发包默认不带宿主库/病毒鉴定库。
+    # 不预筛时缺库会在阶段深处抛 FileNotFoundError 让整个任务失败，
+    # 而 web/chains.py 早就有「宿主库未就绪 → 自动跳过」的正确口径。
+    # 这里把同一口径搬到管道：缺库 → 记 WARN 并剔除该阶段（静默跳过铁律）。
+    if 'host' in stages:
+        try:
+            from .kunpeng import db_ready as _db_ready
+            _host_db_ok = bool(_db_ready(db_host))
+        except Exception:
+            _host_db_ok = False
+        if not _host_db_ok:
+            if logger:
+                _lg2 = getattr(logger, 'log', None) or logger
+                _lg2('宿主库未就绪 → 跳过 ① 宿主去除（「数据库构建」页构建宿主库'
+                     '后可单独运行）', 'WARN')
+            stages = [s for s in stages if s != 'host']
+    # ②b 鉴定库 / ④ 宿主预测都要 databases/virusref_db/plant_ref 里的参考
+    _ref_fa_path, _ref_info_path = '', ''
+    try:
+        from .kv_stage import default_reference as _default_reference
+        _ref_fa_path = _default_reference() or ''
+        if _ref_fa_path:
+            _ref_info_path = os.path.join(os.path.dirname(_ref_fa_path),
+                                         'reference.ref_info.tsv')
+    except Exception:
+        _ref_fa_path = ''
+    if 'kvsuite' in stages and not (_ref_fa_path and os.path.isfile(_ref_fa_path)):
+        if logger:
+            _lg3 = getattr(logger, 'log', None) or logger
+            _lg3('病毒鉴定库未就绪 → 跳过 ②b 已知病毒识别与定量'
+                 '（「数据库构建 → 病毒鉴定库」建库后可单独运行）', 'WARN')
+        stages = [s for s in stages if s != 'kvsuite']
+    if 'hostana' in stages and not (_ref_info_path
+                                    and os.path.isfile(_ref_info_path)):
+        if logger:
+            _lg4 = getattr(logger, 'log', None) or logger
+            _lg4('病毒参考库未就绪 → 跳过 ④ 宿主预测(ICTV)'
+                 '（先建「病毒鉴定库」）', 'WARN')
+        stages = [s for s in stages if s != 'hostana']
+    # ③b 候选序列验证与 ⑦ 系统发育同样依赖 virusref_db 的参考序列：
+    # 没有库时 ③b 会判定「无通过项」，随后 ⑥ ORF 因「无可注释 contig」抛错；
+    # ⑦ 则直接 FileNotFoundError。两者都是"建库后可单独运行"的可选阶段，
+    # 按 ①/②b/④ 的同一口径降级跳过，让默认链在没有数据库包的版本里跑完。
+    if 'verify' in stages and not (_ref_fa_path and os.path.isfile(_ref_fa_path)):
+        if logger:
+            _lg7 = getattr(logger, 'log', None) or logger
+            _lg7('病毒参考库未就绪 → 跳过 ③b 候选序列验证'
+                 '（⑥ ORF 回退到全量病毒 contig 注释）', 'WARN')
+        stages = [s for s in stages if s != 'verify']
+    if 'phylo' in stages and not (_ref_fa_path and os.path.isfile(_ref_fa_path)):
+        if logger:
+            _lg8 = getattr(logger, 'log', None) or logger
+            _lg8('病毒参考库未就绪 → 跳过 ⑦ 系统发育'
+                 '（「数据库构建 → 病毒鉴定库」建库后可单独运行）', 'WARN')
+        stages = [s for s in stages if s != 'phylo']
+
+    # ⑥b 功能注释硬依赖 NCBI taxonomy。此前缺 taxonomy 时会先联网下载 107MB
+    # 蛋白库、再在注释阶段抛「NCBI taxonomy 未就绪」，白跑 30 秒；离线用户
+    # 看到的还是另一种更难懂的错误。这里先解压随包 tar（网页端首启是后台线程
+    # 做的，CLI/管道路径此前完全没人解压），没有 tar 才降级跳过。
+    if 'orfa' in stages:
+        try:
+            from .taxonomy import prepare_taxonomy, taxonomy_ready
+            if not taxonomy_ready():
+                _tar = os.path.join(DIRS['databases'], 'new_taxdump.tar.gz')
+                if os.path.isfile(_tar):
+                    if logger:
+                        _lg5 = getattr(logger, 'log', None) or logger
+                        _lg5('NCBI taxonomy 未解压 → 先解压随包 tar'
+                             '（首次运行约 1 分钟，纯本地）', 'WARN')
+                    try:
+                        prepare_taxonomy()
+                    except Exception as _te:        # noqa: BLE001
+                        if logger:
+                            _lg5(f'解压 taxonomy 失败: {_te}', 'WARN')
+        except Exception:                           # noqa: BLE001
+            pass
+        try:
+            from .taxonomy import taxonomy_ready as _tr_ok
+            _tax_ok = bool(_tr_ok())
+        except Exception:                           # noqa: BLE001
+            _tax_ok = False
+        if not _tax_ok:
+            if logger:
+                _lg6 = getattr(logger, 'log', None) or logger
+                _lg6('NCBI taxonomy 未就绪 → 跳过 ⑥b ORF 功能注释'
+                     '（「数据库构建」页下载 taxonomy 后可单独运行）', 'WARN')
+            stages = [s for s in stages if s != 'orfa']
+
     # 识别已有样品（认磁盘真实目录名，兼容手工/历史/非规范命名）；
     # 若是不存在的新名字，resolve 会退回规范名，等于新建——语义不变。
     sample = _resolve_sample(sample)
     sample_dir = check_path(os.path.join(DIRS['results'], sample),
                             must_exist=False, in_platform=True)
     os.makedirs(sample_dir, exist_ok=True)
+    # ③c 的 reads 取自 01_host_removal：① 没跑且该样品也没有历史去宿主产物时
+    # 必然 RuntimeError，提前剔除并留痕（断点续跑时历史产物存在则照旧执行）。
+    if 'consensus' in stages and 'host' not in stages:
+        _hr_pairs = 0
+        try:
+            from .utils import find_read_pairs as _frp
+            _hr_pairs = len(_frp(os.path.join(sample_dir, '01_host_removal')))
+        except Exception:
+            _hr_pairs = 0
+        if not _hr_pairs:
+            if logger:
+                _lg5 = getattr(logger, 'log', None) or logger
+                _lg5('① 宿主去除未运行且无历史去宿主产物 → 跳过 '
+                     '③c 共识序列与变异', 'WARN')
+            stages = [s for s in stages if s != 'consensus']
     st = _RunState(stages, _fsize(r1) + _fsize(r2), progress, logger)
     # 外部工具版本快照（复现依据）：本次将用到的工具（按已选阶段取）各探一次
     # 版本，写 <样品>/tool_versions.json + 一条日志。探测失败不阻断运行。
@@ -1261,13 +1368,17 @@ def run_analysis(sample, r1, r2, stages, db_host=None, db_virus=None,
                 if _pf['still_missing']:
                     raise RuntimeError(format_error(key, _pf))
                 if _pf['installed'] and logger:
-                    logger(f"阶段 {key} 前已自动安装插件: "
-                           + ', '.join(_pf['installed']))
+                    # logger 是 TaskLogger（有 .log），不是可调用对象：
+                    # 这里曾直接 logger(...)，把"缺可选工具"变成 TypeError。
+                    _lg0 = getattr(logger, 'log', None) or logger
+                    _lg0(f"阶段 {key} 前已自动安装插件: "
+                         + ', '.join(_pf['installed']))
             except RuntimeError:
                 raise
             except Exception as _e:
                 if logger:
-                    logger(f"阶段 {key} 依赖自检异常（继续）: {_e}")
+                    _lg1 = getattr(logger, 'log', None) or logger
+                    _lg1(f"阶段 {key} 依赖自检异常（继续）: {_e}")
             STAGE_REGISTRY[key]['fn'](C)
             _finished.append(key)
             _manifest_sync(_finished, 'running')

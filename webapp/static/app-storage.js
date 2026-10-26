@@ -30,8 +30,9 @@ async function checkStorageBanner() {
       else document.body.prepend(b);
     }
     b.innerHTML = '<b>⚠ ' + t('st.lowTitle', '磁盘空间不足') + '</b><br>'
-      + low.map(x => esc(x.label) + t('st.disk', '盘') + '（' + esc(x.path) + '）'
-        + t('st.onlyLeft', ' 仅剩 ') + esc(x.free_h) + '，'
+      + low.map(x => t('ui.st.lbl.' + x.label, x.label) + t('st.disk', '盘')
+        + t('ui.st.parenL') + esc(x.path) + t('ui.st.parenR')
+        + t('st.onlyLeft', ' 仅剩 ') + esc(x.free_h) + t('ui.st.comma')
         + t('st.suggest', '建议保留 ') + d.threshold_gb + 'GB '
         + t('st.above', '以上')).join('<br>')
       + '<br>' + t('st.lowHint',
@@ -87,7 +88,7 @@ async function loadStoragePanel(times) {
     const col = x.warn ? '#c62828' : (pct > 85 ? '#f9a825' : '#2e7d32');
     return '<div style="margin-bottom:8px">'
       + '<div style="display:flex;justify-content:space-between;font-size:13px">'
-      + '<span>' + esc(x.label) + t('st.disk', '盘') + ' · '
+      + '<span>' + esc(t('ui.st.lbl.' + x.label, x.label)) + t('st.disk', '盘') + ' · '
       + '<span style="color:#666">' + esc(x.path) + '</span></span>'
       + '<span>' + esc(x.free_h) + ' ' + t('st.free', '可用') + ' / '
       + esc(x.total_h) + '</span></div>'

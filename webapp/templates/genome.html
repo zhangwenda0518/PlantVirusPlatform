@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
-<title>基因组图谱 - 植物病毒分析平台</title>
+<title>{{ 'Genome visualization - Plant Virus Analysis Platform' if lang == 'en' else '基因组图谱 - 植物病毒分析平台' }}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
@@ -47,7 +47,7 @@
             <input id="gp_ann" type="text" placeholder="可选；.gb/.gbk/.gff[.gz]" data-i18n-ph="gn.phAnnHint">
             <button class="btn small" onclick="browse('gp_ann')">📁</button>
             <button class="btn small" onclick="pasteSeq('gp_ann', '.txt')" title="粘贴文本">📋</button>
-            <button class="btn small" onclick="fillExample('gp_ann', EXAMPLE_GENBANK_GB); var f=$('gp_fa'); if(f) f.value=''; gpPreview();" title="填入内置示例 GenBank（自带注释）" data-i18n="gn.exampleGb" data-i18n-title="gn.fillExampleGbTitle">✨ 示例 .gb</button>
+            <button class="btn small" onclick="fillExample('gp_ann', EXAMPLE_GENBANK_GB).then(function(){ var f=$('gp_fa'); if(f) f.value=''; gpPreview(); });" title="填入内置示例 GenBank（自带注释）" data-i18n="gn.exampleGb" data-i18n-title="gn.fillExampleGbTitle">✨ 示例 .gb</button>
           </div>
 
           <!-- Basic -->
@@ -63,7 +63,7 @@
             </div>
           </div>
           <div style="margin-top:10px">
-            <label class="chk"><input type="checkbox" id="gp_interactive" checked onchange="gpInteractiveToggle()" data-i18n="gn.chkInteractive"> 🪄 交互模式（调参实时预览，手动保存）</label>
+            <label class="chk"><input type="checkbox" id="gp_interactive" checked onchange="gpInteractiveToggle()"> <span data-i18n="gn.chkInteractive">🪄 交互模式（调参实时预览，手动保存）</span></label>
             <div class="hint" id="gp_inter_hint" style="display:none;margin-top:2px" data-i18n="gn.interHint">调参即预览（不落盘）；满意后点「💾 保存结果」才真正保存</div>
           </div>
 
@@ -292,11 +292,22 @@ function gpPreview() {
   _gpPreviewTimer = setTimeout(async () => {
     body.innerHTML = '<p class="hint">' + t('gn.rendering', '⏳ 正在渲染预览…') + '</p>';
     try {
+      /* 恢复的表单值可能是旧会话里的相对示例路径 → 先换成服务端绝对路径
+         （否则后端按平台根拼接 → 400「路径不存在」） */
+      const _fa = await _resolveExamplePathInput(val('gp_fa'));
+      const _ann = await _resolveExamplePathInput(val('gp_ann'));
+      if ($('gp_fa') && _fa !== val('gp_fa')) $('gp_fa').value = _fa;
+      if ($('gp_ann') && _ann !== val('gp_ann')) $('gp_ann').value = _ann;
+      if (!_fa && !_ann) {
+        body.innerHTML = '<p class="hint">' + t('gn.needInput',
+          '请先选择 FASTA 或 GenBank 输入') + '</p>';
+        return;
+      }
       const r = await fetch('/api/tool/genoplot_preview', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fasta: val('gp_fa'), ann: val('gp_ann'), mode: gp_mode, gb_opts: gpCollectOpts() })});
+        body: JSON.stringify({ fasta: _fa, ann: _ann, mode: gp_mode, gb_opts: gpCollectOpts() })});
       const d = await r.json();
-      if (!r.ok) { body.innerHTML = '<p class="hint">' + t('gn.previewFail', '预览失败: ') + esc(String(d.error || r.status)) + '</p>'; return; }
+      if (!r.ok) { body.innerHTML = '<p class="hint">' + t('gn.previewFail', '预览失败: ') + esc(trPathMsg(String(d.error || r.status))) + '</p>'; return; }
       // SVG 来自用户自备 GenBank/GFF（基因名等字段完全可控），gbdraw 未必
       // 对所有字段转义。不能 innerHTML 直插（onload/foreignObject 会执行）：
       // 先 DOMParser 解析，剥掉脚本/foreignObject/use 与 on* 事件属性再入 DOM

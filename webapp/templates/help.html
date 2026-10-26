@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>使用手册 - 植物病毒分析平台</title>
+<title>{% if lang == 'en' %}User Manual - Plant Virus Analysis Platform{% else %}使用手册 - 植物病毒分析平台{% endif %}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 <style>
@@ -24,7 +24,7 @@
   .doc code { background:#f1f5f2; border:1px solid #e3e8ee; border-radius:4px;
               padding:1px 5px; font-size:12.5px;
               font-family:ui-monospace,Consolas,monospace; }
-  /* 功能全景树（feature-tree.js 渲染） */
+  /* Feature map tree (rendered by feature-tree.js) */
   .vp-ftree { border:1px solid #dbe7e0; border-radius:10px; padding:10px 12px;
               margin:0 0 18px; background:#fbfdfc; }
   .vp-ftree-bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
@@ -55,11 +55,338 @@
 {% include "_nav.html" %}
 <div class="page">
   <div class="doc">
-    <h1 style="margin-top:0" data-i18n="hlp.title">📖 使用手册</h1>
+    <h1 style="margin-top:0" data-i18n="hlp.title">{% if lang == 'en' %}📖 User Manual{% else %}📖 使用手册{% endif %}</h1>
     <div id="vp-ftree-box"></div>
     <div id="md"></div>
   </div>
 </div>
+{% if lang == 'en' %}
+{# English manual body.
+   Why the prose lives here instead of README.md: /help renders `text`, which
+   pages.py reads from README.md (Chinese). This template may only touch its own
+   file, so the English edition is embedded as an inert text/plain block and the
+   markdown renderer below reads it when lang == 'en'. Keep it in sync with
+   README.md when the manual changes. #}
+<script type="text/plain" id="vp-manual-src">
+English edition · [Simplified Chinese](README.md)
+
+# 🌿 VirusPlatform — Plant Virus Analysis Platform
+
+**A Windows-local plant-virus diagnostics and deep-analysis platform built on [kunpeng](https://github.com/afshinokh/kunpeng) (an ultra-low-memory metagenomic classifier)**
+
+From raw FASTQ to NCBI submission files, **the whole route is point-and-click**:
+host removal → known-virus identification and quantification → assembly → ORF prediction and functional annotation → phylogeny / SDT / molecular clock / phylogeography → primer design → genome plots → visual reports → public-data tracing → NCBI submission preparation
+
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-0078D6?logo=windows11&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
+![GUI](https://img.shields.io/badge/GUI-Flask%20%2B%20pywebview-8B5CF6)
+![CLI](https://img.shields.io/badge/CLI-VirusPlatform.exe%20--cli-16A34A)
+![i18n](https://img.shields.io/badge/UI-Bilingual%20CN%2FEN-EAB308)
+![Docs](https://img.shields.io/badge/docs-Wiki%2025%20pages-blue)
+
+---
+
+## ✨ At a Glance
+
+- **One pipeline, end to end**: 15 stages ⓪–⑩ (13 in the default analysis order; ⓪ QC and subsampling are optional). Each step's output is fed to the next automatically, with resume-from-checkpoint, forced reruns and graceful automatic degradation of optional steps.
+- **Local-first, works offline**: every external tool (kunpeng / SPAdes / MAFFT / RAxML-NG / DIAMOND / salmon / primer3 …) ships with the platform or is auto-detected; databases are built and queried locally, and downloads are restricted to an official NCBI/ENA/NGDC domain whitelist.
+- **Dual entry (GUI + CLI)**: a pywebview desktop window or a browser page (bilingual zh/en, one-click switch), both backed by the same engine that powers the full `main.py` CLI for scripted batch runs.
+- **Phylogenetics beyond tree building**: built-in TreeTime maximum-likelihood molecular clock, discrete-trait geographic reconstruction (mugration), skyline plots, RTT/DRT regression, BSP, BEAST hand-off with Markov-jump parsing and phylogeographic migration animations (GIF) — plant-virus epidemiology in one place.
+- **It gets smarter with use**: per-stage runtimes are learned over time, so every task card shows live global progress and an estimated time remaining; heavy-job concurrency gates, a disk-watermark banner and resource-estimate logging are all included.
+- **AI assistant (chat-driven agent)**: a persistent chat dock on the overview page interprets results, answers questions about the current task state and suggests next steps. The AI only reads on-disk products (advisory layer); key numbers are computed in code from result files and injected as context, never invented by the model. One OpenAI-compatible endpoint covers DeepSeek / GLM / Qwen / Kimi / OpenAI, and a local Ollama instance makes it fully offline; by default only statistical digests and table rows are sent — never the sequence data itself. A three-layer proactive driver is built in: **stage explanations** (static knowledge base, zero cost) → **result broadcasts** (automatic interpretation pushed at key milestones) → **decision gates** (AI assessment plus your confirmation at the end of key stages, off by default). The AI can also **drive data discovery for real**: ask "find transcriptome/genome data for species X" in the chat and it searches SRA+GSA directly (reusing the public-data search engine and broadcasting when done), then downloads the selected runs into the platform through an action order — its capability awareness comes from the platform's own module map, so it no longer sends you off to external databases. Execution authority is graduated in three levels: **action orders** (AI drafts, you approve, parameter diffs visible) → **auto-retry** (one rerun with the same parameters after a failure, off by default) → **auto-tuning loop** (parameter proposals re-run automatically within bounded keys, manual opt-in). Destructive and global-reset actions are never whitelisted.
+- **A closed research loop**: public-data search (NCBI SRA + NGDC GSA) → bulk download → analysis → full-coverage LOGAN SRA tracing → NCBI GenBank/BioSample submission preparation, end to end without leaving the platform.
+
+## 🧭 Analysis Workflow
+
+```mermaid
+flowchart LR
+    A["⓪ QC<br/>fastp · fq2fa"] --> B["① Host removal<br/>kunpeng host DB"]
+    B --> C["②b ID & quantification<br/>kvsuite · salmon"]
+    C --> D["③ Assembly<br/>SPAdes rnaviral"]
+    D --> D2["③b/③c Verification<br/>consensus & variants"]
+    D2 --> E["④ Host prediction<br/>ICTV cascade"]
+    E --> F["⑥ ORF prediction<br/>pyrodigal"]
+    F --> G["⑥b Functional annotation<br/>DIAMOND · Pfam HMM · BFVD"]
+    G --> H["⑦ Phylogeny/SDT<br/>MAFFT · FastTree/RAxML"]
+    H --> I["⑧ Primer design<br/>primer3"]
+    I --> J["⑨ Genome plots<br/>gbdraw / DFV"]
+    J --> K["⑩ Visual report<br/>plotly · pycirclize"]
+    K --> L["Tracing / molecular clock /<br/>phylogeography / submission"]
+```
+
+## 🗺️ Feature Map
+
+> The top of the in-app manual hosts an **interactive feature tree** (click to expand, jump straight to the matching tool card); everything it lists is reachable from the left navigation pane.
+
+```mermaid
+mindmap
+  root((🌿 VirusPlatform Plant Virus Analysis Platform))
+    🌐 Data Resources
+      Public Data Search
+      Virus Sample Prescreen
+      Open-Virome Public Virome
+      Bulk Data Download
+      Genome Query & Download
+      Database Builder
+    🧹 Sample Processing
+      One-click Prep Chain
+      Sample Registry / Batch Import
+      Format Conversion
+      Read QC
+      Host Removal & Extraction
+    📈 Virus Quantification & Consensus
+      One-click Full Pipeline
+      Known-virus ID & Quantification
+      Consensus Analysis
+      Variant Analysis
+    🦠 Virus Identification & Classification
+      One-click ②→③→④
+      Virus ID, Classification & Extraction
+      Assembly of Extracted Reads
+      Re-identification of Assemblies
+      Candidate Verification
+    🔬 Virus Annotation
+      Annotation Trio ORF→Function→Map
+      ORF Prediction
+      Functional Annotation
+      Homology BLASTN · BLASTX
+      Genome Plot
+    💊 Detection & Control
+      Primer Design
+      CRISPR Assay Design
+      dsRNA Design
+      miRNA Target Prediction
+    ⚖️ Comparative Genomics
+      Reference Sequence Acquisition
+      CDS · PEP Export
+      MSA MAFFT + trimAl
+      Tree Building family/genus level
+      SDT Identity
+    🧬 Phylodynamics
+      Data Intake & Curation
+      RDP5 Recombination
+      Temporal Signal & Dating
+      Phylogeography
+      One-click Dating → Dispersal → Tracing
+    📊 Results Center
+      Sample & Special Results
+      Tree · SDT · MSA Viewers
+    🔍 Provenance & Submission
+      LOGAN Tracing & Bulk Submission
+      NCBI Submission Prep
+    ✨ Platform Capabilities
+      AI Assistant interpret · broadcast · gates · search
+      Task Center concurrency gates · learned ETA
+      Full CLI 40 subcommands
+      Bilingual zh/en UI
+      Visual Reports
+```
+
+## 📦 Module Overview
+
+> Each module's **detailed documentation (inputs/outputs · parameters · CLI · product directories · caveats) lives in the [Wiki](https://github.com/zhangwenda0518/PlantVirusPlatform/tree/main/wiki)**.
+
+### Main analysis pipeline (per sample, ⓪ → ⑩)
+
+| Stage | Wiki | Engine | Output |
+|---|---|---|---|
+| ⓪ fastp QC (optional) | [Preprocess](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Preprocess.md) | fastp | clean reads, QC report |
+| ⓪b FASTQ→FASTA (optional) | same page | seqkit fq2fa | conv_R1/R2.fa.gz (speeds up classification) |
+| ① Host removal | same page | kunpeng (host DB) | kept_R1/R2, host fraction |
+| ②b Known-virus ID & quantification | [Kvsuite](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Kvsuite.md) | salmon (EM quantification) / minibwa | ID table, quantification table, BAM+depth, viral reads |
+| ③ Assembly & classification | [Assembly](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Assembly.md) | SPAdes metaviral/rna + BLAST | contigs, viral-contig annotation table |
+| ③b Candidate sequence verification | same page | host filtering → length split → blastx/BFVD/viroid | verified candidate set |
+| ③c Consensus & variants | same page | reads re-mapped to the reference → per-position counts | consensus sequences, variant table |
+| ④ Host prediction | [Host-Prediction](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Host-Prediction.md) | kunpeng + ICTV host-probability cascade | host_prediction.tsv, sankey/sunburst plots |
+| ⑥ ORF prediction | [ORF](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/ORF.md) | pyrodigal + pyrodigal-rv | faa/ffn/gff |
+| ⑥b ORF functional annotation | same page | DIAMOND/MMseqs2/blastp × RefSeq viral proteins + Pfam HMM + BFVD viral domains | orf_annotation.tsv, GFF3, feature diagrams |
+| ⑦ Phylogeny & SDT | [Phylo](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylo.md) | MAFFT + trimAl + FastTree/RAxML-NG/NJ; exact SDT engine | tree.nwk, identity matrix + heatmap |
+| ⑧ Primer design | [Primer](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Primer.md) | primer3 (conserved regions / full length) + thermodynamic scoring | primers.tsv |
+| ⑨ Genome plots | [Genome-Plots](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Genome-Plots.md) | gbdraw / dna_features_viewer | circular + linear SVG |
+| ⑩ Visual report | [Report](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Report.md) | plotly + pycirclize + matplotlib | report.html |
+
+### Extended analyses (dedicated tabs)
+
+| Module | Wiki | Description |
+|---|---|---|
+| Phylodynamics toolkit | [Phylodynamics](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylodynamics.md) | TreeTime ML molecular clock / geographic reconstruction / skyline / ancestral sequences, RTT·DRT regression, BSP, MCC-tree parsing, spatiotemporal downsampling, metadata governance, alignment QC |
+| BEAST interface | [BEAST](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/BEAST.md) | server-side BEAST job-package generation and read-back verification, Markov-jump XML injection with log parsing, MCC state parsing |
+| Phylogeography | [Phylogeography](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Phylogeography.md) | migration reconstruction driven by time/geography metadata + migration-arc animated GIF; RDP5 recombination analysis; pre-recombination sequence pre-filtering |
+| Public data search & download | [Public-Data](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Public-Data.md) | SRA+GSA dual-engine search, unified metadata (Core14/Full), publication-grade metadata figure set, aria2c bulk download + built-in sracha FASTQ conversion, host-genome download from three sources (NCBI taxon / accession with chromosome filtering / gget·Ensembl Plants), full NCBI datasets CLI wrapper (genome/gene/taxonomy/virus with host filtering; virus feeds straight into DB building) |
+| Specialized toolbox | [Toolbox](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Toolbox.md) | end-to-end dsRNA design (windowing → efficacy → off-target → primers), miRNA target prediction (5 engines), NCBI reference download, GenBank collections with CDS/PEP extraction, MSA viewer, contig depth annotation, one-step tools |
+| NCBI submission preparation | [Submission](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/NCBI-Submission.md) | one unified_metadata.csv drives everything: online editing → validation → source.src / miuvig / assembly / BioSample / template.sbt / submission report |
+| LOGAN tracing | [Logan](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Logan.md) | submits viral contigs to Logan-Search (covering ~23.4M public SRA samples), batch submission + SSE live progress + tracing report |
+
+### Platform facilities
+
+| Module | Wiki | Description |
+|---|---|---|
+| Databases & reference libraries | [Databases](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Databases.md) | Taxonomy, kunpeng classification DBs, virus reference/ID DBs, annotation DBs (RefSeq proteins / Pfam), tree-building DBs (plant_tree.db / ICTV VMR), host-probability tables, host-DB building |
+| Pipeline orchestration | [Pipeline](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Pipeline-Overview.md) | dependency scheduling, resume-from-checkpoint, weighted progress with self-learning ETA, resource estimation, concurrency gates |
+| Settings · task center · operations | [Settings-Ops](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/Settings-Ops.md) | bilingual zh/en UI, 19 default parameters, disk watermark, environment self-check, tool_runs archive cleanup, database migration |
+| Full CLI reference | [CLI-Reference](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/CLI-Reference.md) | all 40 subcommands with every parameter |
+| FAQ & known issues | [FAQ](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/FAQ.md) | common questions, non-ASCII path support, large-genome DB building, design notes |
+
+## 🚀 Quick Start
+
+### 1. Install
+
+No installation: unpack the package and start it (Windows 10+, 64-bit). Double-click `VirusPlatform.exe` for the desktop window, or `Start-Web.bat` to open the platform in your browser; `Start-Desktop.bat` is the same as the exe. Command-line equivalents: `VirusPlatform.exe --gui` and `VirusPlatform.exe --web`. The Python runtime, the external tools and the web front end all ship inside the folder.
+
+- **Editions**: `VirusPlatform-Standalone` (program only), `VirusPlatform-Platform-and-Database` (program + database package) and `VirusPlatform-Complete` (program + database package + the full 31-tool set). `README-Distribution.txt` in each package lists exactly what is inside.
+- **First run**: if the package carries the NCBI Taxonomy archive it is unpacked once automatically (about a minute, no network); the console prints `[init] ...` while that happens. Later runs start immediately.
+- **Everything is local**: the platform listens on `127.0.0.1` only and never uploads your data.
+- **Databases** (~3.4 GB) live in the separate `VirusPlatform-Database` folder for editions 02/03; for the standalone edition place that folder next to the program (it is detected automatically), or build the libraries on the Database build page.
+- **Source mode** (optional, for development): `git clone https://github.com/zhangwenda0518/PlantVirusPlatform.git`, `python -m pip install -r requirements.txt`, then `python app.py --web`. The frozen executable remains the supported delivery form.
+
+### 2. Launch (two modes)
+
+| Mode | Command | Notes |
+|---|---|---|
+| Desktop window | `python app.py --gui` | pywebview/WebView2 shell around the local pages, no address bar |
+| Web mode | `python app.py --web` | opens in the default browser; the URL can be copied to other devices |
+| Default (auto) | `python app.py` | prefers the desktop window, falls back to the browser |
+
+Port probing starts at 8765 and increments automatically, so **always use the address printed in the console**; it binds to `127.0.0.1` only and is never exposed to the network.
+
+### 3. First-time setup (once)
+
+1. **NCBI Taxonomy**: the database package ships the official archive (155MB) and the platform unpacks it in the background on first launch (~1 minute, no network needed); standalone deployments can also download it from the Databases page with one click;
+2. **Databases page** → pick a host genome FASTA + host TaxID (e.g. 4081 for tomato) → build the host DB (the virus DB ships prebuilt — nothing to build);
+3. **Settings page** → threads, e-mail and the 19 analysis defaults as needed (defaults work out of the box).
+
+### 4. Run your first sample
+
+**Analysis Pipeline page** → new sample (name, R1/R2) → ▶ run the remaining steps one by one.
+For a first pass, set subsampling to 100,000 read pairs to validate the whole flow quickly.
+
+CLI equivalent:
+
+```bat
+VirusPlatform.exe --cli selfcheck                                  :: environment self-check
+VirusPlatform.exe --cli init-taxonomy                              :: download taxonomy (not needed when the package ships it)
+VirusPlatform.exe --cli build-host-db --genome host-db\genome.fa --taxid 4081
+VirusPlatform.exe --cli analyze --r1 R1.fastq.gz --r2 R2.fastq.gz --sample NX-5
+VirusPlatform.exe --cli report --sample NX-5                       :: regenerate the report
+
+:: running from source instead? replace "VirusPlatform.exe --cli" with "python main.py"
+```
+
+## 🧰 External Tools
+
+The external tools ship inside `bin/` and `tools/` of the program folder. To swap an individual tool, drop the new build into its
+`tools/` path and it is detected automatically, or register it under the `tools` section of `platform.json` (takes effect on save);
+`VirusPlatform.exe --cli tools` shows detection status and `VirusPlatform.exe --cli selfcheck` runs the full checkup. A missing tool only affects
+its own step — optional steps (fastp / fq2fa / gbdraw) grey out and are skipped automatically, while required steps report
+exactly which tool is missing. Optional tools that are not bundled can be fetched with one click in Settings → Plugins.
+
+## 🖥️ UI Tour
+
+The top navigation follows the workflow order (🌐 switches zh/en in one click; the task-center entry carries a running-jobs badge):
+
+**Overview** (cover + database status + workflow entries) · **Analysis Pipeline** (the ⓪–⑩ 15-stage cascade cards) · **Results Center** (reports / specialized results / SDT·MSA·tree viewers) · **Specialized Analysis** (one-step tools + reference data) · **Data Download** (bulk SRR/CRR/URL) · **Public Data Search** · **Databases** (Taxonomy / host DB) · **Public Virome** · **LOGAN Tracing** · **Submission Prep** · **Task Center** · **Settings** · **Manual**
+
+Highlights:
+- every finished task auto-expands a **result preview panel** (key numbers + product list + open-report), with a system notification when the page is in the background;
+- 9 stage cards carry a **📊 View** button — tables pop up in place, HTML reports open in a new window;
+- Storage & Disk page: free-space bar + per-sub-database usage breakdown, plus a site-wide yellow watermark banner below 20GB free;
+- concurrency gates: ≤2 heavy and ≤4 light jobs; anything beyond queues automatically with the queue position shown on the task card.
+
+## 📁 Directory Layout
+
+```
+VirusPlatform/
+├─ app.py                    Web GUI service (localhost only)
+├─ main.py                   CLI entry (40 subcommands)
+├─ Virus_Platform_Core/      core pipeline package (shared by GUI and CLI, 130+ modules)
+│  ├─ web/                   Flask blueprints (pages / API / tasks)
+│  ├─ known_virus_suite/     ②b known-virus ID and quantification engine
+│  ├─ ncbi_submit/           NCBI submission-preparation engine
+│  ├─ public_meta/           public-data search engine
+│  └─ mirna_target/          miRNA target-prediction engine (5 engines)
+├─ webapp/                   page templates and static assets (bilingual i18n)
+├─ tests/                    self-checks, data generators, integration tests (pytest style)
+├─ dev_tools/                database-build and maintenance scripts (build_virus_db.py / package.py etc.)
+├─ docs/                     development docs and module inventories
+├─ wiki/                     source Markdown of this repository's Wiki (kept in sync with the site)
+├─ examples/                 built-in example data (shared by the ✨ Example buttons, ~9MB)
+├─ 3rd/                      external dependencies (bin/ tools/ python/ open-virome/; only the interpreter
+│                            itself is committed under python/, packages install from requirements.lock;
+│                            only 3seqTable, >100MB, ships via Release)
+├─ databases/                virus classification/reference/annotation/tree DBs (~3.4GB, not in git)
+├─ host-db/                  host genomes and host classification DBs (one DB per species)
+├─ platform.json             tool paths / language / default parameters
+└─ run/                      runtime data (results/logs/tasks/…, rebuildable)
+```
+
+Legacy path compatibility: platform-relative paths such as `tool_runs/` and `results/` are redirected into `run/` automatically; `tools/`, `bin/` → `3rd/`; historical calls need no changes.
+
+## 📤 Distribution
+
+**Three official editions** — program, databases and examples are kept as separate folders so each can be copied or updated on its own:
+
+| Edition | What is inside |
+|---|---|
+| ① `VirusPlatform-Standalone` | Program only: the main workflow runs out of the box (QC fastp / host removal minibwa+blast / assembly spades / identification kunpeng / alignment mafft+trimal / trees fasttree / quantification-consensus minimap2+samtools+bcftools+salmon / candidate verification diamond+mmseqs / datasets CLI + small bin utilities) — stages ⓪–⑩ and the Data Resources and Virus Identification groups need no network; specialised tools (recombination RDP5, phylodynamics iqtree/raxml-ng/lsd2, NCBI submission table2asn …) install on demand as plugins |
+| ② `VirusPlatform-Platform-and-Database` | Edition ① plus the `VirusPlatform-Database` folder: NCBI Taxonomy archive (unpacked on first run), prebuilt virus reference library, annotation libraries, tree references, dsRNA/miRNA libraries |
+| ③ `VirusPlatform-Complete` | Edition ② plus the full 31-tool set — nothing to fetch at run time |
+
+- All three editions share the same `VirusPlatform.exe` and `_internal` folder; only the tool folders and the database package differ, so upgrading means replacing the program folder.
+- Plugins (32 packages, each sha256-verified, domestic mirrors first) top up the standalone edition, repair corrupted tool folders and support fully offline installation from a zip.
+- Database migration: `VirusPlatform.exe --cli db-migrate --to D:\dbdir` (robocopy + byte verification before the config is switched), or set the path under Settings → Database directory;
+- Third-party licence index: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) (generated by `dev_tools/third_party_notices.py`); third-party runtime files (e.g. RDP5 session snapshots) are never committed or packaged.
+
+## 📚 Documentation
+
+- **[Wiki home](https://github.com/zhangwenda0518/PlantVirusPlatform/tree/main/wiki)** — 25 pages with per-module detail (quick start / each pipeline stage / phylodynamics / BEAST / phylogeography / public data / toolbox / submission / LOGAN / databases / CLI / FAQ).
+- Wiki source files are maintained in the [`wiki/`](wiki/) folder of this repository.
+- **[MCP server](docs/mcp_server.md)** — exposes the toolbox / pipeline / task management as 22 `vp_*` tools (toolbox + pipeline + task management + full CLI + virus prescreening + OpenVirome cloud search), so MCP clients such as Claude Desktop and ZCode can drive it directly (both stdio and streamable-HTTP modes, with per-parameter schemas and a calling model).
+- Development notes: [`docs/DEVELOPMENT_NOTES.md`](docs/DEVELOPMENT_NOTES.md).
+
+## ❓ FAQ (quick picks)
+
+<details>
+<summary><b>The page shows "Failed to fetch" / clicks do nothing?</b></summary>
+
+The server process is gone — closing the black console window quits the platform; or the browser tab belongs to an instance that has already shut down; or a heavy job has saturated memory and the app is temporarily unresponsive. Recent pages show a red diagnostic banner while disconnected and clear it automatically once the connection is back.
+</details>
+
+<details>
+<summary><b>Which input formats are supported?</b></summary>
+
+FASTQ / FASTQ.gz (paired-end: pick R1 and R2; single-end: pick R1 only); FASTA / FASTA.gz; GenBank .gb/.gbk (genome plots and reference collections). Unpack .zip/.rar/.tar archives first.
+</details>
+
+<details>
+<summary><b>SPAdes / BLAST errors (non-ASCII paths)?</b></summary>
+
+Handled automatically: SPAdes runs through `%TEMP%\vp_spades` (pure ASCII), and BLAST databases are built under `%TEMP%\vp_blast`.
+</details>
+
+<details>
+<summary><b>Host-DB building fails on large genomes?</b></summary>
+
+Fixed: sequences are split automatically into ≤1MB chunks (a 34bp overlap between neighbours preserves cross-cut k-mers), so a 1.8GB genome builds with 2GB of RAM and the k-mer counts match whole-sequence indexing exactly.
+</details>
+
+More in the [Wiki FAQ](https://github.com/zhangwenda0518/PlantVirusPlatform/blob/main/wiki/FAQ.md).
+
+## 🙏 Credits & Acknowledgements
+
+The platform integrates a large number of excellent open-source tools and data resources, including (but not limited to):
+
+- **kunpeng** — ultra-low-memory metagenomic classifier (host removal / virus-classification core)
+- **SPAdes** (metaviral/rna), **salmon**, **minibwa**, **fastp**, **seqkit**, **crabz**
+- **pyrodigal / pyrodigal-rv / orfipy** (ORF prediction), **DIAMOND / MMseqs2 / BLAST+** (homology search)
+- **pyhmmer × Pfam**, NCBI **RefSeq Viral** (protein library), the **BFVD** viral-domain library (same library and naming as the NCBI submission chain suvtk). (The former NCBI CDD domain annotation was retired on 2026-09-29: its local prefilter index (~5GB) repeatedly ran out of memory on low-memory machines; BFVD took its place.)
+- **MAFFT / trimAl / Gblocks / FastTree / RAxML-NG / IQ-TREE 3** (phylogenetics), **TreeTime** (molecular clock)
+- **BEAST 1.x** (Markov-jump counting semantics; no MCMC locally), **Logan-Search** (Chikhi et al. 2025, bioRxiv 10.1101/2024.07.30.605881)
+- **ICTV VMR / MSL** (taxonomy metadata), NCBI **Taxonomy / SRA / GenBank / BioSample**, NGDC **GSA**
+- **primer3** (primers), **gbdraw / dna_features_viewer** (genome plots), **plotly / pycirclize / matplotlib** (visualisation), **snipit** (cross-sample SNP typing plots, O'Toole et al., 2024, Bioinformatics btae510; GPL-3.0, invoked as a separate process)
+- **Logan-Search**, **RDP5** (recombination analysis), **sracha** (GSA .sra conversion, pure Rust)
+- Methodological alignment: VirPhyKit (Yin et al., 2025, Ecol Evol; code written in-house, only the input/output contracts aligned), the MMPV-RNA pipelines (host-prediction C9 cascade / SDT semantics / submission preparation)
+</script>
+{% endif %}
 <script src="/static/i18n.js?v={{ asset_v }}"></script>
 <script src="/static/feature-tree.js?v={{ asset_v }}"></script>
 <script src="/static/app.js?v={{ asset_v }}"></script>
@@ -71,46 +398,57 @@
   <script src="/static/app-storage.js?v={{ asset_v }}"></script>
 <script src="/static/examples.js?v={{ asset_v }}"></script>
 <script>
-  // 功能全景树（数据源 feature-tree.js，节点可点跳对应工具卡）
+  // Feature map tree (data from feature-tree.js; nodes link to their tool cards)
   if (window.VPFeatureTree) VPFeatureTree.render('vp-ftree-box');
 
-  // Markdown 渲染（覆盖 README.md 实际语法：标题/粗斜体/行内码/链接/图片
-  // 徽章/有序无序列表/表格/代码块/引用/分隔线/<details> 折叠块/装饰性
-  // HTML 包装行与 <br>、<b> 白名单标签）。先整体转义，再按块解析。
+  // Markdown rendering (covers the syntax README.md actually uses: headings/bold/
+  // italic/inline code/links/images/badges/ordered and unordered lists/tables/
+  // fenced code/quotes/rules/<details> blocks/decorative HTML wrapper lines and
+  // the <br>, <b> whitelist tags). Escape everything first, then parse by block.
   (function () {
+    // Machine-readable source: English edition is embedded above as text/plain,
+    // the Chinese edition still comes from README.md through the `text` variable.
+{% if lang == 'en' %}
+    const RAW = document.getElementById('vp-manual-src').textContent.replace(/^\n+/, '');
+{% else %}
     const RAW = {{ text | tojson }};
-    // 与 app.js 的 esc 同一口径：连引号一起转义（属性上下文也安全）
+{% endif %}
+    // Same convention as esc() in app.js: quotes are escaped too, so the result is
+    // safe in attribute contexts.
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-    // 行内元素：粗体 → 行内码 → 链接 → 斜体（顺序重要，粗体先于斜体）
+    // Inline elements: bold → inline code → link → italic (order matters; bold
+    // before italic).
     function inline(s) {
       let t = esc(s);
-      // 行内码（优先，内部不再解析）
+      // Inline code first, its content is not parsed any further
       t = t.replace(/`([^`]+)`/g, (m, c) =>
         '<code style="background:#f1f5f2;border:1px solid #e3e8ee;border-radius:4px;' +
         'padding:1px 5px;font-size:12.5px;font-family:ui-monospace,Consolas,monospace">' + c + '</code>');
-      // 粗体
+      // Bold
       t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      // 斜体（避开已生成的标签属性）
+      // Italic (avoiding tag attributes generated above)
       t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-      // 图片 ![alt](url)：先于链接解析（否则 `!` 落单，README 头部徽章
-      // 会变成「!Platform」假链接）。只放行 https 外链（shields 徽章）；
-      // 加载失败（离线）整只隐藏，非外链/相对路径退化为 alt 文本。
+      // Images ![alt](url): parsed before links (otherwise the leading `!` is left
+      // dangling and README header badges become bogus "!Platform" links). Only
+      // https URLs are allowed (shields badges); on load failure (offline) the
+      // whole image is hidden, and non-https/relative URLs degrade to alt text.
       t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, url) => {
         if (!/^https:\/\//i.test(url)) return alt;
         return '<img src="' + url + '" alt="' + esc(alt) + '" loading="lazy" ' +
                'style="display:inline-block;height:20px;margin:2px 3px;' +
                'vertical-align:middle" onerror="this.style.display=\'none\'">';
       });
-      // 链接 [text](url)：只放行 http(s)/mailto/站内锚点，堵 javascript: 协议
+      // Links [text](url): only http(s)/mailto/in-site anchors, blocking javascript:
       t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, txt, url) => {
         const ok = /^(https?:\/\/|mailto:|\/|#)/i.test(url);
         return '<a href="' + (ok ? url : '#') + '" target="_blank" rel="noopener">' + txt + '</a>';
       });
-      // README 允许少量装饰性 HTML（2026-10 头部改版：<br/>、<details> 折叠
-      // 块、<b> 直接出现在正文）。整体转义后仅还原这只白名单标签，其余
-      // 标签维持转义原样显示——安全口径不变。
+      // README allows a little decorative HTML (2026-10 header revamp: <br/>,
+      // <details> blocks and <b> appear directly in the body). After escaping
+      // everything, only this whitelist is restored; every other tag stays escaped
+      // and is shown as-is — the security rule is unchanged.
       t = t.replace(/&lt;(\/?)(details|summary|b|kbd|sub|sup)([^&]*?)&gt;/g, '<$1$2$3>');
       t = t.replace(/&lt;br\s*\/?&gt;/gi, '<br>');
       return t;
@@ -118,12 +456,13 @@
 
     const lines = RAW.split(/\r?\n/);
 
-    // 跨行粗体：把「未闭合的 **」与后续行的「**」合并到同一行，
-    // 避免逐行渲染时成对标记被拆开（README.md 有 12 处这种写法，其中一处跨 3 行含空行）。
+    // Bold spanning several lines: merge an unclosed ** with the ** on a later
+    // line so a pair is never split across lines (README.md has 12 such spots,
+    // one of them spanning 3 lines including a blank one).
     for (let k = 0; k + 1 < lines.length; k++) {
       const c = (lines[k].match(/\*\*/g) || []).length;
       if (c % 2 === 1) {
-        // 向后找下一个也含奇数个 ** 的非空行，把中间内容一并并入
+        // Look ahead for the next non-empty line with an odd number of ** too
         for (let j = k + 1; j < lines.length; j++) {
           const cj = (lines[j].match(/\*\*/g) || []).length;
           if (cj % 2 === 1) {
@@ -134,7 +473,7 @@
             k--;
             break;
           }
-          // 遇到标题或围栏就停止，不跨界合并
+          // Stop at a heading or a fence; never merge across those
           if (/^\s*(#|```)/.test(lines[j])) break;
         }
       }
@@ -146,19 +485,19 @@
     while (i < lines.length) {
       const l = lines[i];
 
-      // 代码围栏 ``` ... ```
+      // Code fence ``` ... ```
       if (/^\s*```/.test(l)) {
         const lang = l.replace(/^\s*```/, '').trim();
         const buf = [];
         i++;
         while (i < lines.length && !/^\s*```/.test(lines[i])) { buf.push(lines[i]); i++; }
-        i++; // 跳过收尾围栏
+        i++; // skip the closing fence
         out.push('<pre' + (lang ? ' data-lang="' + esc(lang) + '"' : '') + '>' +
                  esc(buf.join('\n')) + '</pre>');
         continue;
       }
 
-      // 表格：当前行含 | 且下一行是分隔行 |---|---|
+      // Table: current line has | and the next line is the |---|---| separator
       if (/\|/.test(l) && i + 1 < lines.length && /^\s*\|?[\s:-]*\|[\s:|-]*$/.test(lines[i + 1])) {
         const cells = s => s.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
         const head = cells(l);
@@ -181,7 +520,7 @@
         continue;
       }
 
-      // 标题
+      // Headings
       if (/^####? /.test(l)) { out.push('<h3>' + inline(l.replace(/^#+ /, '')) + '</h3>'); i++; continue; }
       if (/^### /.test(l))   { out.push('<h3>' + inline(l.slice(4)) + '</h3>'); i++; continue; }
       if (/^## /.test(l)) {
@@ -194,7 +533,7 @@
         i++; continue;
       }
 
-      // 无序列表（连续多项合并为一个 <ul>）
+      // Unordered list (consecutive items merge into one <ul>)
       if (/^\s*[-*+] /.test(l)) {
         const items = [];
         while (i < lines.length && /^\s*[-*+] /.test(lines[i])) {
@@ -205,7 +544,7 @@
         continue;
       }
 
-      // 有序列表
+      // Ordered list
       if (/^\s*\d+\. /.test(l)) {
         const items = [];
         while (i < lines.length && /^\s*\d+\. /.test(lines[i])) {
@@ -216,7 +555,7 @@
         continue;
       }
 
-      // 引用
+      // Quote
       if (/^> /.test(l)) {
         const buf = [];
         while (i < lines.length && /^> ?/.test(lines[i])) {
@@ -228,15 +567,15 @@
         continue;
       }
 
-      // 分隔线
+      // Horizontal rule
       if (/^\s*([-*_])\1{2,}\s*$/.test(l)) { out.push('<hr style="border:0;border-top:1px solid #e3e8ee;margin:20px 0">'); i++; continue; }
 
-      // GitHub 装饰性包装行（<div align="center"> / </div>）：居中排版只在
-      // 仓库页面有意义，直接丢弃，不渲染也不显形
+      // GitHub decorative wrapper lines (<div align="center"> / </div>): centering
+      // only matters on the repository page, so drop them entirely
       if (/^\s*<\/?div[^>]*>\s*$/i.test(l)) { i++; continue; }
 
-      // 独立成行的徽章图片（README 头部）：连续行合并为一个居中段落，
-      // 观感对齐 GitHub 头图
+      // Standalone badge image lines (README header): merge consecutive lines into
+      // one centred paragraph so it lines up with the GitHub header image
       if (/^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(l)) {
         const imgs = [];
         while (i < lines.length && /^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(lines[i])) {
@@ -246,17 +585,18 @@
         continue;
       }
 
-      // <details>/<summary> 折叠块（README FAQ 用）：标签行原样输出
-      // （inline() 的白名单会把转义还原成真标签），内部内容照常走块解析
+      // <details>/<summary> blocks (used by the README FAQ): the tag lines pass
+      // through unchanged (inline()'s whitelist turns them back into real tags),
+      // the body inside is parsed by block rules as usual
       if (/^\s*<details[^>]*>\s*$/i.test(l) || /^\s*<\/details>\s*$/i.test(l) ||
           /^\s*<summary>.*<\/summary>\s*$/i.test(l)) {
         out.push(inline(l)); i++; continue;
       }
 
-      // 空行
+      // Blank line
       if (!l.trim()) { i++; continue; }
 
-      // 普通段落
+      // Ordinary paragraph
       out.push('<p style="margin:6px 0">' + inline(l) + '</p>');
       i++;
     }

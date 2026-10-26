@@ -182,6 +182,20 @@ def _gbdraw_inproc(argv):
         sys.argv = old_argv
 
 
+def _ascii_gff(line):
+    """把 GFF3 行里的非 ASCII 字符替换成 '_'（只用于喂给 gbdraw 的临时文件）。
+
+    gbdraw 解析 GFF3 用的是 open() 的默认编码；中文 Windows 上默认 GBK，
+    而本平台的注释属性里带中文产物名 → 解析直接抛
+    `'gbk' codec can't decode byte 0xb6 in position 200`，整条 contig 的出图被
+    跳过（实测默认链 3 条 contig 丢 2 条）。属性里的中文对绘图没有意义
+    （标签用 ID/locus_tag/基因名），ASCII 化即可稳定出图。
+    """
+    if line.isascii():
+        return line
+    return ''.join(ch if ord(ch) < 128 else '_' for ch in line)
+
+
 def _split_by_seqid(src_fasta, src_gff, out_dir, seqid):
     """从多条序列的 FASTA+GFF3 中拆出单条 contig 的小文件（gbdraw 单图输入）。"""
     fa_out = os.path.join(out_dir, f'{_safe_fn(seqid)}.fa')
@@ -204,7 +218,7 @@ def _split_by_seqid(src_fasta, src_gff, out_dir, seqid):
                         continue
                     cols = line.rstrip('\n').split('\t')
                     if len(cols) > 3 and cols[0] == seqid:
-                        f.write(line if line.endswith('\n') else line + '\n')
+                        f.write(_ascii_gff(line if line.endswith('\n') else line + '\n'))
         return fa_out, gff_out
     return fa_out, None
 

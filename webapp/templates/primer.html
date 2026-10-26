@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
-<title>引物设计 - 植物病毒分析平台</title>
+<title>{{ 'Primer design - Plant Virus Analysis Platform' if lang == 'en' else '引物设计 - 植物病毒分析平台' }}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
@@ -159,7 +159,7 @@
               <button class="btn small" onclick="browse('pd_fa')" title="选择文件">📁</button>
               <button class="btn small" onclick="pdPaste()" data-i18n-title="prd.pasteFa" title="粘贴 FASTA">📋</button>
               <button class="btn small" onclick="fillExample('pd_fa', EXAMPLE_FASTA)"
-                      data-i18n-title="prd.fillExample" title="填入内置示例（2 条病毒基因组）">✨ 示例</button>
+                      data-i18n-title="prd.fillExample" title="填入内置示例（2 条病毒基因组）" data-i18n="ui.ex.btnFill">✨ 示例</button>
             </div>
 
             <div class="pd-sec" data-i18n="prd.secCore">核心参数</div>

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
-<title>宿主去除与序列提取 - 植物病毒分析平台</title>
+<title>{{ 'Host removal & sequence extraction - Plant Virus Analysis Platform' if lang == 'en' else '宿主去除与序列提取 - 植物病毒分析平台' }}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>

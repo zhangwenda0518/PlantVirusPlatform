@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>设置 - 植物病毒分析平台</title>
+<title>{{ 'Settings - Plant Virus Analysis Platform' if lang == 'en' else '设置 - 植物病毒分析平台' }}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 <style>
@@ -276,7 +276,7 @@
     <h2 data-i18n="se.selfcheck">🩺 环境自检</h2>
     <p class="hint" data-i18n="se.selfcheckHint">四项一键体检：模块导入 / 外部工具 / 数据库 / 磁盘空间。
        首次运行需数秒（递归导入全部模块），结果缓存 5 分钟；与 CLI
-       `main.py selfcheck` 同一套检查。</p>
+       `VirusPlatform.exe --cli selfcheck` 同一套检查。</p>
     <div id="selfcheckBox" class="tools">
       <span class="hint" data-i18n="se.selfcheckIdle">尚未运行</span>
     </div>
@@ -305,8 +305,9 @@
       <div class="s-ctrl">
         <div id="aiPfList" class="pf-list"></div>
         <div style="display:flex;gap:6px;margin-top:6px">
-          <input id="aiPfName" placeholder="档案名（如 DeepSeek / 内网 vLLM）" style="flex:1">
-          <button class="btn small" onclick="aiPfSave()">存为档案</button>
+          <input id="aiPfName" placeholder="档案名（如 DeepSeek / 内网 vLLM）"
+                 data-i18n-ph="ai.se.pfNamePh" style="flex:1">
+          <button class="btn small" onclick="aiPfSave()" data-i18n="ai.se.pfSave">存为档案</button>
         </div>
       </div>
     </div>
@@ -316,7 +317,7 @@
     </div>
     <div class="set-row">
       <div class="s-label"><span data-i18n="ai.se.baseurl">API Base URL</span>
-        <small>OpenAI 兼容端点，通常以 /v1 结尾</small></div>
+        <small data-i18n="se.endpointHint">OpenAI 兼容端点，通常以 /v1 结尾</small></div>
       <div class="s-ctrl"><input id="aiBaseUrl" placeholder="https://api.deepseek.com/v1"></div>
     </div>
     <div class="set-row">
@@ -608,11 +609,11 @@ function renderSelfcheck(d) {
   for (const s of d.sections) {
     const mark = s.warn ? '△' : (s.ok ? '✔' : '✘');
     const extra = s.missing && s.missing.length
-      ? `（缺: ${esc(s.missing.join(', '))}）` : '';
+      ? `${t('se.scMissing', '（缺: ')}${esc(s.missing.join(', '))}${t('se.scMissingEnd', '）')}` : '';
     const sec = s.seconds != null ? ` · ${s.seconds}s` : '';
     html += `<div class="trow ${s.ok ? 'ok' : 'no'}">` +
-            `<span>${mark} ${esc(s.title)}</span>` +
-            `<span>${esc(s.summary || '')}${extra}${sec}</span></div>`;
+            `<span>${mark} ${esc(trSc(s.title))}</span>` +
+            `<span>${esc(trSc(s.summary || ''))}${extra}${sec}</span></div>`;
     // 子明细：数据库身份、磁盘余量要展示；失败模块只展示前 N 条
     const rows = (s.id === 'modules')
       ? (s.items || []).slice(0, SELFCHECK_MAX_ROWS)
@@ -621,8 +622,8 @@ function renderSelfcheck(d) {
       if (s.id === 'modules' && it.ok !== false) continue;
       const c = it.ok === false ? 'no' : '';
       html += `<div class="trow ${c}" style="padding-left:18px">` +
-              `<span style="flex:1">· ${esc(it.name)}${it.detail ? ' — '
-                + esc(it.detail) : ''}</span></div>`;
+              `<span style="flex:1">· ${esc(trSc(it.name))}${it.detail ? ' — '
+                + esc(trSc(it.detail)) : ''}</span></div>`;
     }
     const nf = (s.items || []).filter(i => i.ok === false).length;
     // 外部工具段：把「插件源能补的」和「本次会话自动装过的」显式列出来。
@@ -710,15 +711,15 @@ async function loadPlugins(showMsg) {
     box.innerHTML = PLUGIN_ITEMS.map(p => {
       const st = p.ok
         ? `<span class="ok">✔ ${esc(p.version || '')}</span>`
-        : `<span class="no">✘ ${esc(p.error || '无效插件')}</span>`;
+        : `<span class="no">✘ ${esc(p.error || t('se.pluginInvalid', '无效插件'))}</span>`;
       const provides = Object.entries(p.map || {}).map(([k, v]) => {
         const on = p.active && p.active[k];
         return `<div class="trow"><span>↳ ${esc(k)}</span>
-          <span class="${on ? 'ok' : 'no'}" title="${esc(v)}">${on ? '✔ 生效' : '（未启用：已有同键来源）'}</span></div>`;
+          <span class="${on ? 'ok' : 'no'}" title="${esc(v)}">${on ? t('se.toolOn', '✔ 生效') : t('se.toolDup', '（未启用：已有同键来源）')}</span></div>`;
       }).join('');
       return `<div class="trow" style="display:block">
         <div style="display:flex;justify-content:space-between;gap:10px">
-          <span>🧩 <b>${esc(p.name)}</b> <small>${esc(p.description || '')}</small></span>
+          <span>🧩 <b>${esc(p.name)}</b> <small>${esc(t('plug.desc.' + p.name, p.description || ''))}</small></span>
           <span>${st}
             <button class="btn small danger" onclick="pluginUninstall('${esc(p.name)}')">${t('se.pluginsUninstall', '卸载')}</button>
           </span>
@@ -911,7 +912,7 @@ async function loadModules(force) {
       const miss = m.missing || [];
       const badge = m.ready
         ? `<span class="ok">✔ ${t('se.pluginsModuleReady', '就绪')}</span>`
-        : `<span class="no">缺 ${miss.length}/${m.total}</span>`;
+        : `<span class="no">${t('se.pluginsModuleMissing', '缺')} ${miss.length}/${m.total}</span>`;
       const deps = (m.plugins || []).map(n => {
         const bad = miss.includes(n);
         return `<span class="${bad ? 'no' : 'ok'}" style="margin-left:6px">${bad ? '○' : '●'} ${esc(n)}</span>`;
@@ -920,11 +921,11 @@ async function loadModules(force) {
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
           <input type="checkbox" value="${esc(m.id)}" ${MODULE_SELECTED.has(m.id) ? 'checked' : ''}
                  onchange="toggleModule(this.value, this.checked)">
-          <b>${esc(m.title)}</b>
-          <small>${esc(m.desc || '')}</small>
+          <b>${esc(t('pm.' + m.id + '.t', m.title))}</b>
+          <small>${esc(t('pm.' + m.id + '.d', m.desc || ''))}</small>
           <span style="flex:1"></span>${badge}
         </label>
-        <div style="margin:4px 0 0 24px;font-size:12px">${deps || '<span class="hint">无外部工具依赖</span>'}</div>
+        <div style="margin:4px 0 0 24px;font-size:12px">${deps || '<span class="hint">' + esc(t('se.noToolDeps', '无外部工具依赖')) + '</span>'}</div>
       </div>`;
     }).join('');
     updateModuleBtn();
@@ -1007,7 +1008,7 @@ async function loadAiConfig() {
     const c = d.config || {};
     const sel = $('aiProvider');
     sel.innerHTML = AI_PRESETS.map(p =>
-      `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+      `<option value="${p.id}">${esc(t('ai.pv.' + p.id, p.name))}</option>`).join('');
     sel.value = c.provider || 'deepseek';
     $('aiEnabled').value = c.enabled ? 'true' : 'false';
     $('aiBaseUrl').value = c.base_url || '';

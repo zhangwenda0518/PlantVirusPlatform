@@ -379,7 +379,7 @@ function rhApplyStashed() {
     if (Object.keys(fills).length)
       try { sessionStorage.setItem('vp_runfill', JSON.stringify(fills)); } catch (e) {}
     else sessionStorage.removeItem('vp_runfill');
-    toast('已回填历史运行的衔接输入', applied.join(', '), { ttl: 4000 });
+    toast(t('ui.rh.backfill'), applied.join(', '), { ttl: 4000 });
   }
 }
 window.__rhOnTasks = tasks => {
@@ -397,8 +397,8 @@ function rhInitContainers() {
     if (!box || box.dataset.init) continue;
     box.dataset.init = '1';
     box.innerHTML = `<div class="rh-head" style="display:flex;gap:8px;align-items:center;margin-top:8px">
-        <button class="btn small" onclick="rhToggle('${def.box}')">🕘 历史运行（<span class="rh-count">…</span>）</button>
-        <span class="hint">重启不丢 · 可复用为下游输入 · 可删除（默认折叠）</span>
+        <button class="btn small" onclick="rhToggle('${def.box}')">${t('ui.rh.btnPre')}<span class="rh-count">…</span>${t('ui.rh.btnPost')}</button>
+        <span class="hint">${t('ui.rh.hint')}</span>
       </div>
       <div class="rh-body" style="display:none;margin-top:4px"></div>`;
   }

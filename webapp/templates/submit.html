@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>提交准备 - 植物病毒分析平台</title>
+<title>{{ 'Submission prep - Plant Virus Analysis Platform' if lang == 'en' else '提交准备 - 植物病毒分析平台' }}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 <style>
@@ -603,7 +603,7 @@ async function doTaxCheck(btn) {
 // ⚡分段一键），工具运行保持原名
 function runLabel(r) {
   return String(r).startsWith('sample:')
-    ? `🧪 样品 ${String(r).slice(7)}（管道产物）` : r;
+    ? `🧪 ${t('ui.sb.sample', '样品')} ${String(r).slice(7)}${t('ui.sb.pipe', '（管道产物）')}` : r;
 }
 
 async function loadContigRuns() {

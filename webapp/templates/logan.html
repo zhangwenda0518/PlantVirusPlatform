@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>LOGAN 溯源 - 植物病毒分析平台</title>
+<title>{{ 'LOGAN tracing - Plant Virus Analysis Platform' if lang == 'en' else 'LOGAN 溯源 - 植物病毒分析平台' }}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 </head>
@@ -29,11 +29,11 @@
       <span class="flow-tip" data-i18n="lg.flowTip">方式一 · 一键批量 ｜ 方式二 · 手动半自动（点击标题折叠/展开）</span>
     </h2>
     <div class="flow-body" id="flowBody">
-      <div class="subh"><span class="mode-tag mode-a">方式一 · 一键批量（推荐）</span><span data-i18n="lg.modeANote">需 selenium（pip install selenium）与本机 Edge/Chrome</span></div>
+      <div class="subh"><span class="mode-tag mode-a" data-i18n="lg.modeA">方式一 · 一键批量（推荐）</span><span data-i18n="lg.modeANote">需 selenium（pip install selenium）与本机 Edge/Chrome</span></div>
       <div class="step"><b>1</b><div data-i18n="lg.stepA1">下方新建查询：选样品的病毒 contigs（或粘贴序列），平台自动切成 ≤2.5kb 的查询片段。</div></div>
       <div class="step"><b>2</b><div data-i18n="lg.stepA2">任务卡片里填<b>通知邮箱</b>、选 Groups → 点「一键批量提交」。平台自动打开本机浏览器逐条提交、轮询等结果、下载结果表并<b>自动导入生成报告</b>，全程无需盯守。</div></div>
       <div class="step"><b>3</b><div data-i18n="lg.stepA3">个别片段因超时未落定？<b>再点一次批量提交即可补漏</b>（已下载的片段自动跳过）。</div></div>
-      <div class="subh"><span class="mode-tag mode-b">方式二 · 手动半自动</span><span data-i18n="lg.modeBNote">不装 selenium 也能用</span></div>
+      <div class="subh"><span class="mode-tag mode-b" data-i18n="lg.modeB">方式二 · 手动半自动</span><span data-i18n="lg.modeBNote">不装 selenium 也能用</span></div>
       <div class="step"><b>1</b><div data-i18n="lg.stepB1">每个片段点「复制序列」→ 点「打开 Logan-Search」粘贴提交；Groups 建议 <b>All_No_viral_human</b>（快速预检用 Fast），Threshold 默认 0.25；<b>建议填邮箱</b>拿结果下载链接。</div></div>
       <div class="step"><b>2</b><div data-i18n="lg.stepB2">把结果表（CSV/TSV）下载到本地，回点对应片段的「导入结果」。</div></div>
       <p class="hint" data-i18n="lg.selfHint">平台自身不发起任何外部请求（批量方式由本机浏览器代为访问 logan-search.org）；使用请引用：Chikhi et al. 2025, bioRxiv 10.1101/2024.07.30.605881。</p>
@@ -166,7 +166,8 @@ async function loadContigs() {
 function ctGo(p) { ctPageN = p; renderContigs(); }
 let ctSort = { key: '', dir: 1 };
 const CT_COLS = [['contig', 'Contig'], ['length', '长度', 1],
-  ['species', '物种'], ['family', '科']];
+  ['species', '物种'], ['family', '科']]
+  .map(c => [c[0], t('lg.ct.' + c[0], c[1]), c[2]]);
 function ctSortBy(k) {
   if (ctSort.key === k) ctSort.dir = -ctSort.dir;
   else { ctSort.key = k; ctSort.dir = 1; }
@@ -239,60 +240,60 @@ async function createJob() {
 
 function statusChip(j) {
   if (!j.n_segments) return '';
-  if (j.n_imported >= j.n_segments) return '<span class="seg-status done">结果齐全</span>';
-  if (j.n_imported > 0) return '<span class="seg-status wait">已导入 ' + j.n_imported + '/' + j.n_segments + '</span>';
-  return '<span class="seg-status wait">待提交</span>';
+  if (j.n_imported >= j.n_segments) return '<span class="seg-status done">' + esc(t('lg.stReady', '结果齐全')) + '</span>';
+  if (j.n_imported > 0) return '<span class="seg-status wait">' + esc(t('lg.stImported', '已导入 ')) + j.n_imported + '/' + j.n_segments + '</span>';
+  return '<span class="seg-status wait">' + esc(t('lg.stPending', '待提交')) + '</span>';
 }
 
 /* ---------- 批量自动提交 ---------- */
 function groupsOptions(sel) {
   return GROUPS.map(g => {
     const v = Array.isArray(g) ? g[0] : g;
-    const label = Array.isArray(g) ? (v + ' — ' + g[1]) : v;
+    const label = Array.isArray(g) ? (v + ' — ' + t('lg.g.' + v, g[1])) : v;
     return `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(label)}</option>`;
   }).join('');
 }
 
 function batchPanelHtml(name) {
   if (!SELENIUM) {
-    return `<div class="batch-panel" id="bp-panel-${esc(name)}"><div class="bp-title">🚀 一键批量提交（未启用）</div>
+    return `<div class="batch-panel" id="bp-panel-${esc(name)}"><div class="bp-title">${esc(t('lg.batchOff', '🚀 一键批量提交（未启用）'))}</div>
       <div class="hint">${t('lg.noSel')} <b>python -m pip install selenium</b>${t('lg.noSelTail')}</div></div>`;
   }
   const bt = batchTasks[name];
   if (bt && bt.status === 'running') {
     const pct = Math.max(2, Math.min(98, Math.round((bt.pct || 0) * 100)));
     const logTail = (bt.log || []).slice(-6).map(esc).join('\n');
-    return `<div class="batch-panel" id="bp-panel-${esc(name)}"><div class="bp-title">🚀 批量提交运行中
+    return `<div class="batch-panel" id="bp-panel-${esc(name)}"><div class="bp-title">${esc(t('lg.batchRunning', '🚀 批量提交运行中'))}
       <span class="spin">⠋</span></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
       <div class="hint bp-msg">${esc(bt.msg || bt.stage || t('lg.running'))}（${pct}%）</div>
-      <div class="batch-log">${logTail || '等待日志…'}</div>
+      <div class="batch-log">${logTail || esc(t('lg.waitLog', '等待日志…'))}</div>
       <button class="btn small danger" style="margin-top:6px" onclick="cancelBatch('${esc(name)}','${esc(bt.id)}')">${t('lg.cancel')}</button></div>`;
   }
   if (bt && (bt.status === 'done' || bt.status === 'failed')) {
-    const okTxt = bt.status === 'done' ? '✅ 批量任务结束' : '❌ 批量任务失败';
+    const okTxt = bt.status === 'done' ? t('lg.batchDone', '✅ 批量任务结束')
+      : t('lg.batchFailed', '❌ 批量任务失败');
     const logTail = (bt.log || []).slice(-8).map(esc).join('\n');
     return `<div class="batch-panel" id="bp-panel-${esc(name)}"><div class="bp-title">${okTxt}</div>
       <div class="hint">${esc(bt.error || bt.msg || '')}</div>
       <div class="batch-log">${logTail}</div>
       ${batchFormHtml(name, true)}</div>`;
   }
-  return `<div class="batch-panel" id="bp-panel-${esc(name)}"><div class="bp-title">🚀 一键批量提交（自动等待结果并导入）</div>
+  return `<div class="batch-panel" id="bp-panel-${esc(name)}"><div class="bp-title">${esc(t('lg.batchTitle', '🚀 一键批量提交（自动等待结果并导入）'))}</div>
     ${batchFormHtml(name, false)}</div>`;
 }
 
 function batchFormHtml(name, showPrev) {
   return `<div class="bp-row">
-      <span>通知邮箱</span>
+      <span>${t('lg.mail', '通知邮箱')}</span>
       <input type="text" class="bp-mail" id="bp-mail-${esc(name)}"
-             placeholder="用于接收 Logan-Search 完成通知；多邮箱用英文逗号分隔可轮换防限额">
+             placeholder="${t('lg.mailPh', '用于接收 Logan-Search 完成通知；多邮箱用英文逗号分隔可轮换防限额')}">
       <span>Groups</span>
       <select id="bp-group-${esc(name)}">${groupsOptions('Fast_No_human')}</select>
-      <label class="chk" style="margin:0"><input type="checkbox" id="bp-headless-${esc(name)}" checked> 后台运行</label>
+      <label class="chk" style="margin:0"><input type="checkbox" id="bp-headless-${esc(name)}" checked> ${t('lg.headless', '后台运行')}</label>
       <button class="btn primary small" onclick="startBatch('${esc(name)}')">${t('lg.batchBtn')}</button>
     </div>
-    <div class="hint" style="margin-top:5px">平台将驱动本机浏览器（Edge/Chrome）逐条提交全部未导入片段，
-    自动等待并下载结果、导入生成报告；过程中请勿关闭弹出的浏览器窗口。断点续跑：再点一次即补漏未落定片段。</div>`;
+    <div class="hint" style="margin-top:5px">${t('lg.batchHint', '平台将驱动本机浏览器（Edge/Chrome）逐条提交全部未导入片段，自动等待并下载结果、导入生成报告；过程中请勿关闭弹出的浏览器窗口。断点续跑：再点一次即补漏未落定片段。')}</div>`;
 }
 
 const subscribed = {};    // jobname -> EventSource（SSE 实时进度流）
@@ -382,20 +383,20 @@ async function loadJobs() {
       <div class="card">
         <h2>${esc(j.name)} ${statusChip(j)}</h2>
         <div class="job-meta">
-          ${j.sample ? '来源样品：<b>' + esc(j.sample) + '</b> ｜ ' : ''}创建：${esc(j.created)} ｜
-          <a href="/logan/report/${encodeURIComponent(j.name)}/" target="_blank">溯源报告${j.has_report ? '' : '（导入结果后生成）'}</a> ｜
-          <a href="/api/logan/job/${encodeURIComponent(j.name)}/query">下载查询 FASTA</a>
+          ${j.sample ? t('lg.srcSample', '来源样品：') + '<b>' + esc(j.sample) + '</b> ｜ ' : ''}${t('lg.created', '创建：')}${esc(j.created)} ｜
+          <a href="/logan/report/${encodeURIComponent(j.name)}/" target="_blank">${t('lg.reportLink', '溯源报告')}${j.has_report ? '' : t('lg.reportPending', '（导入结果后生成）')}</a> ｜
+          <a href="/api/logan/job/${encodeURIComponent(j.name)}/query">${t('lg.dlQuery', '下载查询 FASTA')}</a>
         </div>
         <div>${(j.contigs || []).map(c => `<span class="job-contigs">${esc(c.contig)} · ${(c.length||0).toLocaleString()}bp · ${esc(c.species || '')}</span>`).join('')}</div>
         ${batchPanelHtml(j.name)}
-        <div class="subh"><span class="mode-tag mode-b">方式二 · 手动</span>逐片段提交 / 导入</div>
+        <div class="subh"><span class="mode-tag mode-b">${t('lg.modeBShort', '方式二 · 手动')}</span>${t('lg.modeBSub', '逐片段提交 / 导入')}</div>
         ${(j.segments || []).map(s => `
           <div class="seg-row">
             <span class="seg-name">s${s.index}</span>
-            <span>${esc(s.contig)} ｜ ${s.start.toLocaleString()}–${s.end.toLocaleString()}（${s.length.toLocaleString()}bp）</span>
+            <span>${esc(s.contig)} ｜ ${s.start.toLocaleString()}–${s.end.toLocaleString()}${t('lg.parenL', '（')}${s.length.toLocaleString()}bp${t('lg.parenR', '）')}</span>
             <button class="btn small" onclick="copySeg('${esc(j.name)}',${s.index},this)">${t('lg.copySeg')}</button>
             <button class="btn small" onclick="toggleSeq('${esc(j.name)}',${s.index},this)">${t('lg.view')}</button>
-            <span class="seg-status ${s.imported ? 'done' : 'wait'}">${s.imported ? '已导入 ' + s.n_hits + ' 行' : '未导入'}</span>
+            <span class="seg-status ${s.imported ? 'done' : 'wait'}">${s.imported ? t('lg.stImported', '已导入 ') + s.n_hits + t('lg.stRows', ' 行') : t('lg.stNotImported', '未导入')}</span>
             <button class="btn small" onclick="this.nextElementSibling.click()">${t('lg.importRes')}</button>
             <input type="file" accept=".tsv,.csv,.txt,.gz" onchange="importResult('${esc(j.name)}',${s.index},this)">
             <textarea class="seqbox" id="seq-${esc(j.name)}-${s.index}" readonly></textarea>
@@ -412,11 +413,11 @@ async function loadJobs() {
 async function copySeg(name, idx, btn) {
   const r = await (await fetch(`/api/logan/job/${encodeURIComponent(name)}/segment/${idx}`)).json();
   const txt = '>' + r.header + '\n' + r.seq.replace(/(.{70})/g, '$1\n');
-  try { await navigator.clipboard.writeText(txt); ok(btn, '✓ 已复制'); }
+  try { await navigator.clipboard.writeText(txt); ok(btn, t('lg.copied', '✓ 已复制')); }
   catch (e) {
     const ta = $('seq-' + name + '-' + idx);
     ta.value = txt; ta.style.display = 'block'; ta.select();
-    document.execCommand('copy'); ok(btn, '✓ 已复制');
+    document.execCommand('copy'); ok(btn, t('lg.copied', '✓ 已复制'));
   }
 }
 function ok(btn, msg) { const prev = btn.textContent; btn.textContent = msg;

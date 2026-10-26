@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
-<title>分析结果 - 植物病毒分析平台</title>
+<title>{{ 'Analysis results - Plant Virus Analysis Platform' if lang == 'en' else '分析结果 - 植物病毒分析平台' }}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
@@ -24,7 +24,7 @@
       <a class="gt-item" data-sec="tree" href="#tree" data-i18n="rs.gTree">🌳 进化树</a>
       <a class="gt-item" data-sec="seqview" href="#seqview" data-i18n="rs.gSeqview">📄 序列查看器</a>
       <a class="gt-item" href="/svguest/" target="_blank" rel="noopener"
-         title="内置 svguest：多图合并 / 排版 / 标注，导出 PNG·SVG·PDF（不上传）">🎨 结果图整理</a>
+         title="内置 svguest：多图合并 / 排版 / 标注，导出 PNG·SVG·PDF（不上传）">🎨 <span data-i18n="rs.svguest">结果图整理</span></a>
     </div>
   </nav>
 

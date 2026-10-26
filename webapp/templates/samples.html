@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
-<title>样品创建 / 批量导入 - 植物病毒分析平台</title>
+<title>{{ 'Sample creation / batch import - Plant Virus Analysis Platform' if lang == 'en' else '样品创建 / 批量导入 - 植物病毒分析平台' }}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
@@ -19,7 +19,7 @@
     <div class="col">
       <div class="card">
         <h1 data-i18n="sc.title">🧾 样品创建 / 批量导入</h1>
-        <p class="hint">独立模块：登记样品（单个或从文件夹批量扫描），不启动分析。
+        <p class="hint" data-i18n="sc.intro">独立模块：登记样品（单个或从文件夹批量扫描），不启动分析。
         创建后可在本页表格中查看、改名、删除；分析请到顶部各功能模块选样品运行
         （全流程「自动化分析流程」页已于 2026-10 归档，不适合本地电脑运行）。</p>
 

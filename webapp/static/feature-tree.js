@@ -5,8 +5,10 @@
  * （docs/功能全景图.html）共用同一份数据。节点 href 与顶部导航/
  * 工具页分组一一对应（t-* 卡 → /tools?g=<组>#<卡>）。
  * 结构：VP_FEATURE_TREE.groups[] = { id, icon, zh, en, items[] }
+ *        （每个节点都带 zh/en 两份文案，切语言不动数据）
  * 渲染：VPFeatureTree.render(container, opts) —— 可折叠树 + 搜索，
- *       标签随 VP_LANG（zh/en）切换。
+ *       标签按 VP_LANG / <meta name="vp-lang"> / localStorage.vp_lang /
+ *       <html lang> 的顺序取语言（zh/en）。
  * ============================================================ */
 (function () {
   'use strict';
@@ -92,9 +94,34 @@
 
     render: function (container, opts) {
       opts = opts || {};
-      // VP_LANG 是 i18n.js 的顶层 let 绑定（不在 window 上），但经典脚本
-      // 按顺序加载后可直接按名访问
-      const lang = (typeof VP_LANG !== 'undefined' && VP_LANG === 'en') ? 'en' : 'zh';
+      // Language: VP_LANG is i18n.js's top-level `let` binding (not on window),
+      // but classic scripts share the global lexical scope and can read it by
+      // name. Fall back to <meta name="vp-lang">, then localStorage.vp_lang,
+      // then <html lang>, so the tree still renders in English where i18n.js is
+      // not in the page (standalone panorama page) or has not run yet.
+      const lang = (function () {
+        let l = '';
+        try {
+          if (typeof VP_LANG !== 'undefined' && VP_LANG) l = String(VP_LANG);
+        } catch (e) { l = ''; }
+        if (l !== 'en' && l !== 'zh') {
+          try {
+            const m = document.querySelector('meta[name="vp-lang"]');
+            if (m && m.content) l = m.content.trim();
+          } catch (e) { /* ignore */ }
+        }
+        if (l !== 'en' && l !== 'zh') {
+          try {
+            const s = localStorage.getItem('vp_lang');
+            if (s === 'en' || s === 'zh') l = s;
+          } catch (e) { /* ignore */ }
+        }
+        if (l !== 'en' && l !== 'zh') {
+          const hl = (document.documentElement.lang || '').toLowerCase();
+          l = hl.indexOf('zh') === 0 ? 'zh' : (hl ? 'en' : 'zh');
+        }
+        return l === 'en' ? 'en' : 'zh';
+      })();
       const L = node => node[lang] || node.zh;
       const data = window.VP_FEATURE_TREE;
       const nItems = data.groups.reduce((a, g) => a + g.items.length, 0);

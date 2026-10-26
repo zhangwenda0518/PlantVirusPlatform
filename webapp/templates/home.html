@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>植物病毒分析平台</title>
+<title>{{ 'Plant Virus Analysis Platform' if lang == 'en' else '植物病毒分析平台' }}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 </head>
@@ -23,7 +23,20 @@
   <!-- 封面：平台名 + 科研定位句 + 工程口径行。
        2026-10-23 按需求移除「背景 / 方法 / 流程 / 意义」四张叙事卡与
        平台架构总览：前者是静态文案，后者与下方模块入口重复，
-       首页只保留可操作入口。 -->
+       首页只保留可操作入口。
+       2026-10-26 顺序调整（用户）：封面平台名置顶，AI 对话卡排在其下 ——
+       先认识平台、再上手对话，页面第一屏的主语是平台本身。 -->
+  <div class="hero cover">
+    <div class="cover-txt">
+      <h1 data-i18n="hm.heroTitle">植物病毒分析平台</h1>
+      <!-- 主标题下的一句科研定位（口径：看见样本里的病毒世界） -->
+      <p class="cover-lead" data-i18n="hm.heroLead">看见样本里的病毒世界。</p>
+      <p data-i18n="hm.heroSub">发现、鉴定、定量、溯源植物 RNA 病毒——再低的丰度也看得见；从原始测序数据到可发表的基因组证据，一台 Windows 电脑完成。</p>
+      <!-- 工程口径一行：本地化 / 内置库 / 13 步级联 / 默认离线 -->
+      <p class="cover-eng" data-i18n="hm.heroEng">Windows 单机本地分析 · 内置病毒数据库 3.4 GB · 十余个功能模块全程离线</p>
+    </div>
+  </div>
+
   <!-- AI 对话（MCP 驱动）：正式对话窗——用户打字，LLM 经工具循环直接
        执行 MCP 工具（vp_*），流式输出。复用 /api/ai/chat（SSE）。 -->
   <h2 class="sec" data-i18n="hm.chat.section">💬 AI 对话 · 直接驱动分析（MCP）</h2>
@@ -35,10 +48,13 @@
                 style="max-width:360px;padding:4px 8px;border:1px solid var(--line,#cbd5e1);
                        border-radius:8px;font-size:12.5px"></select>
       </div>
-      <div class="chat-msg ai">你好！我是平台 AI 助手，可以直接驱动 22 个 MCP 工具。试试：
+      <div class="chat-msg ai">{% if lang == 'en' %}Hi! I'm the platform AI assistant — I can drive the 22 MCP tools directly. Try:
+• “Find runs that are palmprint-positive for Tobacco mosaic virus”
+• “Run quicktree on mcp_night_demo2”
+• “Is the platform ready right now?”{% else %}你好！我是平台 AI 助手，可以直接驱动 22 个 MCP 工具。试试：
 • 「查一下 Tobacco mosaic virus 的 palmprint 阳性 Run」
 • 「给 mcp_night_demo2 跑一遍 quicktree」
-• 「平台现在就绪吗？」</div>
+• 「平台现在就绪吗？」{% endif %}</div>
     </div>
     <div class="qs-row" style="margin-top:8px;align-items:flex-end">
       <textarea id="chatInput" rows="2" spellcheck="false"
@@ -46,7 +62,7 @@
                 placeholder="问点什么，或直接吩咐任务…（Enter 发送，Shift+Enter 换行）"
                 style="flex:1;padding:8px 10px;border:1px solid var(--line,#cbd5e1);
                        border-radius:8px;font-size:13px;resize:vertical"></textarea>
-      <button id="chatSend" class="btn" onclick="VC.send()">发送</button>
+      <button id="chatSend" class="btn" onclick="VC.send()" data-i18n="ai.dock.send">发送</button>
     </div>
   </div>
   <style>
@@ -60,18 +76,9 @@
     .chat-msg.tool { background: none; color: var(--ink-400, #7b8a99);
                      font-size: 12px; padding: 2px 12px; }
     .chat-msg.err { color: #b91c1c; background: #fef2f2; }
+    /* 首页有内嵌 AI 对话卡；右下角浮动坞按钮会压住「发送」键，首页隐藏之 */
+    #aiFab { display: none !important; }
   </style>
-
-  <div class="hero cover">
-    <div class="cover-txt">
-      <h1 data-i18n="hm.heroTitle">植物病毒分析平台</h1>
-      <!-- 主标题下的一句科研定位（口径：看见样本里的病毒世界） -->
-      <p class="cover-lead" data-i18n="hm.heroLead">看见样本里的病毒世界。</p>
-      <p data-i18n="hm.heroSub">发现、鉴定、定量、溯源植物 RNA 病毒——再低的丰度也看得见；从原始测序数据到可发表的基因组证据，一台 Windows 电脑完成。</p>
-      <!-- 工程口径一行：本地化 / 内置库 / 13 步级联 / 默认离线 -->
-      <p class="cover-eng" data-i18n="hm.heroEng">Windows 单机本地分析 · 内置病毒数据库 3.4 GB · 十余个功能模块全程离线</p>
-    </div>
-  </div>
 
   <!-- 数据库模块 -->
   <h2 class="sec" data-i18n="hm.dbSection">🗄 数据库模块</h2>
@@ -118,7 +125,7 @@
              data-i18n-ph="hm.qs.ph"
              onkeydown="if(event.key==='Enter'){event.preventDefault();QS.scan()}"
              placeholder="粘贴 FASTQ 文件夹（或单个 R1 文件）路径，回车扫描…">
-      <button id="qsScan" class="btn" onclick="QS.scan()">扫描识别</button>
+      <button id="qsScan" class="btn" onclick="QS.scan()" data-i18n="ui.qs.scan">扫描识别</button>
     </div>
     <div id="qsResult" hidden></div>
     <p class="hint" data-i18n="hm.qs.hint">双端按 R1/R2 命名自动配对（_R1 / .R1 / -R1）；目录下无 FASTQ 时自动下探一层子目录。识别后勾选样品一键「接入并开始分析」（默认 13 步流水线，已有样品自动续跑剩余阶段）。</p>
@@ -195,7 +202,7 @@
   <h2 class="sec" data-i18n="mcp.con.section" style="margin-top:18px">🛰 MCP 控制台</h2>
   <div class="qs-card" id="mcpCard">
     <div id="mcpIdle">
-      <button id="mcpConnect" class="btn" onclick="MCPC.connect()">连接 MCP 控制台</button>
+      <button id="mcpConnect" class="btn" onclick="MCPC.connect()" data-i18n="mcp.con.idleBtn">连接 MCP 控制台</button>
       <span class="hint" style="margin-left:8px" data-i18n="mcp.con.idleHint">按需拉起内置 mcp_server（stdio，标准 MCP 协议）；连接后本页可直接调用全部 22 个 vp_* 工具。</span>
     </div>
     <div id="mcpUI" hidden>
@@ -490,15 +497,15 @@ const VC = {
       const sel = $('chatModel');
       let html = '';
       if (!this.active) {
-        html += `<option value="" selected>当前配置 · ${esc(cfg.model || '未设置模型')}</option>`;
+        html += `<option value="" selected>${t('ui.qs.cfg')}${esc(cfg.model || t('ui.qs.noModel'))}</option>`;
       }
       for (const p of profiles) {
         html += `<option value="pf:${esc(p.name)}" ${p.active ? 'selected' : ''}>`
               + `${p.active ? '● ' : ''}${esc(p.name)} · ${esc(p.model || '')}`
-              + `${p.key_set ? '' : '（未存Key）'}</option>`;
+              + `${p.key_set ? '' : t('ui.qs.noKey')}</option>`;
       }
       if (!profiles.length) {
-        html = `<option value="" selected>当前配置 · ${esc(cfg.model || '未设置（到「设置 → AI 助手」配置）')}</option>`;
+        html = `<option value="" selected>${t('ui.qs.cfg')}${esc(cfg.model || t('ui.qs.noModelHint'))}</option>`;
       }
       sel.innerHTML = html;
     } catch (e) { /* 静默：选择条属增强功能 */ }
@@ -510,8 +517,8 @@ const VC = {
       headers: this._hdr, body: JSON.stringify({name})});
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return alert(d.detail || d.error || ('HTTP ' + r.status));
-    this._bubble('tool', '✔ 已切换模型 → ' + name
-      + (d.ready ? '' : '（注意：该配置不完整或未启用 AI 总开关）'));
+    this._bubble('tool', t('ui.qs.switched') + name
+      + (d.ready ? '' : t('ui.qs.incomplete')));
     this._scroll();
   }
 };
@@ -537,16 +544,16 @@ document.getElementById('chatInput').addEventListener('keydown',
     const nMiss = (tools.missing || []).length;
     const bits = [
       bit(t('hm.env.modules', '模块'),
-          sec.modules ? sec.modules.summary : '—',
+          sec.modules ? trSc(sec.modules.summary) : '—',
           sec.modules && sec.modules.ok ? 'ok' : 'bad'),
       bit(t('hm.env.tools', '外部工具'),
-          tools.summary || '—',
+          trSc(tools.summary || '—'),
           nMiss === 0 ? 'ok' : (tools.summary ? 'warn' : 'bad')),
       bit(t('hm.env.databases', '数据库'),
-          sec.databases ? (sec.databases.ok ? '就绪' : '未就绪') : '—',
+          sec.databases ? (sec.databases.ok ? t('hm.env.ready', '就绪') : t('hm.env.notReady', '未就绪')) : '—',
           sec.databases && sec.databases.ok ? 'ok' : 'bad'),
       bit(t('hm.env.disk', '磁盘'),
-          disk ? disk.detail.replace(/^剩余\s*/, '') : '—',
+          disk ? trSc(disk.detail.replace(/^(剩余|free)\s*/, '')) : '—',
           disk ? (disk.ok ? 'ok' : 'warn') : 'ok'),
     ];
     $('envStripBody').innerHTML = bits.join('');

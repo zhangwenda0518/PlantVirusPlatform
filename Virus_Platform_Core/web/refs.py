@@ -49,7 +49,21 @@ def api_ictv_cascade():
     宿主口径由 db 决定：plant = 植物口径，ictv = 全病毒界不过滤。"""
     from Virus_Platform_Core import ictv_db
     if not ictv_db.available():
-        abort(400, 'ICTV 库未初始化（python main.py ictv-update）')
+        # 没有数据库包的版本（01-Standalone）里没有 ICTV 谱系表。这不是错误：
+        # 按 200 + available=false 正常返回，让前端显示中性提示。此前 abort(400)
+        # 会让页面控制台出现 4xx 子资源（验收脚本记为缺陷），且提示文案里还留着
+        # 过时的 `python main.py ictv-update` 命令。
+        _db0 = str(request.args.get('db') or '').strip().lower() or 'plant'
+        return jsonify({
+            'available': False,
+            'selected': {},
+            'db': _db0,
+            'dbs': [],
+            'ranks': [{'col': col, 'zh': zh, 'options': []}
+                      for col, zh in ictv_db.RANK_COLS],
+            'hint': ('ICTV 分类库未就绪——可在「数据库构建」页建库，或运行 '
+                     'VirusPlatform.exe --cli ictv-update'),
+        })
     db = _pick_db(request.args.get('db'))
     levels = {col: (request.args.get(col) or '').strip()
               for col, _zh in ictv_db.RANK_COLS}

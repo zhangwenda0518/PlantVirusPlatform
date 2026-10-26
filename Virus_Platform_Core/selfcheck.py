@@ -246,7 +246,13 @@ def _check_databases():
     from Virus_Platform_Core.kunpeng import db_ready
     from Virus_Platform_Core.taxonomy import taxonomy_ready
     cfg = get_config()
-    items = [{'name': 'NCBI Taxonomy', 'ok': bool(taxonomy_ready())}]
+    _tax_ok = bool(taxonomy_ready())
+    items = [{'name': 'NCBI Taxonomy', 'ok': _tax_ok}]
+    if not _tax_ok:
+        # 单独版不含数据库包：✘ 之外必须给出口，否则买家只会看到一个红叉
+        items[0]['detail'] = ('未配置——「数据库构建」页可一键下载；离线时把 '
+                              'new_taxdump.tar.gz 放到 databases/ 下，'
+                              '任一条命令首次运行会自动解压')
     for key, label in (('host', '宿主库 host_db'),
                        ('virus', '病毒库 virus_db')):
         ok = bool(db_ready(cfg.databases[key]))

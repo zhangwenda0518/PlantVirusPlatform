@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ 'en' if lang == 'en' else 'zh-CN' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="vp-lang" content="{{ lang }}">
-<title>任务中心 - 植物病毒分析平台</title>
+<title>{{ 'Task center - Plant Virus Analysis Platform' if lang == 'en' else '任务中心 - 植物病毒分析平台' }}</title>
 <script>try{if(localStorage.getItem("vp_theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 <style>
@@ -81,7 +81,7 @@
   <div class="tk-stats" id="stats"></div>
   <div id="taskList"></div>
 
-  <h2 class="sec"><span data-i18n="tk.arch">历史归档</span> <small class="hint" style="font-weight:400">（服务重启前的任务记录）</small></h2>
+  <h2 class="sec"><span data-i18n="tk.arch">历史归档</span> <small class="hint" style="font-weight:400">{{ '(records from before the service restarted)' if lang == 'en' else '（服务重启前的任务记录）' }}</small></h2>
   <div id="archList"></div>
 </div>
 
@@ -129,8 +129,10 @@ function durOf(task) {
 }
 
 const ST_TEXT = {
-  running: ['运行中', 'tstat running'], done: ['已完成', 'tstat done'],
-  failed: ['失败', 'tstat failed'], cancelled: ['已停止', 'tstat cancelled'],
+  running: [t('stt.running', '运行中'), 'tstat running'],
+  done: [t('stt.done', '已完成'), 'tstat done'],
+  failed: [t('stt.failed', '失败'), 'tstat failed'],
+  cancelled: [t('stt.stopped', '已停止'), 'tstat cancelled'],
 };
 function stBadge(task) {
   const [txt, cls] = ST_TEXT[task.status] || [task.status, 'tstat'];
@@ -185,14 +187,14 @@ function cardHtml(task, archived) {
   return `<div class="task-card ${task.status}" data-tid="${task.id}">
     <div class="tk-row1">
       ${stBadge(task)}
-      <b>${esc(task.name)}</b>
+      <b>${esc(trTaskName(task.name))}</b>
       ${actionsHtml(task, archived)}
     </div>
-    ${task.msg ? `<p class="tk-msg">${esc(task.msg)}</p>` : ''}
+    ${task.msg ? `<p class="tk-msg">${esc(trTaskMsg(task.msg))}</p>` : ''}
     ${pct != null ? `<div class="tk-bar"><i style="width:${pct}%"></i></div>` : ''}
-    <p class="tk-meta">${meta.join(' · ')}${task.stage ? ' · ' + esc(task.stage) : ''}</p>
+    <p class="tk-meta">${meta.join(' · ')}${task.stage ? ' · ' + esc(trTaskMsg(task.stage)) : ''}</p>
     ${outdirRow}
-    ${task.error ? `<div class="tk-err">${esc(task.error)}</div>` : ''}
+    ${task.error ? `<div class="tk-err">${esc(trTaskMsg(task.error))}</div>` : ''}
     ${details}
   </div>`;
 }
