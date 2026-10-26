@@ -11,9 +11,11 @@
   GET  /api/mcp/tools    → {count, tools:[{name, description, inputSchema}]}
   POST /api/mcp/call     → {name, arguments} → {isError, text, data}
 
-注：16 个工具全部「提交/快查即返回」，正常调用秒级；vp_cli_run 若把
+注：工具全部「提交/快查即返回」，正常调用秒级；vp_cli_run 若把
 timeout_sec 调到 300s 以上，本客户端（330s）会先行超时——超时不杀
 服务器（可能有任务在跑），用 /api/mcp/restart 手动重置。
+工具总数不写死：以 mcp_server.py 的 @mcp.tool 注册数为准（/api/mcp/tools
+返回 count），避免文档与实际能力漂移。
 """
 import atexit
 import json
@@ -36,6 +38,11 @@ _REQ_ID = 0
 _SERVER_SCRIPT = os.path.join(PLATFORM_ROOT, 'mcp_server.py')
 _BOOT_TIMEOUT = 150          # 首次拉起含平台模块导入
 _CALL_TIMEOUT = 330          # 工具全部「提交即返回」；覆盖 vp_cli_run 默认 180s
+
+# 破坏面工具：网页控制台不开放（与 ai_agent/tools.py 的 _MCP_BLOCKED 同口径）。
+# 不写死总数：工具清单由 mcp_server.py 的 @mcp.tool 决定，任何一处写死数字
+# 都会随增删漂移（曾出现系统提示写 19、实际 22 的口径不一致）。
+_BLOCKED_TOOLS = {'vp_delete_tool_run'}
 
 
 def _alive():
@@ -184,6 +191,12 @@ def api_mcp_call():
     name = str(body.get('name') or '').strip()
     if not name:
         abort(400, '缺少工具名 name')
+    # 破坏面工具与 AI 对话坞同口径：一律不开放。
+    # vp_delete_tool_run 会 rm 整个运行目录（不可逆），此前网页控制台是
+    # 裸透传 —— 普通用户点开就能删结果。删除请走任务中心/运行历史的界面。
+    if name in _BLOCKED_TOOLS:
+        abort(403, f'{name} 属破坏面工具：网页控制台不开放。'
+                   '删除运行请到「任务中心 / 运行历史」操作')
     args = body.get('arguments')
     if not isinstance(args, dict):
         args = {}
