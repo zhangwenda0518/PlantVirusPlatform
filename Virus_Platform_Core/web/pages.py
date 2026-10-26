@@ -373,6 +373,33 @@ def page_refdata():
     return render_template('refdata.html')
 
 
+@bp.route('/mcp')
+def page_mcp():
+    """MCP 控制台（2026-10-26 从首页迁出）。
+
+    为什么独立成页：它是开发者调试面板（手填 JSON、看原始返回），留在首页
+    会截断"粘贴路径 → 选模块"的主线，普通用户也容易把它当日常入口。
+    同时这里给出外部 agent 的接入配置片段 —— MCP 就是平台唯一的工具契约，
+    内置 AI 助手与外部 agent 共用。
+    """
+    import sys as _sys
+    from Virus_Platform_Core.config import PLATFORM_ROOT as _root
+    # 打包版没有 python（用 exe 自身跑引擎），非打包版给解释器绝对路径
+    py = _sys.executable or 'python'
+    script = os.path.join(_root, 'mcp_server.py')
+    # 直接拼 JSON 字面量注入 <script> 里的 dataset（safe 过滤后不需要转义）
+    from flask import json as _json
+    cfg = _json.dumps({'root': _root, 'py': py, 'script': script},
+                      ensure_ascii=False)
+    # 防提前闭合 script：路径里若出现 </script> 会截断注入
+    cfg = cfg.replace('</', '<\\/')
+    return render_template('mcp.html', mcp_cfg=(
+        '<script>(function(){var d=document.getElementById("mcpCfg");'
+        'if(!d)return;var c=' + cfg + ';'
+        'd.dataset.root=c.root;d.dataset.py=c.py;d.dataset.script=c.script;'
+        '})();</script>'))
+
+
 @bp.route('/tasks')
 def page_tasks():
     """全局任务中心：运行中监测 / 日志折叠 / 停止 / 重启 / 删除 / 历史归档。"""

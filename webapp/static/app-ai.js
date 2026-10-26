@@ -311,6 +311,61 @@ AI.onSampleChange = function (v) {
   if (v) AI.sysNote(`📎 ${t('ai.dock.sample', '样品')}: ${v}`);
 };
 
+/* ---------- 模型切换 ----------
+ * 2026-10-26：首页内嵌对话卡移除后，它独有的"当场换模型"能力并入全局坞。
+ * 数据源与设置页同一套接口：/api/ai/profiles（档案清单 + 当前激活）
+ * + /api/ai/config（平铺配置，未存档案时显示当前模型）。
+ * 切换 = 把档案灌进平台配置并落盘，全链路（对话/执行单/播报）立即生效。 */
+AI.loadModels = async function () {
+  const sel = $('aiModelSel');
+  if (!sel) return;
+  try {
+    const [pr, cf] = await Promise.all([
+      fetch('/api/ai/profiles').then(x => x.json().catch(() => ({}))),
+      fetch('/api/ai/config').then(x => x.json().catch(() => ({}))),
+    ]);
+    const profiles = (pr && pr.profiles) || [];
+    const cfg = (cf && cf.config) || {};
+    AI.activeProfile = cfg.active_profile || '';
+    let html = '';
+    if (!AI.activeProfile) {
+      html += `<option value="" selected>${esc(t('ui.qs.cfg', '当前配置 · ')
+        + (cfg.model || t('ui.qs.noModel', '未设置模型')))}</option>`;
+    }
+    for (const p of profiles) {
+      html += `<option value="pf:${esc(p.name)}"${p.active ? ' selected' : ''}>`
+        + `${p.active ? '● ' : ''}${esc(p.name)} · ${esc(p.model || '')}`
+        + `${p.key_set ? '' : esc(t('ui.qs.noKey', '（未存Key）'))}</option>`;
+    }
+    if (!profiles.length) {
+      html = `<option value="" selected>${esc(t('ui.qs.cfg', '当前配置 · ')
+        + (cfg.model || t('ui.qs.noModelHint', '未设置（到「设置 → AI 助手」配置）')))}</option>`;
+    }
+    sel.innerHTML = html;
+  } catch (e) { /* 静默：选择条属增强功能，失败不影响对话 */ }
+};
+
+AI.onModelChange = async function (v) {
+  if (!v || v.indexOf('pf:') !== 0) return;
+  const name = v.slice(3);
+  try {
+    const r = await fetch('/api/ai/profiles/activate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { AI.sysNote('⚠ ' + (d.detail || d.error || ('HTTP ' + r.status))); return; }
+    AI.ready = !!d.ready;
+    const dot = $('aiReadyDot');
+    if (dot) { dot.hidden = false;
+               dot.classList.toggle('ok', AI.ready);
+               dot.classList.toggle('no', !AI.ready); }
+    AI.sysNote(t('ui.qs.switched', '✔ 已切换模型 → ') + name
+      + (d.ready ? '' : t('ui.qs.incomplete', '（注意：该配置不完整或未启用 AI 总开关）')));
+  } catch (e) {
+    AI.sysNote('⚠ ' + String(e.message || e));
+  }
+};
+
 /* ---------- 对话历史本地持久化 ----------
  * 刷新/换页不丢对话（localStorage，最多 30 条）。事件卡不持久化——
  * 它们由服务端环形缓冲在重连时重放。 */
@@ -539,6 +594,9 @@ AI._stream = async function (body, onEvent, signal) {
       inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
     });
     AI.startEvents();   // 常驻订阅主动播报（讲解/解读/闸门三层共用一条流）
+    // 模型选择条：本页有坞就预取一次（归入上面的 load 时机，
+    // 打开坞时无需再等一次网络往返）
+    AI.loadModels();
   };
   if (document.readyState === 'complete') boot();
   else window.addEventListener('load', boot);

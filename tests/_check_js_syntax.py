@@ -63,8 +63,18 @@ def find_node():
     return shutil.which('node')
 
 
+NON_JS_TYPES = ('text/plain', 'text/template', 'text/html',
+                'application/json', 'application/ld+json')
+
+
 def blocks_of(path):
-    """→ [(起始行号, JS 源码, 标签)]；跳过带 src 的空块。"""
+    """→ [(起始行号, JS 源码, 标签)]；跳过带 src 的空块与非 JS 的 script。
+
+    必须按 type 过滤：help.html 的英文手册用
+    `<script type="text/plain" id="vp-manual-src">` 内嵌 markdown（惰性文本，
+    由页面渲染器读取），把它当 JS 交给 node 会报"语法错误"——这是误报。
+    只有缺省 type 或 JS MIME 的块才是真正要检查的脚本。
+    """
     src = io.open(path, encoding='utf-8', errors='replace').read()
     out = []
     if path.endswith('.js'):
@@ -72,6 +82,9 @@ def blocks_of(path):
     for m in SCRIPT_RE.finditer(src):
         attrs, body = m.group(1), m.group(2)
         if 'src=' in attrs or not body.strip():
+            continue
+        low = attrs.lower()
+        if any(t in low for t in NON_JS_TYPES):
             continue
         line = src[:m.start()].count('\n') + 1
         out.append((line, body, 'inline script @%d' % line))

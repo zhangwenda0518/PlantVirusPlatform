@@ -408,10 +408,14 @@ The platform integrates a large number of excellent open-source tools and data r
   (function () {
     // Machine-readable source: English edition is embedded above as text/plain,
     // the Chinese edition still comes from README.md through the `text` variable.
+    // 声明放在分支外：两个分支各写 `const RAW` 时服务端渲染没问题，但静态
+    // 语法巡检剥离 Jinja 后会把它们看成同一作用域的重复声明（误报）。改成
+    // let + 赋值后，两种渲染结果都是合法 JS。
+    let RAW;
 {% if lang == 'en' %}
-    const RAW = document.getElementById('vp-manual-src').textContent.replace(/^\n+/, '');
+    RAW = document.getElementById('vp-manual-src').textContent.replace(/^\n+/, '');
 {% else %}
-    const RAW = {{ text | tojson }};
+    RAW = {{ text | tojson }};
 {% endif %}
     // Same convention as esc() in app.js: quotes are escaped too, so the result is
     // safe in attribute contexts.

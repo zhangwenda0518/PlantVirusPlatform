@@ -92,6 +92,10 @@
        href="/results" data-i18n="nav.results">结果中心</a>
     <a class="sn-link{{ ' active' if request.path == '/settings' }}"
        href="/settings" data-i18n="nav.settings">设置</a>
+    {# MCP 控制台：开发者调试面板，2026-10-26 从首页正文迁出后在此保留入口。
+       放在底部组（与设置/手册同类）而非业务分组里 —— 它不是分析流程的一环。 #}
+    <a class="sn-link{{ ' active' if request.path == '/mcp' }}"
+       href="/mcp" data-i18n="nav.mcp">MCP 控制台</a>
     <a class="sn-link{{ ' active' if request.path == '/help' }}"
        href="/help" data-i18n="nav.help">手册</a>
   </div>
@@ -121,8 +125,6 @@
     <span class="ai-dock-title"><img class="ai-logo-img" alt="" src="/static/ai-logo.png?v={{ asset_v }}"> <span data-i18n="ai.dock.title">AI 助手</span>
       <i id="aiReadyDot" class="ai-dot" hidden></i></span>
     <span class="ai-dock-ops">
-      <select id="aiSampleSel" onchange="AI.onSampleChange(this.value)"
-              data-i18n-title="ai.dock.sample" title="样品"></select>
       <button class="ai-ico" onclick="AI.clear()" data-i18n-title="ai.dock.clear"
               title="清空对话">⟲</button>
       <a class="ai-ico" href="/settings#aiCard" data-i18n-title="ai.dock.settings"
@@ -130,6 +132,15 @@
       <button class="ai-ico" onclick="AI.toggle(false)"
               data-i18n-title="ai.dock.close" title="收起">✕</button>
     </span>
+  </div>
+  {# 样品 / 模型两个选择器单独一行：430px 宽的坞放不进标题栏。
+     模型切换原先是首页内嵌对话卡独有的能力，2026-10-26 卡片移除后
+     并入全局坞，避免"换个模型还得去设置页"。 #}
+  <div class="ai-dock-ctx">
+    <select id="aiSampleSel" onchange="AI.onSampleChange(this.value)"
+            data-i18n-title="ai.dock.sample" title="样品"></select>
+    <select id="aiModelSel" onchange="AI.onModelChange(this.value)"
+            data-i18n-title="ai.dock.model" title="模型"></select>
   </div>
   <div id="aiMsgs" class="ai-msgs"></div>
   <div class="ai-chips">

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="vp-lang" content="{{ lang }}">
+<title>MCP 控制台 - 植物病毒分析平台</title>
+<script>try{if(localStorage.getItem("vp_theme")==="dark"){document.documentElement.setAttribute("data-theme","dark")}}catch(e){}</script>
+<link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
+</head>
+<body>
+{% include "_nav.html" %}
+
+<div class="page">
+  <div class="pipe-head">
+    <div>
+      <h1 data-i18n="mcp.page.title">🛰 MCP 控制台</h1>
+      <p class="hint" data-i18n="mcp.page.lead">平台通过标准 MCP（stdio）暴露全部 vp_* 工具：内置 AI 助手用的就是这一层，外部 agent（Claude Desktop / Cursor / VS Code 等）也可以接入同一套契约。本页是调试面板——手填参数、看原始返回。</p>
+    </div>
+  </div>
+
+  <!-- 连接状态与外部接入说明 -->
+  <section class="card">
+    <h2 data-i18n="mcp.page.connectTitle">连接</h2>
+    <p class="hint" data-i18n="mcp.page.connectHint">打开本页会自动连接内置 mcp_server（stdio，标准 MCP 协议）并列出全部工具；首次连接较慢（要导入平台模块）。工具清单由服务器实时返回，本页不写死数量。</p>
+    <div id="mcpIdle">
+      <button id="mcpConnect" class="btn primary" onclick="MCPC.autoConnect(true)"
+              data-i18n="mcp.con.idleBtn">连接 MCP 控制台</button>
+      <button class="btn" onclick="MCPC.restart()"
+              title="长同步调用卡住时手动重拉服务器进程"
+              data-i18n="mcp.page.restart">⟳ 重启 MCP 服务</button>
+      <span class="hint" style="margin-left:8px" id="mcpState"></span>
+    </div>
+    <div id="mcpUI" hidden>
+      <div class="qs-row" style="align-items:center;gap:8px;flex-wrap:wrap">
+        <select id="mcpTool" onchange="MCPC.pick()"
+                style="flex:0 0 280px;padding:7px 8px;border:1px solid var(--line-200);border-radius:8px;font-size:13px;background:var(--input-bg);color:var(--ink-900)"></select>
+        <button class="btn" onclick="MCPC.run()" data-i18n="mcp.page.run">▶ 运行</button>
+        <button class="btn" onclick="MCPC.connect()" title="刷新工具清单">⟳</button>
+        <span class="hint" id="mcpCount"></span>
+      </div>
+      <p class="hint" id="mcpDesc" style="margin:8px 0"></p>
+      <textarea id="mcpArgs" rows="6" spellcheck="false"
+                style="width:100%;font-family:Consolas,monospace;font-size:12.5px;
+                       border:1px solid var(--line-200);border-radius:8px;padding:8px;
+                       background:var(--input-bg);color:var(--ink-900)"></textarea>
+      <div class="qs-bar" style="flex-wrap:wrap">
+        <button class="btn" onclick="MCPC.chips('vp_platform_info')">环境</button>
+        <button class="btn" onclick="MCPC.chips('vp_list_tools')">工具卡</button>
+        <button class="btn" onclick="MCPC.chips('vp_list_tasks')">任务</button>
+        <button class="btn" onclick="MCPC.chips('vp_list_tool_runs')">运行</button>
+        <span class="hint" data-i18n="mcp.con.hint">run_tool / pipeline_start / cli_submit 返回 task_id 后，再调 get_task 轮询；task/call 类参数记得读 vp_list_tools / vp_cli_help 的 schema。</span>
+      </div>
+      <pre id="mcpOut" style="max-height:420px;overflow:auto;white-space:pre-wrap;
+                             font-family:Consolas,monospace;font-size:12px;
+                             background:var(--green-50,#f2f8f4);border-radius:8px;
+                             padding:10px;margin-top:8px"></pre>
+    </div>
+  </section>
+
+  <!-- 外部 agent 接入说明：把 MCP 契约提供给别的 agent 用的第一步 -->
+  <section class="card">
+    <h2 data-i18n="mcp.page.externalTitle">外部 agent 接入</h2>
+    <p class="hint" data-i18n="mcp.page.externalHint">同一套 vp_* 工具可以被外部 agent 直接调用（本机 stdio，不开放网络端口）。把下面这段加到客户端的 MCP 配置里即可；路径请按本机实际安装位置替换。</p>
+    <pre id="mcpCfg" style="white-space:pre-wrap;font-family:Consolas,monospace;
+                            font-size:12px;background:var(--surface-2);border:1px solid var(--line-200);
+                            border-radius:8px;padding:10px;margin:8px 0"></pre>
+    <button class="btn small" onclick="MCPC.copyCfg()"
+            data-i18n="mcp.page.copyCfg">复制配置</button>
+    <p class="hint" data-i18n="mcp.page.externalNote">破坏面工具（如 vp_delete_tool_run）在网页控制台与内置对话中不开放；外部 agent 是否受同样限制取决于它自身的权限策略，请自行把关。</p>
+  </section>
+</div>
+
+<script src="/static/i18n.js?v={{ asset_v }}"></script>
+<script src="/static/app.js?v={{ asset_v }}"></script>
+<script>
+/* MCP 控制台：工具清单从 /api/mcp/tools 拉取（首次连接才拉起服务器进程，
+   不拖慢页面加载）；参数按 inputSchema 生成必填骨架，可选键在下方提示。
+
+   2026-10-26：从首页正文迁到独立 /mcp 页。它是开发者调试面板（手填 JSON、
+   看原始返回），留在首页会把"粘贴路径 → 选模块"的主线截断，也会让普通
+   用户误把它当成日常入口。 */
+const MCPC = {
+  tools: [],
+  _hdr: {'Content-Type': 'application/json'},
+  /* 连接后默认选中这个只读、秒回、信息量最大的工具 —— 让页面一打开就
+     停在一个有意义的入口上，而不是空着下拉等用户去挑。 */
+  DEFAULT_TOOL: 'vp_platform_info',
+  _busy: false,
+
+  async connect() {
+    if (this._busy) return;
+    this._busy = true;
+    const btn = $('mcpConnect');
+    const st = $('mcpState');
+    if (btn) { btn.disabled = true; btn.textContent = t('mcp.con.connecting', '连接中…'); }
+    try {
+      const r = await fetch('/api/mcp/tools');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || d.error || ('HTTP ' + r.status));
+      this.tools = d.tools || [];
+      $('mcpIdle').hidden = true;
+      $('mcpUI').hidden = false;
+      $('mcpTool').innerHTML = this.tools.map(x =>
+        `<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
+      const cnt = $('mcpCount');
+      if (cnt) cnt.textContent = t('mcp.page.count', '共') + ' ' + this.tools.length + ' '
+        + t('mcp.page.countUnit', '个工具');
+      // 自动定位到默认工具：没有就落到第一个
+      const names = this.tools.map(x => x.name);
+      $('mcpTool').value = names.indexOf(this.DEFAULT_TOOL) >= 0
+        ? this.DEFAULT_TOOL : (names[0] || '');
+      this.pick();                    // 值变更不触发 onchange，须显式渲染
+      MCPC._cfg();
+      if (st) st.textContent = '';
+    } catch (e) {
+      // 自动连接失败时不要弹 alert（用户没主动点，弹窗很突兀）；
+      // 留在 idle 态把原因写在行内，按钮仍可点重试。
+      if (st) {
+        st.textContent = '✘ ' + t('mcp.page.autoFail', '连接失败') + ': '
+          + String(e.message || e);
+        st.style.color = 'var(--red-700, #b03a2e)';
+      }
+    } finally {
+      this._busy = false;
+      if (btn) { btn.disabled = false; btn.textContent = t('mcp.con.idleBtn', '连接 MCP 控制台'); }
+    }
+  },
+
+  /* 页面加载即连接（用户报障："怎么还要单独点连接"）。
+     MCP 只有一个服务、工具清单由服务器返回，没有"选哪个模块"这回事 ——
+     所谓连接就是拉起那一个 stdio 服务器。
+     manual=true 表示用户主动点按钮（此时把失败原因也写到行内，语义相同）。 */
+  async autoConnect(manual) {
+    const st = $('mcpState');
+    if (st) {
+      st.style.color = '';
+      st.textContent = t('mcp.page.autoConnecting',
+        '正在连接 MCP 服务…（首次需导入平台模块，可能要几十秒）');
+    }
+    await this.connect();
+    if (!this.tools.length && st && manual) {
+      st.textContent = t('mcp.page.autoFailHint',
+        '无法连接。可点「⟳ 重启 MCP 服务」重置进程后重试；'
+        + '若仍失败，检查平台根目录下 mcp_server.py 是否存在。');
+    }
+  },
+  async restart() {
+    if (!confirm(t('mcp.page.restartConfirm',
+        '重启 MCP 服务器进程？正在执行的长调用会被中断（已提交任务不受影响）。'))) return;
+    const st = $('mcpState');
+    if (st) st.textContent = '…';
+    try {
+      const r = await fetch('/api/mcp/restart', {method: 'POST'});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || d.error || ('HTTP ' + r.status));
+      if (st) st.textContent = t('mcp.page.restarted', '✔ 已重启');
+      await this.connect();
+    } catch (e) {
+      if (st) st.textContent = '✘ ' + String(e.message || e);
+    }
+  },
+  cur() { return this.tools.find(x => x.name === $('mcpTool').value) || {}; },
+  pick() {
+    const tl = this.cur();
+    $('mcpDesc').textContent = tl.description || '';
+    const sch = tl.inputSchema || {};
+    const props = sch.properties || {};
+    const req = sch.required || [];
+    const obj = {};
+    req.forEach(k => { obj[k] = ''; });
+    $('mcpArgs').value = JSON.stringify(obj, null, 2);
+    const opt = Object.keys(props).filter(k => !req.includes(k));
+    $('mcpOut').textContent = t('mcp.con.optional', '可选键') + ': '
+      + (opt.join(', ') || '—');
+    $('mcpOut').style.color = '';
+  },
+  async run() {
+    const name = $('mcpTool').value;
+    let args;
+    try { args = JSON.parse($('mcpArgs').value || '{}'); }
+    catch (e) { return alert(t('mcp.con.badjson', '参数不是合法 JSON：') + e.message); }
+    const out = $('mcpOut');
+    out.style.color = '';
+    out.textContent = t('mcp.con.running', '运行中…');
+    try {
+      const r = await fetch('/api/mcp/call', {method: 'POST',
+        headers: this._hdr, body: JSON.stringify({name, arguments: args})});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || d.error || ('HTTP ' + r.status));
+      const body = (d.data !== null && d.data !== undefined)
+        ? JSON.stringify(d.data, null, 2) : (d.text || '(空)');
+      out.textContent = (d.isError ? '✘ isError\n' : '✔\n') + body;
+      out.style.color = d.isError ? '#b91c1c' : '';
+    } catch (e) {
+      out.textContent = '✘ ' + String(e.message || e);
+      out.style.color = '#b91c1c';
+    }
+  },
+  chips(name) {
+    if (!this.tools.length) return this.connect().then(() => {
+      if (this.tools.length) { $('mcpTool').value = name; this.pick(); this.run(); }
+    });
+    $('mcpTool').value = name;
+    this.pick();
+    this.run();
+  },
+  /* 外部 agent 配置片段：路径由服务端注入（浏览器拿不到平台绝对路径） */
+  _cfg() {
+    const box = $('mcpCfg');
+    if (!box) return;
+    const p = box.dataset.py || 'python';
+    const s = box.dataset.script || 'mcp_server.py';
+    box.textContent = JSON.stringify({
+      mcpServers: {
+        virusplatform: {command: p, args: [s], cwd: box.dataset.root || '.'}
+      }
+    }, null, 2);
+  },
+  copyCfg() {
+    const box = $('mcpCfg');
+    if (!box) return;
+    const txt = box.textContent || '';
+    const done = () => toast(t('mcp.page.copied', '✔ 已复制到剪贴板'), '', {ttl: 1800});
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done).catch(() => MCPC._fallbackCopy(txt, done));
+    } else MCPC._fallbackCopy(txt, done);
+  },
+  _fallbackCopy(txt, done) {
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { alert(txt); }
+    ta.remove();
+  }
+};
+window.MCPC = MCPC;
+
+/* 打开页面即连接：外部接入配置不依赖"先连上服务"（路径由服务端在页尾
+   注入 dataset），工具清单则自动拉取并定位到默认工具。 */
+document.addEventListener('DOMContentLoaded', () => {
+  MCPC._cfg();
+  MCPC.autoConnect(false);
+});
+</script>
+{{ mcp_cfg | safe }}
+</body>
+</html>

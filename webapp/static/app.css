@@ -1453,8 +1453,16 @@ html[data-theme="dark"] .mir-algo-tbl td { border-bottom-color: #1f2a36; }
 .ai-dock-title { font-weight: 700; font-size: 14px; color: var(--ink-900);
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .ai-dock-ops { display: inline-flex; align-items: center; gap: 6px; }
-.ai-dock-ops select {
-  max-width: 150px; font-size: 12px; padding: 3px 6px;
+/* 样品 / 模型选择行：单独一行放在标题栏下方。
+   430px 宽的坞里塞不下"标题 + 两个下拉 + 三个图标"，硬塞会把样品名
+   压到只剩两三个字。 */
+.ai-dock-ctx {
+  display: flex; gap: 6px; padding: 6px 12px;
+  border-bottom: 1px solid var(--line-100); background: var(--surface-2);
+}
+.ai-dock-ctx select {
+  flex: 1 1 0; min-width: 0;                   /* 两个下拉等分、可压缩 */
+  font-size: 12px; padding: 3px 6px;
   border: 1px solid var(--line-200); border-radius: 6px;
   background: var(--input-bg); color: var(--ink-700);
 }
@@ -1513,6 +1521,10 @@ html[data-theme="dark"] .mir-algo-tbl td { border-bottom-color: #1f2a36; }
 html[data-theme="dark"] .ai-dock { background: #141c24; border-color: #263241; }
 html[data-theme="dark"] .ai-dock-head { background: #1b2630;
   border-bottom-color: #263241; }
+html[data-theme="dark"] .ai-dock-ctx { background: #161f28;
+  border-bottom-color: #263241; }
+html[data-theme="dark"] .ai-dock-ctx select { background: #141c24;
+  color: #d7dee6; border-color: #263241; }
 html[data-theme="dark"] .ai-dock-title { color: #d7dee6; }
 html[data-theme="dark"] .ai-ico { color: #8fa1b3; }
 html[data-theme="dark"] .ai-ico:hover { background: #263241; color: #d7dee6; }

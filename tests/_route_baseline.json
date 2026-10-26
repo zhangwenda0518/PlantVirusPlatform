@@ -225,6 +225,7 @@
   "/logan": "logan.page_logan",
   "/logan/report/<name>/": "logan.page_logan_report",
   "/logan/report/<name>/<path:filename>": "logan.page_logan_report_file",
+  "/mcp": "pages.page_mcp",
   "/meta": "meta.page_meta",
   "/meta_files/<name>/<path:subpath>": "meta.meta_files_download",
   "/orf": "pages.page_orf",
@@ -925,6 +926,9 @@
    "GET"
   ],
   "/logan/report/<name>/<path:filename>": [
+   "GET"
+  ],
+  "/mcp": [
    "GET"
   ],
   "/meta": [

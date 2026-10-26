@@ -231,6 +231,10 @@ TESTS = [
     # 高亮的就是被点项、各条目滚动位置互不相同（防"三列网格同排挤在一处"
     # 与"侧栏顺序 ≠ 文档顺序"两类回归）。无 playwright 时 SKIP（~25s）。
     ('tests/_check_settings_nav.py', 300, False),
+    # MCP 控制台：/mcp 独立页可达、不再出现在首页、破坏面工具
+    # (vp_delete_tool_run) 在 /api/mcp/call 前置 403 且文案指出替代入口。
+    # 纯 test_client，不拉起 mcp_server 子进程（~2s）。
+    ('tests/_check_mcp_console.py', 120, False),
     # ⚡一键分析（全流程）卡：自起临时实例 + 真浏览器，验证本卡自有输入/参数/
     # 输出区齐全、示例与参数互取落到本卡、内联结果链路（桩 API）不串卡（~30s）。
     # 无 playwright（开发依赖未装）时自动 SKIP 并返回 0。
