@@ -13,7 +13,7 @@ import uuid
 from flask import (abort, jsonify, render_template, request, send_file,
                    Response)
 
-from Virus_Platform_Core.config import DIRS, PLATFORM_ROOT, db_path
+from Virus_Platform_Core.config import DIRS, PLATFORM_ROOT, db_asset, db_path
 from Virus_Platform_Core.utils import (check_path, fmt_size, safe_open)
 from Virus_Platform_Core.web.state import (cfg, run_real_dir as _run_real_dir,
                                            tool_runs_root as _tool_runs_root,
@@ -669,13 +669,10 @@ def api_dsrna_panel():
     """
     from Virus_Platform_Core import dsrna_offtarget as dso
     from Virus_Platform_Core.dsrna_pipeline import _norm_species
-    # ⚠️ 必须走 DIRS['databases']：分发版由 config._detect_database_root() 把
-    # 数据库根重定向到同级 VirusPlatform-Database，与 PLATFORM_ROOT 不等价。
-    # 用 PLATFORM_ROOT 时面板清单会恒为空（本函数把"目录缺失"当正常），
-    # 用户以为平台没有面板数据 —— 静默失效。2026-10-07 审查 P1-2。
-    panel_dir = os.path.join(DIRS['databases'], 'dsrna', 'panel')
-    lethal_dir = os.path.join(DIRS['databases'], 'dsrna',
-                              'lethal_lists')
+    # 数据库根优先、程序内置兜底：分发版数据库外置时 DIRS['databases'] 指向
+    # 同级 VirusPlatform-Database，而 dsrna 小数据随程序走（见 config.db_asset）。
+    panel_dir = db_asset('dsrna', 'panel')
+    lethal_dir = db_asset('dsrna', 'lethal_lists')
     files = []
     for f in dso.panel_files(panel_dir):
         sp = _norm_species(os.path.splitext(os.path.basename(f))[0])
@@ -821,10 +818,9 @@ _MIRNA_LIB_CACHE = {'rows': None, 'mtime': None, 'facets': None}
 
 
 def _mirna_lib_path():
-    # DIRS['databases'] 而非 PLATFORM_ROOT/databases（分发版数据库外置会重定向）
-    # —— 2026-10-07 审查 P1-2
-    return os.path.join(DIRS['databases'], 'mirna_lib',
-                        'plant_mirna_library.tsv')
+    # 数据库根优先、程序内置兜底：分发版数据库外置时 DIRS['databases'] 指向
+    # 同级 VirusPlatform-Database，而 mirna_lib 随程序走（见 config.db_asset）。
+    return db_asset('mirna_lib', 'plant_mirna_library.tsv')
 
 
 def _mirna_lib_rows():

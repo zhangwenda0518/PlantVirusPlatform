@@ -58,9 +58,10 @@ except Exception as _rna_err:      # noqa: BLE001
                 break
     raise ImportError(f'ViennaRNA(RNA) 加载失败：{_detail}') from _rna_err
 
-from .config import PLATFORM_ROOT
+from .config import db_asset
 
-DSRNA_DATA_DIR = Path(PLATFORM_ROOT) / 'databases' / 'dsrna'
+# 数据库根优先、程序内置兜底（分发版数据库外置时 PLATFORM_ROOT 下没有 dsrna）
+DSRNA_DATA_DIR = Path(db_asset('dsrna'))
 LOOKUP_DB = DSRNA_DATA_DIR / 'lookup.db'
 PARAMS_PATH = DSRNA_DATA_DIR / 'siRNA_parameters.txt'
 

@@ -3624,3 +3624,37 @@ auto / mirror / gitee / github）：
   首地址区分，换源自动失效）；索引 URL 覆盖（plugin_index_url）仍可用。
 - 单测 test_order_urls_source_pref（auto/三源优先/兜底顺序/非法值回落）；
   回归：插件单测 35 项、i18n 校验、JS 语法、设置页锚点全过。
+
+
+### 2026-10-26 续④：打包清单两处修正（db-only 覆盖程序清单 / 构建机路径泄露）
+
+- `--db-only` 以前会把 `APP/EX/SRC` 的 `build_info.json` 一并重写，程序包里
+  因此留下数据库构建的 `argv` 和源树 7GB 的 `db_dirs` 统计。现在只给本次
+  真正重建的包写清单（`--db-only` 只写数据库包）。
+- `_clean_probe` 原先只按 `DIST`/`ROOT` 做字符串替换，仓库改名前的旧绝对
+  路径（`D:\<旧名>\3rd\...`）会漏进产物。新增通用盘符路径抹除，只认到
+  `3rd` / `databases` / `host-db` 为止。
+- 每个包只统计自己带的 `databases`/`host-db`；清单新增 `tool_tier`
+  （full / slim / minimal）。
+
+产物验证：两版 `build_info.json` 均为纯 ASCII、无盘符路径。
+
+
+### 2026-10-26 续⑤：外置数据库根下程序内置小数据失联（miRNA 页 500）
+
+三分离分发时 `_detect_database_root()` 会把 `DIRS['databases']` 重定向到同级
+`VirusPlatform-Database`，而 `databases/mirna_lib`（13MB 候选 miRNA 库）与
+`databases/dsrna`（热力学查找表 + siRNA 参数）是随**程序**走的小数据，不在
+数据库包内：
+
+- `/api/tool/mirna_lib*` 只查 `DIRS['databases']` → 分发版恒 500
+  「候选 miRNA 库缺失」；
+- `/api/tool/dsrna_panel` 面板清单恒空；`dsrna_pipeline` 与 API 取的不是
+  同一个根（前者 PLATFORM_ROOT、后者数据库根）。
+
+修法：新增 `config.db_asset(*parts)` —— 数据库根优先、程序内置兜底；两处都
+没有时返回数据库根路径（可选面板数据可以放进数据库包）。`tools_api`、
+`dsrna_pipeline`、`dsrna_scoring` 统一改走它。
+
+验证：`tests/_check_db_paths.py` rc=0（148 文件 0 命中）；程序包重建后两版
+selfcheck rc=0、dist_completeness rc=0；体积不变（1.88 / 2.57 GB）。

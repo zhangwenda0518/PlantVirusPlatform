@@ -205,6 +205,24 @@ def db_path(category, name):
 DIRS['taxonomy'] = db_path('tax', 'core')
 
 
+def db_asset(*parts):
+    """定位随程序携带的小数据（mirna_lib / dsrna 等）：数据库根优先，程序内置兜底。
+
+    为什么需要（2026-10-26）：三分离分发时 `_detect_database_root()` 会把
+    `DIRS['databases']` 重定向到同级的 `VirusPlatform-Database`，而
+    `databases/mirna_lib`、`databases/dsrna` 这类小数据是随**程序**走的
+    （不占 0.69GB 数据库包）。只查 `DIRS['databases']` 会静默找不到：
+    miRNA 候选库页 500、dsRNA 面板清单恒为空。两处都查，先命中先用；
+    都不存在时返回数据库根路径（供用户把可选面板数据放进数据库包）。
+    """
+    rel = os.path.join(*parts)
+    for base in (DIRS['databases'], os.path.join(PLATFORM_ROOT, 'databases')):
+        p = os.path.join(base, rel)
+        if os.path.exists(p):
+            return p
+    return os.path.join(DIRS['databases'], rel)
+
+
 def ref_annotation_path():
     """参考病毒注释 TSV 的当前路径（accession → 物种/taxid/科/属）。
 

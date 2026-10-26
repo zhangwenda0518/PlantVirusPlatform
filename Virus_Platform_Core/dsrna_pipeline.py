@@ -24,13 +24,13 @@ import threading
 import time
 from pathlib import Path
 
-from .config import PLATFORM_ROOT
+from .config import db_asset
 from . import dsrna_scoring as dscore
 from .utils import decode_output, safe_open, task_register_proc
 
-DSRNA_DIR = Path(PLATFORM_ROOT) / 'databases' / 'dsrna'
-PANEL_DIR = DSRNA_DIR / 'panel'
-LETHAL_DIR = DSRNA_DIR / 'lethal_lists'
+# 数据库根优先、程序内置兜底（分发版数据库外置时 PLATFORM_ROOT 下没有面板数据）
+PANEL_DIR = Path(db_asset('dsrna', 'panel'))
+LETHAL_DIR = Path(db_asset('dsrna', 'lethal_lists'))
 CACHE_DIR = PANEL_DIR / '_cache'
 
 EXE_CANDIDATES = ('3rd/tools/dsrnamax/dsRNAmax_det.exe',

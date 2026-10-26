@@ -228,6 +228,14 @@ def _clean_probe(text):
         for a, b in roots:
             line = line.replace(a, b)
             line = line.replace(a.replace(os.sep, '/'), b)
+        # 仓库改名前/旧快照里的盘符路径（D:\<anything>\3rd\...）也要抹掉：
+        # 只认到 3rd / databases / host-db 为止，避免把用户数据路径也改写。
+        line = re.sub(
+            r'[A-Za-z]:(?:\\[^\\\r\n]+)*\\(?=(?:3rd|databases|host-db)\\)',
+            r'<root>\\', line)
+        line = re.sub(
+            r'[A-Za-z]:(?:/[^/\r\n]+)*/(?=(?:3rd|databases|host-db)/)',
+            '<root>/', line)
         out.append(line.rstrip())
     return '\n'.join(out).strip('\n')
 
@@ -271,6 +279,8 @@ def _build_info():
         'built_at_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'python': sys.version.split()[0],
         'argv': sys.argv[1:],
+        'tool_tier': ('minimal' if _args.minimal_tools
+                      else 'slim' if _args.slim_tools else 'full'),
         'tools_probe': tools_probe,
         'db_dirs': db_dirs,
     }
@@ -621,7 +631,7 @@ if not (_args.db_only or _args.source_only):
     # ---- 干净 platform.json：零硬编码路径，示例/数据库靠自动探测 ----
     fresh_cfg = {'threads': 0, 'tools': {},
                  'defaults': {'max_heavy_tasks': 2, 'max_light_tasks': 4},
-                 'language': 'zh',
+                 'language': 'en',          # 全站英文（2026-10-26 定案）
                  'examples_root': ''}      # '' = 启动时自动探测
     with open(os.path.join(APP, 'platform.json'), 'w', encoding='utf-8') as f:
         json.dump(fresh_cfg, f, ensure_ascii=False, indent=2)
@@ -807,6 +817,9 @@ if _args.with_db or _args.db_only:
     _tar_src = os.path.join('databases', 'new_taxdump.tar.gz')
     if os.path.isfile(_tar_src):
         _rmtree(os.path.join(target, 'databases', 'tax_db'))   # 陈旧解压态
+        # 全新打包（目标目录尚不存在）时先建 databases/——否则 copy2 报
+        # WinError 3（旧包存在时该目录已在，bug 被掩盖；2026-10-26 实测）
+        os.makedirs(os.path.join(target, 'databases'), exist_ok=True)
         shutil.copy2(_tar_src, os.path.join(target, 'databases',
                                             'new_taxdump.tar.gz'))
         _sz = os.path.getsize(os.path.join(target, 'databases',
@@ -1012,7 +1025,7 @@ if _args.with_source:
     with open(os.path.join(SRC_DIR, 'platform.json'), 'w', encoding='utf-8') as f:
         json.dump({'threads': 0, 'tools': {},
                    'defaults': {'max_heavy_tasks': 2, 'max_light_tasks': 4},
-                   'language': 'zh', 'examples_root': ''},
+                   'language': 'en', 'examples_root': ''},
                   f, ensure_ascii=False, indent=2)
     print('  + platform.json（干净配置）')
 
@@ -1220,10 +1233,32 @@ for d in (APP, EX_DIR, DB_DIR, SRC_DIR):
 # ------------------------------------------------------------------
 print('== 5.5/5 构建清单 ==')
 _info = _build_info()
-for _d in (APP, EX_DIR, DB_DIR, SRC_DIR):
+# 只给本次真正重建的包写清单：`--db-only` 不再覆盖程序包的 argv/tools_probe
+# （2026-10-26：之前 db-only 会把程序包的 build_info 改成数据库构建参数）。
+if _args.db_only:
+    _bi_targets = (DB_DIR,)
+elif _args.source_only:
+    _bi_targets = (SRC_DIR,)
+else:
+    _bi_targets = tuple(
+        d for d in (APP, EX_DIR, SRC_DIR)
+        if os.path.isdir(d) and (_args.with_source or d != SRC_DIR))
+    if _args.with_db and os.path.isdir(DB_DIR):
+        _bi_targets += (DB_DIR,)
+for _d in _bi_targets:
     if not os.path.isdir(_d):
         continue
-    _payload = dict(_info, product=os.path.basename(_d))
+    # 每个包的 db_dirs 只统计它自己带的目录（数据库包 0.7GB、程序包只有
+    # mirna/dsrna 小库），不再写源树的 7GB 统计。
+    _db = {}
+    for _rel in ('databases', 'host-db'):
+        _p = os.path.join(_d, _rel)
+        if os.path.isdir(_p):
+            _n = sum(len(fs) for _dp, _s, fs in os.walk(_p))
+            _sz = sum(os.path.getsize(os.path.join(_dp, f))
+                      for _dp, _s, fs in os.walk(_p) for f in fs)
+            _db[_rel + '/'] = {'files': _n, 'bytes': _sz}
+    _payload = dict(_info, product=os.path.basename(_d), db_dirs=_db)
     with open(os.path.join(_d, 'build_info.json'), 'w', encoding='utf-8') as f:
         json.dump(_payload, f, ensure_ascii=False, indent=2)
         f.write('\n')
