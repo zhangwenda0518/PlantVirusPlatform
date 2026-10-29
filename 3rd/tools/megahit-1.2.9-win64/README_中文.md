@@ -7,7 +7,7 @@
 - 编译器：MinGW-w64 g++ 16.2.0 (UCRT, posix threads, seh)
 - 四个可执行文件全部**静态链接**，除 Windows 自带的 UCRT 外无任何外部 DLL 依赖
 - 本目录**只有命令行入口**，供平台脚本调用
-- 需要图形界面时用独立便携包：`D:\桌面\文章写作2\megahit-1.2.9-win64-with-python.zip`
+- 需要图形界面时用同目录下的便携包：`3rd\tools\megahit-1.2.9-win64-with-python.zip`
   （内置 Python 3.12.10 + 图形界面，可整体拷到没装 Python 的机器上用）
 
 ## 入口
